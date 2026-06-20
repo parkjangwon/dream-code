@@ -5,7 +5,7 @@ import { ansi } from "../src/ansi.js";
 import { formatLoginSource } from "../src/tui-login-menu.js";
 
 test("formatLoginSource colors provider connection states", () => {
-  assert.equal(formatLoginSource("env"), `${ansi.blue}env${ansi.reset}`);
-  assert.equal(formatLoginSource("saved"), `${ansi.green}saved${ansi.reset}`);
-  assert.equal(formatLoginSource("missing"), `${ansi.yellow}missing${ansi.reset}`);
+  assert.equal(formatLoginSource("env"), `${ansi.bold}${ansi.blue}env${ansi.reset}`);
+  assert.equal(formatLoginSource("saved"), `${ansi.bold}${ansi.green}saved${ansi.reset}`);
+  assert.equal(formatLoginSource("missing"), `${ansi.bold}${ansi.yellow}missing${ansi.reset}`);
 });

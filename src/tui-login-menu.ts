@@ -77,11 +77,11 @@ function formatLoginMenuLine(index: number, choice: LoginChoice): string {
 export function formatLoginSource(source: LoginChoice["source"]): string {
   switch (source) {
     case "env":
-      return paint("env", ansi.blue);
+      return paint("env", `${ansi.bold}${ansi.blue}`);
     case "saved":
-      return paint("saved", ansi.green);
+      return paint("saved", `${ansi.bold}${ansi.green}`);
     case "missing":
-      return paint("missing", ansi.yellow);
+      return paint("missing", `${ansi.bold}${ansi.yellow}`);
     default:
       return assertNever(source);
   }
