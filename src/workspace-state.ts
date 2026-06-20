@@ -47,6 +47,22 @@ export async function formatTasks(root: string): Promise<string> {
   ].join("\n");
 }
 
+export async function appendTask(root: string, label: string, detail: string): Promise<void> {
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const line = `- [ ] ${label}: ${detail.trim()}\n`;
+  const previous = await readOptional(join(root, "tasks.md"));
+  await writeFile(join(root, "tasks.md"), `${previous ?? ""}${line}`, "utf8");
+}
+
+export async function appendWorkflowNote(root: string, fileName: "goals.md" | "plans.md", title: string, detail: string): Promise<string> {
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const filePath = join(root, fileName);
+  const entry = [`## ${new Date().toISOString()} ${title}`, "", detail.trim(), ""].join("\n");
+  const previous = await readOptional(filePath);
+  await writeFile(filePath, `${previous ?? ""}${entry}`, "utf8");
+  return filePath;
+}
+
 export async function formatSettingsFile(root: string, name: "mcp" | "hooks"): Promise<string> {
   const filePath = join(root, `${name}.toml`);
   const content = await readOptional(filePath);

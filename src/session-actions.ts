@@ -18,6 +18,14 @@ export async function compactCurrentSession(root: string, sessionId: string): Pr
   return `compact saved: ${filePath}`;
 }
 
+export async function maybeAutoCompactSession(root: string, sessionId: string): Promise<void> {
+  const session = await currentSession(root, sessionId);
+  if (session === undefined || session.turns.length < 40 || session.turns.length % 10 !== 0) {
+    return;
+  }
+  await compactCurrentSession(root, sessionId);
+}
+
 export async function exportCurrentSession(root: string, sessionId: string): Promise<string> {
   const session = await currentSession(root, sessionId);
   if (session === undefined) {

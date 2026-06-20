@@ -15,6 +15,8 @@ import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
 import {
   addWorkspaceDir,
+  appendTask,
+  appendWorkflowNote,
   formatArtifacts,
   formatSettingsFile,
   formatTasks,
@@ -51,7 +53,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(await formatSessionActionResult(await exportCurrentSession(options.configRoot, currentSessionId(options))));
       return true;
     case "/goal":
-      await runFramedAgentPrompt(options, "Goal mode", "Drive this goal to a verifiable outcome. Produce success criteria, risks, and the next concrete action.");
+      await runWorkflowPrompt(options, "Goal mode", "goals.md", "Goal", "Drive this goal to a verifiable outcome. Produce success criteria, risks, and the next concrete action.");
       return true;
     case "/hooks":
       output.write(`${await formatSettingsFile(options.configRoot, "hooks")}\n`);
@@ -66,7 +68,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(`${await formatSettingsFile(options.configRoot, "mcp")}\n`);
       return true;
     case "/plan":
-      await runFramedAgentPrompt(options, "Plan mode", "Create a concise implementation plan with ordered tasks, verification steps, and open risks.");
+      await runWorkflowPrompt(options, "Plan mode", "plans.md", "Plan", "Create a concise implementation plan with ordered tasks, verification steps, and open risks.");
       return true;
     case "/rules":
       output.write(`${await formatRulesCommand(options.configRoot, options.cwd)}\n`);
@@ -118,6 +120,24 @@ async function runFramedAgentPrompt(options: UtilityCommandOptions, title: strin
     prompt: `${instruction}\n\nUser request:\n${prompt}`,
     write: (chunk) => output.write(chunk),
   });
+}
+
+async function runWorkflowPrompt(
+  options: UtilityCommandOptions,
+  title: string,
+  fileName: "goals.md" | "plans.md",
+  taskLabel: string,
+  instruction: string,
+): Promise<void> {
+  const prompt = await restOrAsk(options.rest, `${title}: `, options.questioner);
+  if (prompt.trim().length === 0) {
+    output.write(`${title.toLowerCase()} skipped: no prompt\n`);
+    return;
+  }
+  const filePath = await appendWorkflowNote(options.configRoot, fileName, taskLabel, prompt);
+  await appendTask(options.configRoot, taskLabel, prompt);
+  output.write(`${paint(`${taskLabel.toLowerCase()} saved:`, ansi.green)} ${paint(filePath, ansi.blue)}\n`);
+  await runFramedAgentPrompt({ ...options, rest: prompt }, title, instruction);
 }
 
 async function logoutProvider(root: string, rest: string, questioner: Questioner): Promise<string> {

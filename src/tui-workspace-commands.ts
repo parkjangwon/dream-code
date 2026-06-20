@@ -9,6 +9,7 @@ import {
   type DreamConfig,
 } from "./config.js";
 import { appendSessionTurn } from "./session-store.js";
+import { maybeAutoCompactSession } from "./session-actions.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
 import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-file-commands.js";
 import { configureModels } from "./tui-model-commands.js";
@@ -65,6 +66,7 @@ export async function runWorkspaceCommand(
     });
     if (sessionRuntime !== undefined) {
       await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
+      await maybeAutoCompactSession(configRoot, sessionRuntime.currentId());
     }
     return { config, shouldContinue: true };
   }

@@ -77,3 +77,37 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     await rm(project, { recursive: true, force: true });
   }
 });
+
+test("plan and goal commands save workflow notes before model execution", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workflow-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-workflow-project-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const baseConfig = defaultConfig();
+    const config = {
+      ...baseConfig,
+      model: {
+        ...baseConfig.model,
+        single: {
+          ...baseConfig.model.single,
+          provider: "unknown-provider",
+        },
+      },
+    };
+
+    await runWorkspaceCommand("/goal Ship the harness", config, true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/plan Implement tool loop", config, true, { question: async () => "" }, root, undefined, project);
+
+    const tasks = await readFile(join(root, "tasks.md"), "utf8");
+    const goals = await readFile(join(root, "goals.md"), "utf8");
+    const plans = await readFile(join(root, "plans.md"), "utf8");
+    assert.match(tasks, /Goal: Ship the harness/u);
+    assert.match(tasks, /Plan: Implement tool loop/u);
+    assert.match(goals, /Ship the harness/u);
+    assert.match(plans, /Implement tool loop/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
