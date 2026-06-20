@@ -13,6 +13,7 @@ dist/
 .aider*
 .claude/
 .codex/
+.codegraph/
 .continue/
 .cursor/
 .gemini/
