@@ -9,7 +9,7 @@ import {
   serializeModelConfigToml,
   TomlConfigParseError,
 } from "./config-toml.js";
-import { modelConfigSchema } from "./model-routing.js";
+import { defaultAutoCategories, modelConfigSchema } from "./model-routing.js";
 import type { ModelConfig } from "./model-routing.js";
 import { providerModelIdForRequest } from "./provider-registry.js";
 
@@ -204,6 +204,7 @@ function defaultModelConfig(): ModelConfig {
       defaultTier: "mid",
     },
     auto: {
+      preferConnectedProviders: true,
       routes: [
         {
           id: "fast-classifier",
@@ -220,6 +221,7 @@ function defaultModelConfig(): ModelConfig {
           match: ["architecture", "debug", "refactor", "review"],
         },
       ],
+      categories: [...defaultAutoCategories()],
     },
   };
 }
@@ -238,13 +240,28 @@ function normalizeLoadedConfig(config: DreamConfig): DreamConfig {
         },
       },
       auto: {
+        preferConnectedProviders: config.model.auto.preferConnectedProviders ?? true,
         routes: config.model.auto.routes.map((route) => ({
           ...route,
           model: providerModelIdForRequest(route.provider, route.model),
         })),
+        categories: (config.model.auto.categories ?? defaultAutoCategories()).map((category) => ({
+          ...category,
+          candidates: category.candidates.map(normalizeCandidateSpec),
+        })),
       },
     },
   };
+}
+
+function normalizeCandidateSpec(spec: string): string {
+  const separator = spec.indexOf("/");
+  if (separator <= 0 || separator >= spec.length - 1) {
+    return spec;
+  }
+  const provider = spec.slice(0, separator);
+  const model = spec.slice(separator + 1);
+  return `${provider}/${providerModelIdForRequest(provider, model)}`;
 }
 
 type ErrnoException = Error & {

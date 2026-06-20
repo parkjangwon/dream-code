@@ -37,7 +37,8 @@ rests.
 
 3. **Model Modes**
    - Single provider mode with `low`, `mid`, and `high` tiers.
-   - Multi model auto mode shape for route-based orchestration.
+   - Multi model auto mode with category routing, provider candidate chains, and
+     dry-run route previews.
    - Provider registry, env-first connect flow, saved credentials, and live
      OpenAI-compatible streaming calls.
 
@@ -73,7 +74,9 @@ rests.
 
 - Expand provider registry coverage.
 - Single provider tier routing.
-- Multi provider route table.
+- Multi provider route table with category chains inspired by Pi Pizza and
+  capability/fallback ideas from Oh My OpenAgent.
+- Connected-provider aware auto selection and `/model route <prompt>` previews.
 - Cost/latency/health telemetry.
 - OAuth polish for providers that expose CLI/browser auth flows.
 

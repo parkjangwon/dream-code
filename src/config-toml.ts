@@ -44,6 +44,9 @@ export function serializeModelConfigToml(model: ModelConfig): string {
     "[model]",
     `mode = ${quote(model.mode)}`,
     "",
+    "[model.auto]",
+    `preferConnectedProviders = ${model.auto.preferConnectedProviders ?? true}`,
+    "",
     "[model.single]",
     `provider = ${quote(model.single.provider)}`,
     `defaultTier = ${quote(model.single.defaultTier)}`,
@@ -63,6 +66,18 @@ export function serializeModelConfigToml(model: ModelConfig): string {
       `model = ${quote(route.model)}`,
       `tier = ${quote(route.tier)}`,
       `match = ${stringArray(route.match)}`,
+      "",
+    );
+  }
+
+  for (const category of model.auto.categories ?? []) {
+    lines.push(
+      "[[model.auto.categories]]",
+      `id = ${quote(category.id)}`,
+      `label = ${quote(category.label)}`,
+      `tier = ${quote(category.tier)}`,
+      `match = ${stringArray(category.match)}`,
+      `candidates = ${stringArray(category.candidates)}`,
       "",
     );
   }

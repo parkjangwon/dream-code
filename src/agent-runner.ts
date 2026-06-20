@@ -3,7 +3,9 @@ import { cwd } from "node:process";
 import type { AgentDefinition } from "./agent-library.js";
 import { defaultConfigRoot, type DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
+import { loadCredentials } from "./credentials.js";
 import { runHookEvent } from "./hooks.js";
+import type { ProviderEnv } from "./llm-provider.js";
 import { formatMcpServersForPrompt } from "./mcp-config.js";
 import {
   extractAgentToolRequests,
@@ -20,10 +22,12 @@ import {
   type ChatMessage,
 } from "./llm-provider.js";
 import { selectModelForPrompt } from "./model-routing.js";
+import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { formatCompactContext } from "./session-actions.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
+import { providerConnectionSource } from "./tui-provider-status.js";
 import { loadWorkspaceDirs } from "./workspace-state.js";
 
 export type AgentPromptOptions = {
@@ -39,13 +43,16 @@ export type AgentPromptOptions = {
 const maxToolCycles = 3;
 
 export async function runAgentPrompt(options: AgentPromptOptions): Promise<void> {
-  const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent));
-  const settings = await loadSkillSettings(options.configRoot);
+  const configRoot = options.configRoot ?? defaultConfigRoot();
+  const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
+    connectedProviders: await connectedProviderIds(configRoot, process.env),
+  });
+  const settings = await loadSkillSettings(configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
-  const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
-  const workspaceDirs = await loadWorkspaceDirs(options.configRoot ?? defaultConfigRoot());
-  const mcpContext = await formatMcpServersForPrompt(options.configRoot ?? defaultConfigRoot());
-  const compactContext = await formatCompactContext(options.configRoot ?? defaultConfigRoot(), options.sessionId);
+  const contextDocs = await loadContextDocs({ configRoot, cwd: cwd(), prompt: options.prompt });
+  const workspaceDirs = await loadWorkspaceDirs(configRoot);
+  const mcpContext = await formatMcpServersForPrompt(configRoot);
+  const compactContext = await formatCompactContext(configRoot, options.sessionId);
   let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext);
 
   try {
@@ -57,9 +64,9 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
       }
       const results: AgentToolResult[] = [];
       for (const request of requests) {
-        await runHookEvent(options.configRoot ?? defaultConfigRoot(), "preTool", { tool: request.tool });
+        await runHookEvent(configRoot, "preTool", { tool: request.tool });
         const result = await runAgentToolRequest(request, options.config.permissions.mode);
-        await runHookEvent(options.configRoot ?? defaultConfigRoot(), "postTool", { tool: request.tool, ok: String(result.ok) });
+        await runHookEvent(configRoot, "postTool", { tool: request.tool, ok: String(result.ok) });
         options.write(formatToolProgress(result));
         results.push(result);
       }
@@ -80,6 +87,13 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     }
     throw error;
   }
+}
+
+async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {
+  const credentials = await loadCredentials(root);
+  return new Set(listProviderDefinitions()
+    .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
+    .map((definition) => definition.id));
 }
 
 function writeAgentFailure(

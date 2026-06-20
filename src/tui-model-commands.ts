@@ -2,14 +2,24 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import { saveConfig, type DreamConfig } from "./config.js";
-import { modelTierSchema, type ModelTier } from "./model-routing.js";
+import { loadCredentials } from "./credentials.js";
+import type { ProviderEnv } from "./llm-provider.js";
 import {
+  autoCategories,
+  describeModelMode,
+  formatRoutePreview,
+  modelTierSchema,
+  type ModelTier,
+} from "./model-routing.js";
+import {
+  listProviderDefinitions,
   providerModelIdForRequest,
   resolveProviderDefinition,
   type ProviderDefinition,
   type ProviderTierModels,
 } from "./provider-registry.js";
 import type { ProviderQuestioner } from "./tui-provider-picker.js";
+import { providerConnectionSource } from "./tui-provider-status.js";
 
 export type ConfigureModelsOptions = {
   readonly config: DreamConfig;
@@ -24,6 +34,11 @@ type ModelSelection =
   | { readonly kind: "unchanged" };
 
 export async function configureModels(options: ConfigureModelsOptions): Promise<DreamConfig> {
+  const modeCommand = await maybeHandleModelModeCommand(options);
+  if (modeCommand !== undefined) {
+    return modeCommand;
+  }
+
   const definition = resolveProviderDefinition(options.config.model.single.provider);
   if (definition === undefined) {
     output.write(`unknown provider: ${options.config.model.single.provider}\n`);
@@ -39,6 +54,33 @@ export async function configureModels(options: ConfigureModelsOptions): Promise<
   await saveConfig(options.configRoot, nextConfig);
   output.write(formatSelectedModel(nextConfig));
   return nextConfig;
+}
+
+async function maybeHandleModelModeCommand(options: ConfigureModelsOptions): Promise<DreamConfig | undefined> {
+  const args = options.args.trim();
+  if (args === "auto") {
+    const nextConfig = { ...options.config, model: { ...options.config.model, mode: "auto" as const } };
+    await saveConfig(options.configRoot, nextConfig);
+    output.write(`${paint("model routing:", ansi.green)} ${describeModelMode(nextConfig.model)}\n`);
+    return nextConfig;
+  }
+  if (args === "single") {
+    const nextConfig = { ...options.config, model: { ...options.config.model, mode: "single" as const } };
+    await saveConfig(options.configRoot, nextConfig);
+    output.write(`${paint("model routing:", ansi.green)} ${describeModelMode(nextConfig.model)}\n`);
+    return nextConfig;
+  }
+  if (args === "routes") {
+    output.write(formatAutoRoutes(options.config));
+    return options.config;
+  }
+  if (args.startsWith("route ")) {
+    output.write(`${formatRoutePreview(options.config.model, args.slice("route ".length).trim(), {
+      connectedProviders: await connectedProviderIds(options.configRoot, process.env),
+    })}\n`);
+    return options.config;
+  }
+  return undefined;
 }
 
 function resolveModelSelection(
@@ -165,11 +207,14 @@ function modelSet(
 function formatModelMenu(config: DreamConfig, definition: ProviderDefinition): string {
   const currentTier = config.model.single.defaultTier;
   const models = config.model.single.models;
-  const lines = [`${paint("Models", ansi.accent)} ${definition.displayName}`];
+  const lines = [
+    `${paint("Models", ansi.accent)} ${definition.displayName}`,
+    `${paint("mode", ansi.dim)} ${describeModelMode(config.model)}`,
+  ];
   for (const model of definition.availableModels) {
     lines.push(formatModelLine(model, models, currentTier));
   }
-  lines.push("Type a model id, low, mid, high, or custom.", "");
+  lines.push("Type a model id, low, mid, high, auto, single, routes, or custom.", "");
   return lines.join("\n");
 }
 
@@ -209,6 +254,23 @@ function tierForModel(models: ProviderTierModels, model: string): ModelTier | un
 function formatSelectedModel(config: DreamConfig): string {
   const tier = config.model.single.defaultTier;
   return `model set: ${config.model.single.provider} ${modelForTier(config.model.single.models, tier)} (${formatTier(tier)})\n`;
+}
+
+function formatAutoRoutes(config: DreamConfig): string {
+  return [
+    `${paint("Multi-Model Routing", `${ansi.bold}${ansi.accent}`)} ${paint(config.model.mode, ansi.dim)}`,
+    ...autoCategories(config.model).map((route) => {
+      return `${paint(route.id.padEnd(11), ansi.blue)} ${route.tier.padEnd(4)} ${route.candidates.join(" -> ")}`;
+    }),
+    "",
+  ].join("\n");
+}
+
+async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {
+  const credentials = await loadCredentials(root);
+  return new Set(listProviderDefinitions()
+    .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
+    .map((definition) => definition.id));
 }
 
 function modelForTier(models: ProviderTierModels, tier: ModelTier): string {

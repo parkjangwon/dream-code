@@ -22,6 +22,8 @@ Inside the TUI:
 /provider
 /login
 /model
+/model auto
+/model route <prompt>
 /session
 /skills
 /agents
@@ -41,6 +43,13 @@ uses it without asking again. Otherwise it prompts inside the TUI and stores the
 credential in `~/.dream/credentials.json` with owner-only file permissions. Main
 user-editable settings live in TOML files; credentials stay in JSON because they
 are app-owned secrets rather than hand-edited configuration.
+
+Model routing starts in single-provider mode. Use `/model` to choose the active
+provider model tier, `/model auto` to enable multi-provider routing, `/model
+single` to go back, `/model routes` to inspect the configured category chains,
+and `/model route <prompt>` to preview which provider/model Dream Code would
+choose before sending a real request. Auto routing prefers providers that are
+already connected through env keys, saved credentials, or OAuth.
 
 Session history uses a Termux-friendly file layout inspired by Kimi Code:
 `~/.dream/session_index.jsonl` for the lightweight picker index and

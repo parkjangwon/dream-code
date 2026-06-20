@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
@@ -125,6 +125,56 @@ test("configureModels lists extended OpenAI models through the picker", async ()
   }
 });
 
+test("configureModels toggles multi-provider auto mode", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-models-auto-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await configureModels({
+      config: configWithOpenAi(),
+      configRoot: root,
+      args: "auto",
+      questioner: { question: async () => "" },
+    });
+
+    assert.equal(nextConfig.model.mode, "auto");
+    assert.equal((await loadConfig(root)).model.mode, "auto");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("configureModels previews multi-provider routes with connected providers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-models-route-"));
+  const chunks: string[] = [];
+  const restoreEnv = clearEnvKeys(["GEMINI_API_KEY", "GOOGLE_API_KEY", "DREAM_GEMINI_API_KEY"]);
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    await writeFile(join(root, "credentials.json"), JSON.stringify({
+      version: 1,
+      providers: {
+        openai: { authMode: "api-key", apiKey: "test-key" },
+      },
+    }), "utf8");
+
+    await configureModels({
+      config: { ...configWithOpenAi(), model: { ...configWithOpenAi().model, mode: "auto" } },
+      configRoot: root,
+      args: "route Polish this React layout",
+      questioner: { question: async () => "" },
+    });
+
+    assert.match(chunks.join(""), /route: visual -> openai\/gpt-5\.5/u);
+  } finally {
+    stdout.mock.restore();
+    restoreEnv();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function configWithOpenAi(): ReturnType<typeof defaultConfig> {
   const config = defaultConfig();
   return {
@@ -162,5 +212,22 @@ function configWithOpenCodeGo(): ReturnType<typeof defaultConfig> {
         defaultTier: "mid",
       },
     },
+  };
+}
+
+function clearEnvKeys(keys: readonly string[]): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    delete process.env[key];
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   };
 }
