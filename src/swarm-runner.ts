@@ -13,6 +13,7 @@ import {
 
 export type SwarmRunProgress = {
   readonly characters: number;
+  readonly preview?: string;
 };
 
 export type SwarmRunInput =
@@ -74,6 +75,7 @@ export async function runAgentSwarmWithAgents(
     lanes: plan.lanes,
     write: options.write,
     replaceInPlace: options.replaceMonitor,
+    interactive: options.replaceMonitor === true,
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
@@ -82,13 +84,13 @@ export async function runAgentSwarmWithAgents(
     const startedAt = Date.now();
     monitor.laneStarted(lane.id);
     const output = await runLane(runAgent, lane, (progress) => {
-      monitor.laneProgress(lane.id, progress.characters);
+      monitor.laneProgress(lane.id, progress.characters, progress.preview);
     });
     const elapsedMs = Date.now() - startedAt;
     if (output.startsWith("Lane failed:")) {
-      monitor.laneFailed(lane.id, output.length);
+      monitor.laneFailed(lane.id, output.length, output);
     } else {
-      monitor.laneDone(lane.id, output.length);
+      monitor.laneDone(lane.id, output.length, output);
     }
     return { lane, output, elapsedMs };
   }));
@@ -101,6 +103,7 @@ export async function runAgentSwarmWithAgents(
   } else {
     monitor.synthesisDone();
   }
+  monitor.stop();
   options.write(formatSwarmSynthesis(synthesis));
   return { goal: options.goal, laneResults, synthesis };
 }
@@ -150,11 +153,15 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
       agent: input.agent,
       write: (chunk) => {
         transcript = `${transcript}${stripAnsi(chunk)}`;
-        input.report({ characters: transcript.length });
+        input.report({ characters: transcript.length, preview: tailPreview(transcript) });
       },
     });
     return transcript.trim();
   };
+}
+
+function tailPreview(text: string): string {
+  return text.split(/\r?\n/u).slice(-8).join("\n").trim();
 }
 
 function swarmPlanOptions(options: SwarmRunOptions): { readonly forceAgents?: number } {

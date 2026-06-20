@@ -10,9 +10,12 @@ export type SwarmMonitorLane = {
   readonly title: string;
   readonly status: SwarmLaneStatus;
   readonly characters: number;
+  readonly preview: string;
   readonly startedAt: number | undefined;
   readonly finishedAt: number | undefined;
 };
+
+export type SwarmMonitorView = "monitor" | "detail";
 
 export type SwarmMonitorSnapshot = {
   readonly goal: string;
@@ -20,10 +23,16 @@ export type SwarmMonitorSnapshot = {
   readonly now: number;
   readonly frame: number;
   readonly lanes: readonly SwarmMonitorLane[];
+  readonly selectedIndex: number | undefined;
+  readonly view: SwarmMonitorView;
+  readonly interactive: boolean;
   readonly synthesisStatus: SwarmSynthesisStatus;
 };
 
 export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): string {
+  if (snapshot.view === "detail") {
+    return renderLaneDetail(snapshot);
+  }
   const completed = snapshot.lanes.filter((lane) => lane.status === "done").length;
   const active = snapshot.lanes.filter((lane) => lane.status === "running").length;
   const showActivity = active > 0 || snapshot.synthesisStatus === "running";
@@ -31,17 +40,18 @@ export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): stri
     `${paint("╭─ Swarm Monitor", ansi.accent)} ${paint(`${active} active`, ansi.bold)} ${paint("·", ansi.guide)} ${completed}/${snapshot.lanes.length} done ${paint("·", ansi.guide)} ${formatDuration(snapshot.now - snapshot.startedAt)}`,
     `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
     ...(showActivity ? [`${paint("│", ansi.guide)} activity ${activityStrip(snapshot.frame)} ${paint("parallel lanes mixing", ansi.dim)}`] : []),
-    ...snapshot.lanes.map((lane) => renderLane(lane, snapshot.now)),
+    ...snapshot.lanes.map((lane) => renderLane(lane, snapshot.now, isSelected(snapshot, lane.index))),
     `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot.synthesisStatus)}`,
-    `${paint("╰─", ansi.accent)} ${paint("token mixing radar online", ansi.guide)}`,
+    `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive)}`,
   ];
   return `${lines.join("\n")}\n`;
 }
 
-function renderLane(lane: SwarmMonitorLane, now: number): string {
+function renderLane(lane: SwarmMonitorLane, now: number, selected: boolean): string {
   const duration = lane.startedAt === undefined ? "0.0s" : formatDuration((lane.finishedAt ?? now) - lane.startedAt);
+  const marker = selected ? paint("›", ansi.accent) : paint("│", ansi.guide);
   return [
-    paint("│", ansi.guide),
+    marker,
     String(lane.index).padStart(2, "0"),
     statusLabel(lane.status),
     statusBar(lane.status),
@@ -49,6 +59,43 @@ function renderLane(lane: SwarmMonitorLane, now: number): string {
     paint(duration.padStart(5), ansi.dim),
     paint(formatCharacters(lane.characters).padStart(10), ansi.guide),
   ].join(" ");
+}
+
+function renderLaneDetail(snapshot: SwarmMonitorSnapshot): string {
+  const selectedLane = snapshot.lanes.find((lane) => lane.index === snapshot.selectedIndex);
+  if (selectedLane === undefined) {
+    return renderEmptyDetail(snapshot);
+  }
+  const duration = selectedLane.startedAt === undefined ? "0.0s" : formatDuration((selectedLane.finishedAt ?? snapshot.now) - selectedLane.startedAt);
+  const previewLines = selectedLane.preview.trim().length === 0 ? [paint("No lane output yet.", ansi.dim)] : selectedLane.preview.trim().split(/\r?\n/u).slice(-6);
+  const lines = [
+    `${paint("╭─ Swarm Lane", ansi.accent)} ${String(selectedLane.index).padStart(2, "0")} ${paint(selectedLane.title, ansi.bold)}`,
+    `${paint("│", ansi.guide)} status ${statusLabel(selectedLane.status)} ${paint("·", ansi.guide)} ${duration} ${paint("·", ansi.guide)} ${formatCharacters(selectedLane.characters)}`,
+    `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
+    `${paint("│", ansi.guide)} latest`,
+    ...previewLines.map((line) => `${paint("│", ansi.guide)} ${truncate(line, 96)}`),
+    `${paint("╰─", ansi.accent)} ${paint("esc back", ansi.guide)} ${paint("·", ansi.guide)} ${paint("↑/↓ switch lane", ansi.guide)}`,
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+function renderEmptyDetail(snapshot: SwarmMonitorSnapshot): string {
+  const lines = [
+    `${paint("╭─ Swarm Lane", ansi.accent)} ${paint("no lanes", ansi.dim)}`,
+    `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
+    `${paint("╰─", ansi.accent)} ${paint("esc back", ansi.guide)}`,
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+function isSelected(snapshot: SwarmMonitorSnapshot, laneIndex: number): boolean {
+  return snapshot.interactive && snapshot.selectedIndex === laneIndex;
+}
+
+function footerText(interactive: boolean): string {
+  return interactive
+    ? paint("↑/↓ select lane · enter inspect · esc back · token mixing radar online", ansi.guide)
+    : paint("token mixing radar online", ansi.guide);
 }
 
 function statusLabel(status: SwarmLaneStatus): string {

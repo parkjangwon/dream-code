@@ -20,6 +20,7 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
         title: "Tech Lead",
         status: "running",
         characters: 1536,
+        preview: "Reviewing architecture seams.",
         startedAt: 1000,
         finishedAt: undefined,
       },
@@ -29,10 +30,14 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
         title: "Security Reviewer",
         status: "done",
         characters: 420,
+        preview: "Security pass complete.",
         startedAt: 1100,
         finishedAt: 2300,
       },
     ],
+    selectedIndex: undefined,
+    view: "monitor",
+    interactive: false,
   }));
 
   assert.match(rendered, /Swarm Monitor/u);
@@ -44,6 +49,47 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /parallel lanes mixing/u);
   assert.match(rendered, /merging parallel outputs/u);
   assert.match(rendered, /token mixing radar online/u);
+});
+
+test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane details", () => {
+  const rendered = stripAnsi(renderSwarmMonitorSnapshot({
+    goal: "Ship an absurdly powerful swarm cockpit",
+    startedAt: 1000,
+    now: 3400,
+    frame: 1,
+    synthesisStatus: "waiting",
+    selectedIndex: 2,
+    view: "detail",
+    interactive: true,
+    lanes: [
+      {
+        id: "lane-1",
+        index: 1,
+        title: "Tech Lead",
+        status: "done",
+        characters: 2200,
+        preview: "Architecture route is stable.",
+        startedAt: 1000,
+        finishedAt: 2000,
+      },
+      {
+        id: "lane-2",
+        index: 2,
+        title: "Code Reviewer",
+        status: "running",
+        characters: 6700,
+        preview: "Checking changed files\nLooking for regressions",
+        startedAt: 1100,
+        finishedAt: undefined,
+      },
+    ],
+  }));
+
+  assert.match(rendered, /Swarm Lane 02/u);
+  assert.match(rendered, /Code Reviewer/u);
+  assert.match(rendered, /6\.7k chars/u);
+  assert.match(rendered, /Checking changed files/u);
+  assert.match(rendered, /esc back/u);
 });
 
 test("createSwarmMonitor can redraw the same live panel in place", () => {
@@ -79,4 +125,40 @@ test("createSwarmMonitor can redraw the same live panel in place", () => {
 
   assert.equal(chunks.length, 2);
   assert.equal(chunks[1]?.includes("\u001B[1A\r\u001B[2K"), true);
+});
+
+test("createSwarmMonitor renders lane progress previews in the cockpit", () => {
+  const chunks: string[] = [];
+  const lanes: readonly SwarmLane[] = [
+    {
+      id: "lane-1",
+      title: "Security Reviewer",
+      agent: {
+        id: "security-reviewer",
+        name: "Security Reviewer",
+        summary: "Audit the work.",
+        model: "inherit",
+        tools: ["read"],
+        prompt: "Audit.",
+        source: "built-in",
+      },
+      prompt: "Audit.",
+    },
+  ];
+  const monitor = createSwarmMonitor({
+    goal: "Inspect running lane output",
+    lanes,
+    now: () => 1000,
+    write: (chunk) => {
+      chunks.push(stripAnsi(chunk));
+    },
+  });
+
+  monitor.start();
+  monitor.laneStarted("lane-1");
+  monitor.laneProgress("lane-1", 600, "Reading package.json");
+  monitor.laneDone("lane-1", 900, "Security checklist complete");
+
+  assert.match(chunks.join("\n"), /900 chars/u);
+  assert.match(chunks.join("\n"), /DONE/u);
 });
