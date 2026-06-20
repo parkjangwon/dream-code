@@ -4,6 +4,7 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { deleteProviderCredential } from "./credentials.js";
 import { runAgentPrompt } from "./agent-runner.js";
+import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
 import {
   compactCurrentSession,
@@ -54,7 +55,11 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(await formatSessionActionResult(await exportCurrentSession(options.configRoot, currentSessionId(options))));
       return true;
     case "/goal":
-      await runWorkflowPrompt(options, "Goal mode", "goals.md", "Goal", "Drive this goal to a verifiable outcome. Produce success criteria, risks, and the next concrete action.");
+      await runGoalCommand({
+        config: options.config,
+        configRoot: options.configRoot,
+        rest: options.rest,
+      });
       return true;
     case "/hooks":
       output.write(`${await formatSettingsFile(options.configRoot, "hooks")}\n`);

@@ -97,6 +97,7 @@ test("plan and goal commands save workflow notes before model execution", async 
     };
 
     await runWorkspaceCommand("/goal Ship the harness", config, true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/goal", config, true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/plan Implement tool loop", config, true, { question: async () => "" }, root, undefined, project);
 
     const tasks = await readFile(join(root, "tasks.md"), "utf8");
