@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -8,9 +8,12 @@ import {
   configFilePath,
   defaultConfig,
   loadConfig,
+  modelConfigFilePath,
   resolveEffectivePermissionMode,
   saveConfig,
+  teamConfigFilePath,
   togglePersistedYolo,
+  type DreamConfig,
 } from "../src/config.js";
 
 test("loadConfig returns defaults when the config file is absent", async () => {
@@ -24,6 +27,10 @@ test("loadConfig returns defaults when the config file is absent", async () => {
   }
 });
 
+test("configFilePath uses TOML as the main config file", () => {
+  assert.equal(configFilePath("/tmp/dream-home"), join("/tmp/dream-home", "config.toml"));
+});
+
 test("togglePersistedYolo flips and saves the permission mode", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-yolo-"));
   try {
@@ -31,9 +38,16 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
     await saveConfig(root, defaultConfig());
     const enabled = await togglePersistedYolo(root);
     const disabled = await togglePersistedYolo(root);
+    const savedToml = await readFile(configFilePath(root), "utf8");
+    const modelsToml = await readFile(modelConfigFilePath(root), "utf8");
+    const teamToml = await readFile(teamConfigFilePath(root), "utf8");
 
     assert.equal(enabled.permissions.mode, "yolo");
     assert.equal(disabled.permissions.mode, "ask");
+    assert.match(savedToml, /\[permissions\]\nmode = "ask"/);
+    assert.doesNotMatch(savedToml, /\[model\]/);
+    assert.match(modelsToml, /\[model\.single\.models\]/);
+    assert.match(teamToml, /\[\[team\]\]/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -47,12 +61,12 @@ test("resolveEffectivePermissionMode prefers one-shot yolo over saved config", (
   assert.equal(resolveEffectivePermissionMode(config, false), "ask");
 });
 
-test("loadConfig normalizes legacy OpenCode Go model IDs", async () => {
+test("loadConfig normalizes OpenCode Go model IDs from TOML", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-opencode-go-"));
   try {
     await mkdir(root, { recursive: true });
     const config = defaultConfig();
-    const legacyConfig = {
+    const legacyConfig: DreamConfig = {
       ...config,
       model: {
         ...config.model,
@@ -78,7 +92,7 @@ test("loadConfig normalizes legacy OpenCode Go model IDs", async () => {
         },
       },
     };
-    await writeFile(configFilePath(root), `${JSON.stringify(legacyConfig, null, 2)}\n`, "utf8");
+    await saveConfig(root, legacyConfig);
 
     const loaded = await loadConfig(root);
 

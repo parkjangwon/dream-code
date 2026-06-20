@@ -3,6 +3,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
+import {
+  parseConfigToml,
+  serializeMainConfigToml,
+  serializeModelConfigToml,
+  serializeTeamConfigToml,
+  TomlConfigParseError,
+} from "./config-toml.js";
 import { modelConfigSchema } from "./model-routing.js";
 import type { ModelConfig } from "./model-routing.js";
 import { providerModelIdForRequest } from "./provider-registry.js";
@@ -42,6 +49,16 @@ export const dreamConfigSchema = z.object({
 
 export type DreamConfig = z.infer<typeof dreamConfigSchema>;
 
+const mainConfigSchema = dreamConfigSchema.omit({ model: true, team: true });
+const modelFileSchema = z.object({
+  version: z.literal(1),
+  model: modelConfigSchema,
+});
+const teamFileSchema = z.object({
+  version: z.literal(1),
+  team: z.array(teamMemberSchema),
+});
+
 export class ConfigParseError extends Error {
   readonly filePath: string;
 
@@ -69,34 +86,10 @@ export function defaultConfig(): DreamConfig {
       webResearch: true,
     },
     team: [
-      {
-        id: "architect",
-        name: "Dream Architect",
-        role: "architecture",
-        mission: "Turn goals into small, verifiable plans.",
-        enabled: true,
-      },
-      {
-        id: "builder",
-        name: "Night Builder",
-        role: "implementation",
-        mission: "Ship focused code changes with tests.",
-        enabled: true,
-      },
-      {
-        id: "reviewer",
-        name: "Morning Reviewer",
-        role: "review",
-        mission: "Find regressions before the user wakes up.",
-        enabled: true,
-      },
-      {
-        id: "researcher",
-        name: "Web Researcher",
-        role: "research",
-        mission: "Bring fresh external context when local knowledge is stale.",
-        enabled: true,
-      },
+      { id: "architect", name: "Dream Architect", role: "architecture", mission: "Turn goals into small, verifiable plans.", enabled: true },
+      { id: "builder", name: "Night Builder", role: "implementation", mission: "Ship focused code changes with tests.", enabled: true },
+      { id: "reviewer", name: "Morning Reviewer", role: "review", mission: "Find regressions before the user wakes up.", enabled: true },
+      { id: "researcher", name: "Web Researcher", role: "research", mission: "Bring fresh external context when local knowledge is stale.", enabled: true },
     ],
   };
 }
@@ -116,11 +109,58 @@ export function defaultConfigRoot(): string {
 }
 
 export function configFilePath(root = defaultConfigRoot()): string {
-  return join(root, "config.json");
+  return join(root, "config.toml");
+}
+
+export function modelConfigFilePath(root = defaultConfigRoot()): string {
+  return join(root, "models.toml");
+}
+
+export function teamConfigFilePath(root = defaultConfigRoot()): string {
+  return join(root, "team.toml");
 }
 
 export async function loadConfig(root = defaultConfigRoot()): Promise<DreamConfig> {
-  const filePath = configFilePath(root);
+  const defaults = defaultConfig();
+  const mainConfig = await loadMainConfig(root, defaults);
+  const model = await loadModelConfig(root, defaults.model);
+  const team = await loadTeamConfig(root, defaults.team);
+  return normalizeLoadedConfig({ ...mainConfig, model, team });
+}
+
+export async function saveConfig(root: string, config: DreamConfig): Promise<void> {
+  await mkdir(root, { recursive: true });
+  await writeFile(configFilePath(root), serializeMainConfigToml(config), "utf8");
+  await writeFile(modelConfigFilePath(root), serializeModelConfigToml(config.model), "utf8");
+  await writeFile(teamConfigFilePath(root), serializeTeamConfigToml(config.team), "utf8");
+}
+
+async function loadMainConfig(root: string, defaults: DreamConfig): Promise<Omit<DreamConfig, "model" | "team">> {
+  const parsed = await loadTomlFile(configFilePath(root));
+  if (parsed === undefined) {
+    return {
+      version: defaults.version,
+      permissions: defaults.permissions,
+      tokenSaving: defaults.tokenSaving,
+      tools: defaults.tools,
+    };
+  }
+  return parseWithSchema(configFilePath(root), parsed, mainConfigSchema);
+}
+
+async function loadModelConfig(root: string, defaults: DreamConfig["model"]): Promise<DreamConfig["model"]> {
+  const filePath = modelConfigFilePath(root);
+  const parsed = await loadTomlFile(filePath);
+  return parsed === undefined ? defaults : parseWithSchema(filePath, parsed, modelFileSchema).model;
+}
+
+async function loadTeamConfig(root: string, defaults: DreamConfig["team"]): Promise<DreamConfig["team"]> {
+  const filePath = teamConfigFilePath(root);
+  const parsed = await loadTomlFile(filePath);
+  return parsed === undefined ? defaults : parseWithSchema(filePath, parsed, teamFileSchema).team;
+}
+
+async function loadTomlFile(filePath: string): Promise<unknown | undefined> {
   let raw: string;
 
   try {
@@ -132,27 +172,22 @@ export async function loadConfig(root = defaultConfigRoot()): Promise<DreamConfi
     throw error;
   }
 
-  let parsedJson: unknown;
   try {
-    parsedJson = JSON.parse(raw);
+    return parseConfigToml(raw);
   } catch (error) {
-    if (error instanceof SyntaxError) {
+    if (error instanceof TomlConfigParseError) {
       throw new ConfigParseError(filePath, error.message);
     }
     throw error;
   }
-
-  const parsedConfig = dreamConfigSchema.safeParse(parsedJson);
-  if (!parsedConfig.success) {
-    throw new ConfigParseError(filePath, parsedConfig.error.message);
-  }
-
-  return normalizeLoadedConfig(parsedConfig.data);
 }
 
-export async function saveConfig(root: string, config: DreamConfig): Promise<void> {
-  await mkdir(root, { recursive: true });
-  await writeFile(configFilePath(root), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+function parseWithSchema<T>(filePath: string, value: unknown, schema: z.ZodType<T>): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new ConfigParseError(filePath, parsed.error.message);
+  }
+  return parsed.data;
 }
 
 export async function togglePersistedYolo(root = defaultConfigRoot()): Promise<DreamConfig> {
