@@ -59,6 +59,7 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
 
     await runWorkspaceCommand("/add-dir", defaultConfig(), true, { question: async () => project }, root, undefined, project);
     await runWorkspaceCommand("/tasks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/tasks Polish command UX", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/artifact", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/mcp", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/hooks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
@@ -68,6 +69,7 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     assert.match(state, /paths = \[/u);
     assert.match(outputText, /Tasks/u);
     assert.match(outputText, /No tasks yet/u);
+    assert.match(outputText, /Task: Polish command UX/u);
     assert.match(outputText, /Artifacts/u);
     assert.match(outputText, /note\.md/u);
     assert.match(outputText, /mcp\.toml/u);

@@ -34,7 +34,7 @@ export const slashCommands = [
   { name: "/skills", summary: "Show installed skills", acceptsArgs: false },
   { name: "/status", summary: "Show current session state", acceptsArgs: false },
   { name: "/swarm", summary: "Explode a goal across parallel agents", acceptsArgs: true },
-  { name: "/tasks", summary: "Show task board", acceptsArgs: false },
+  { name: "/tasks", summary: "Show or add tasks", acceptsArgs: true },
   { name: "/verify", summary: "Plan verification checks", acceptsArgs: true },
   { name: "/yolo", summary: "Toggle saved bypass mode", acceptsArgs: false },
 ] as const satisfies readonly SlashCommand[];

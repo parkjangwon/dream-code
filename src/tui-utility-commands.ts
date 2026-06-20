@@ -92,6 +92,10 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       await runFramedAgentPrompt(options, "Review", "Review the current work for bugs, regressions, missing tests, and UX risks. Findings first.");
       return true;
     case "/tasks":
+      if (options.rest.trim().length > 0) {
+        await appendTask(options.configRoot, "Task", options.rest);
+        output.write(`${paint("task added", ansi.green)}\n`);
+      }
       output.write(`${await formatTasks(options.configRoot)}\n`);
       return true;
     case "/verify":
