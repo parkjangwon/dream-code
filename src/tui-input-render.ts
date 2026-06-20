@@ -1,6 +1,7 @@
 import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
+import type { DreamSkill } from "./skills.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 import type { InputState } from "./tui-input-state.js";
 import { shortcutGuideLines } from "./tui-shortcuts.js";
@@ -119,13 +120,20 @@ function renderSkillPaletteLines(
   for (let index = 0; index < visible.length; index += 1) {
     const skill = visible[index];
     if (skill !== undefined) {
-      const selected = start + index === palette.selectedIndex ? ">" : " ";
-      const prefix = `${selected} @${skill.name.padEnd(12)} `;
-      lines.push(`${prefix}${paint(renderPaletteDescription(skill.description, width - terminalVisibleWidth(prefix)), ansi.dim)}`);
+      lines.push(formatSkillPaletteLine(skill, start + index === palette.selectedIndex, width));
     }
   }
 
   return lines;
+}
+
+export function formatSkillPaletteLine(skill: DreamSkill, selected: boolean, width: number): string {
+  const marker = selected ? paint(">", ansi.accent) : " ";
+  const name = padVisible(paint(`@${renderPaletteDescription(skill.name, 18)}`, ansi.blue), 20);
+  const source = padVisible(paint(skill.source, ansi.muted), 8);
+  const prefix = `${marker} ${name} ${source} `;
+  const description = renderPaletteDescription(skill.description, width - terminalVisibleWidth(prefix));
+  return `${prefix}${paint(description, ansi.dim)}`;
 }
 
 function moveCursorToPrompt(lineCount: number, columns: number): void {
@@ -148,6 +156,10 @@ function borderLine(position: "top" | "bottom", width: number): string {
 function boxedLine(content: string, width: number): string {
   const padding = " ".repeat(Math.max(0, width - terminalVisibleWidth(content)));
   return `${paint("│", ansi.guide)} ${content}${padding} ${paint("│", ansi.guide)}`;
+}
+
+function padVisible(text: string, width: number): string {
+  return `${text}${" ".repeat(Math.max(0, width - terminalVisibleWidth(text)))}`;
 }
 
 export function cursorUpToPromptLineCount(lineCount: number): number {

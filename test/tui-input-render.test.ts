@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { ansi } from "../src/ansi.js";
 import {
   cursorUpToPromptLineCount,
   displayInputText,
+  formatSkillPaletteLine,
   renderPaletteDescription,
   shouldShowInlineShortcutGuide,
 } from "../src/tui-input-render.js";
@@ -35,4 +37,19 @@ test("renderPaletteDescription truncates long text to the available width", () =
 
   assert.equal(terminalVisibleWidth(rendered) <= 28, true);
   assert.match(rendered, /…/u);
+});
+
+test("skill autocomplete lines color the selected marker and skill name", () => {
+  const rendered = formatSkillPaletteLine({
+    name: "cso",
+    description: "Chief Security Officer security audit.",
+    body: "",
+    path: "/tmp/cso/SKILL.md",
+    source: "agents",
+  }, true, 80);
+
+  assert.equal(rendered.includes(`${ansi.accent}>`), true);
+  assert.equal(rendered.includes(`${ansi.blue}@cso`), true);
+  assert.equal(rendered.includes(`${ansi.muted}agents`), true);
+  assert.equal(terminalVisibleWidth(rendered) <= 80, true);
 });
