@@ -4,6 +4,7 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { deleteProviderCredential } from "./credentials.js";
 import { runAgentPrompt } from "./agent-runner.js";
+import { runLspCheck } from "./lsp-check.js";
 import {
   compactCurrentSession,
   copyLastAssistantResponse,
@@ -64,6 +65,9 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
     case "/logout":
       output.write(`${await logoutProvider(options.configRoot, options.rest, options.questioner)}\n`);
       return true;
+    case "/lsp":
+      output.write(`${await runLspCheck(options.cwd)}\n`);
+      return true;
     case "/mcp":
       output.write(`${await formatSettingsFile(options.configRoot, "mcp")}\n`);
       return true;
@@ -72,6 +76,12 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       return true;
     case "/rules":
       output.write(`${await formatRulesCommand(options.configRoot, options.cwd)}\n`);
+      return true;
+    case "/research":
+      await runFramedAgentPrompt(options, "Research", "Research the request with preference for official sources. If live web search is unavailable, identify the exact sources to verify.");
+      return true;
+    case "/review":
+      await runFramedAgentPrompt(options, "Review", "Review the current work for bugs, regressions, missing tests, and UX risks. Findings first.");
       return true;
     case "/tasks":
       output.write(`${await formatTasks(options.configRoot)}\n`);
