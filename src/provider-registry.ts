@@ -70,10 +70,27 @@ const openCodeGoModels = [
   "hy3-preview",
 ] as const;
 
+const openAiModels = [
+  "gpt-5.5",
+  "gpt-5.5-pro",
+  "gpt-5.4",
+  "gpt-5.4-pro",
+  "gpt-5.4-mini",
+  "gpt-5.4-nano",
+  "gpt-5.3-codex",
+  "gpt-5.2",
+  "gpt-5.2-pro",
+  "gpt-5.1",
+  "gpt-5",
+  "gpt-5-mini",
+  "gpt-5-nano",
+  "gpt-5-pro",
+] as const;
+
 export const providerDefinitions = [
   define("openai", "OpenAI", "chat-completions", "authorization", ["OPENAI_API_KEY"], [
     region("global", "Global", "https://api.openai.com/v1"),
-  ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key", "oauth"], "https://developers.openai.com/api/docs/models"),
+  ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key", "oauth"], "https://developers.openai.com/api/docs/models", openAiModels),
   define("deepseek", "DeepSeek", "chat-completions", "authorization", ["DEEPSEEK_API_KEY"], [
     region("global", "Global", "https://api.deepseek.com"),
   ], "global", models("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-pro"), ["api-key"], "https://api-docs.deepseek.com/"),

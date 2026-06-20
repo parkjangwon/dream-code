@@ -98,6 +98,53 @@ test("configureModels selects any provider model through the picker", async () =
   }
 });
 
+test("configureModels lists extended OpenAI models through the picker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-models-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await configureModels({
+      config: configWithOpenAi(),
+      configRoot: root,
+      args: "",
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          assert.equal(options.title, "Models OpenAI");
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.4-pro"), true);
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.3-codex"), true);
+          return "gpt-5.3-codex";
+        },
+      },
+    });
+
+    assert.equal(nextConfig.model.single.defaultTier, "mid");
+    assert.equal(nextConfig.model.single.models.mid, "gpt-5.3-codex");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function configWithOpenAi(): ReturnType<typeof defaultConfig> {
+  const config = defaultConfig();
+  return {
+    ...config,
+    model: {
+      ...config.model,
+      mode: "single",
+      single: {
+        provider: "openai",
+        models: {
+          low: "gpt-5.4-nano",
+          mid: "gpt-5.4-mini",
+          high: "gpt-5.5",
+        },
+        defaultTier: "mid",
+      },
+    },
+  };
+}
+
 function configWithOpenCodeGo(): ReturnType<typeof defaultConfig> {
   const config = defaultConfig();
   return {
