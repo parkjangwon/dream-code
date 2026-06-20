@@ -46,8 +46,11 @@ rests.
    - Explain which fallbacks Dream Code will use.
 
 5. **Workflow Vocabulary**
-   - Stub commands and state vocabulary for interview, plan, goal, task, swarm,
-     team, research, LSP, token saving, read, edit, write, and shell.
+   - Implemented commands for interview, plan, goal, tasks, sessions, research,
+     LSP, rules, compact context, artifacts, add-dir, copy/export, hooks, MCP,
+     agents, and swarm.
+   - Agent profiles live as Markdown under `~/.dream/agents/` and
+     `.dream/agents/`; no separate crew/team TOML is required.
 
 ## Near-Term Milestones
 
@@ -77,21 +80,27 @@ rests.
 ### M4: Workflow Engine
 
 - Interview brief.
-- Plan artifact.
-- Goal state machine.
-- Task ledger.
+- Plan artifact and task ledger.
+- Durable goal state.
+- Automatic and manual compact context.
+- Rules and design-doc loading from global and project `AGENTS.md` and
+  `DESIGN.md`.
 
 ### M5: Parallel Work
 
-- AgentSwarm-style `prompt_template + items`.
-- Task scheduler with rate-limit backoff.
-- Team member profiles and personas.
+- Kimi-inspired Dream Swarm fan-out with forced lane count, live monitor,
+  lane inspection, cancellation, and synthesis.
+- Claude-style agent library and project/personal agent Markdown profiles.
+- Remaining depth: rate-limit aware scheduling and resumable long-running
+  swarm jobs.
 
 ### M6: Research And Code Intelligence
 
-- Web research with citations.
-- LSP diagnostics, definition, references, symbols, hover.
-- Evidence ledger integration.
+- Web research command and agent tool.
+- LSP diagnostics command.
+- MCP and hook configuration surfaces.
+- Remaining depth: richer source citations, interactive LSP navigation, and
+  evidence ledger integration.
 
 ## Deferred
 

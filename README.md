@@ -2,9 +2,10 @@
 
 **잠든 사이에도, 당신의 꿈은 빌드됩니다.**
 
-Dream Code is a Termux-first coding harness CLI. The MVP is intentionally small:
-a simple TUI shell, persistent config, YOLO mode, model-mode scaffolding, and an
-environment doctor.
+Dream Code is a Termux-first coding harness CLI. The core stays small while the
+TUI exposes the workflows that matter: sessions, provider login, model picking,
+skills, agents, swarm fan-out, compact context, hooks, MCP settings, and local
+coding tools.
 
 ```sh
 npm install -g dream-code
@@ -18,13 +19,21 @@ Inside the TUI:
 /status
 /doctor
 /yolo
-/providers
-/login <provider> [region]
+/provider
+/login
+/model
+/session
 /skills
-/read <path>
-/write <path> <text>
-/edit <path> old text => new text
-/shell <command>
+/agents
+/swarm --size 8 <goal>
+/goal <goal>
+/plan <request>
+/tasks <task>
+/compact
+/research <query>
+/rules
+/hooks
+/mcp
 ```
 
 Provider setup is env-first. If Dream Code detects a provider API key, `/login`
@@ -38,6 +47,10 @@ Session history uses a Termux-friendly file layout inspired by Kimi Code:
 `~/.dream/sessions/<workspace>/<session>/state.json` plus `wire.jsonl` for
 per-session metadata and append-only turns.
 
+Compact context is automatic as sessions grow and can be forced with
+`/compact`. Saved compacts are injected back into the next agent prompt so long
+sessions stay useful without stuffing the whole transcript into every request.
+
 Skills are loaded from `~/.dream/skills` and `~/.agents/skills`. A skill can be
 a directory with `SKILL.md` or a single Markdown file. Use `/skills` to list or
 enable/disable skills, and mention `@skill-name` in a prompt to activate that
@@ -50,6 +63,16 @@ Current built-in providers:
 openai, deepseek, opencode-go, opencode-zen, minimax, kimi, z-ai, gemini,
 xiaomi-mimo, openrouter, groq, xai, mistral, together, fireworks, cerebras,
 qwen, custom-openai
+```
+
+Optional settings live beside the main config:
+
+```text
+~/.dream/config.toml       main user settings
+~/.dream/models.toml       model routing and tier choices
+~/.dream/mcp.toml          MCP server definitions
+~/.dream/hooks.toml        preTool/postTool/postCommand hooks
+~/.dream/credentials.json  provider credentials
 ```
 
 TUI keys:
