@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -8,6 +8,7 @@ import {
   appendSessionTurn,
   listSessions,
   renameSession,
+  sessionIndexPath,
   startSession,
 } from "../src/session-store.js";
 
@@ -21,6 +22,28 @@ test("session store records a session summary from the latest user turn", async 
     assert.equal(sessions[0]?.name, "dream-code");
     assert.equal(sessions[0]?.summary, "Implement provider routing.");
     assert.equal(sessions[0]?.turns.length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("session store uses an index and per-session wire log", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-session-layout-"));
+  try {
+    const session = await startSession(root, "/tmp/dream-code");
+    await appendSessionTurn(root, session.id, "user", "Ship a Termux-friendly session store.");
+
+    const indexLine = (await readFile(sessionIndexPath(root), "utf8")).trim();
+    const indexEntry = JSON.parse(indexLine);
+
+    assert.equal(indexEntry.sessionId, session.id);
+    assert.equal(indexEntry.directory, "/tmp/dream-code");
+
+    const state = JSON.parse(await readFile(join(indexEntry.sessionDir, "state.json"), "utf8"));
+    const wire = (await readFile(join(indexEntry.sessionDir, "wire.jsonl"), "utf8")).trim();
+
+    assert.equal(state.summary, "Ship a Termux-friendly session store.");
+    assert.match(wire, /"type":"turn"/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

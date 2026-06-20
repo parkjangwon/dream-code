@@ -64,7 +64,7 @@ rests.
 - Harden `read`, `write`, `edit`, and `shell` tools.
 - `rg`-first file search with fallback.
 - Tool output compression policy.
-- Session JSONL log.
+- Kimi-inspired session storage: `session_index.jsonl`, per-session `state.json`, and append-only `wire.jsonl`.
 
 ### M3: Model Layer
 

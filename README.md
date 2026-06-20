@@ -32,6 +32,11 @@ credential in `~/.dream/credentials.json` with owner-only file permissions. Main
 user-editable settings live in TOML files; credentials stay in JSON because they
 are app-owned secrets rather than hand-edited configuration.
 
+Session history uses a Termux-friendly file layout inspired by Kimi Code:
+`~/.dream/session_index.jsonl` for the lightweight picker index and
+`~/.dream/sessions/<workspace>/<session>/state.json` plus `wire.jsonl` for
+per-session metadata and append-only turns.
+
 Current built-in providers:
 
 ```text
