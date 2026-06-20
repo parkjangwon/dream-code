@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import {
   parseConfigToml,
-  serializeCrewConfigToml,
   serializeMainConfigToml,
   serializeModelConfigToml,
   TomlConfigParseError,
@@ -54,11 +53,6 @@ const modelFileSchema = z.object({
   version: z.literal(1),
   model: modelConfigSchema,
 });
-const crewFileSchema = z.object({
-  version: z.literal(1),
-  crew: z.array(teamMemberSchema),
-});
-
 export class ConfigParseError extends Error {
   readonly filePath: string;
 
@@ -116,23 +110,17 @@ export function modelConfigFilePath(root = defaultConfigRoot()): string {
   return join(root, "models.toml");
 }
 
-export function crewConfigFilePath(root = defaultConfigRoot()): string {
-  return join(root, "crew.toml");
-}
-
 export async function loadConfig(root = defaultConfigRoot()): Promise<DreamConfig> {
   const defaults = defaultConfig();
   const mainConfig = await loadMainConfig(root, defaults);
   const model = await loadModelConfig(root, defaults.model);
-  const team = await loadCrewConfig(root, defaults.team);
-  return normalizeLoadedConfig({ ...mainConfig, model, team });
+  return normalizeLoadedConfig({ ...mainConfig, model, team: defaults.team });
 }
 
 export async function saveConfig(root: string, config: DreamConfig): Promise<void> {
   await mkdir(root, { recursive: true });
   await writeFile(configFilePath(root), serializeMainConfigToml(config), "utf8");
   await writeFile(modelConfigFilePath(root), serializeModelConfigToml(config.model), "utf8");
-  await writeFile(crewConfigFilePath(root), serializeCrewConfigToml(config.team), "utf8");
 }
 
 async function loadMainConfig(root: string, defaults: DreamConfig): Promise<Omit<DreamConfig, "model" | "team">> {
@@ -152,12 +140,6 @@ async function loadModelConfig(root: string, defaults: DreamConfig["model"]): Pr
   const filePath = modelConfigFilePath(root);
   const parsed = await loadTomlFile(filePath);
   return parsed === undefined ? defaults : parseWithSchema(filePath, parsed, modelFileSchema).model;
-}
-
-async function loadCrewConfig(root: string, defaults: DreamConfig["team"]): Promise<DreamConfig["team"]> {
-  const filePath = crewConfigFilePath(root);
-  const parsed = await loadTomlFile(filePath);
-  return parsed === undefined ? defaults : parseWithSchema(filePath, parsed, crewFileSchema).crew;
 }
 
 async function loadTomlFile(filePath: string): Promise<unknown | undefined> {

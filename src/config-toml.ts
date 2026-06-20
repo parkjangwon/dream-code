@@ -70,24 +70,6 @@ export function serializeModelConfigToml(model: ModelConfig): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-export function serializeCrewConfigToml(team: DreamConfig["team"]): string {
-  const lines = ["version = 1", ""];
-
-  for (const member of team) {
-    lines.push(
-      "[[crew]]",
-      `id = ${quote(member.id)}`,
-      `name = ${quote(member.name)}`,
-      `role = ${quote(member.role)}`,
-      `mission = ${quote(member.mission)}`,
-      `enabled = ${member.enabled}`,
-      "",
-    );
-  }
-
-  return `${lines.join("\n").trimEnd()}\n`;
-}
-
 export function parseConfigToml(raw: string): unknown {
   const root: TomlObject = {};
   let current = root;

@@ -30,7 +30,7 @@ rests.
    - Ctrl+L redraw, Up/Down history, and slash command menu.
 
 2. **Config**
-   - Store main config at `~/.dream/config.toml`, model routing at `~/.dream/models.toml`, and crew members at `~/.dream/crew.toml`.
+   - Store main config at `~/.dream/config.toml`, model routing at `~/.dream/models.toml`, and crew agents as Markdown cards under `~/.dream/agents/` or `.dream/agents/`.
    - Keep provider credentials in `~/.dream/credentials.json` as an app-owned secret store with owner-only permissions.
    - Persist `/yolo` toggles.
    - Keep a single default visual theme; do not expose theme settings.

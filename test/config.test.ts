@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -6,7 +6,6 @@ import assert from "node:assert/strict";
 
 import {
   configFilePath,
-  crewConfigFilePath,
   defaultConfig,
   loadConfig,
   modelConfigFilePath,
@@ -40,18 +39,21 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
     const disabled = await togglePersistedYolo(root);
     const savedToml = await readFile(configFilePath(root), "utf8");
     const modelsToml = await readFile(modelConfigFilePath(root), "utf8");
-    const crewToml = await readFile(crewConfigFilePath(root), "utf8");
 
     assert.equal(enabled.permissions.mode, "yolo");
     assert.equal(disabled.permissions.mode, "ask");
     assert.match(savedToml, /\[permissions\]\nmode = "ask"/);
     assert.doesNotMatch(savedToml, /\[model\]/);
     assert.match(modelsToml, /\[model\.single\.models\]/);
-    assert.match(crewToml, /\[\[crew\]\]/);
+    await assertFileMissing(join(root, "crew.toml"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+async function assertFileMissing(filePath: string): Promise<void> {
+  await assert.rejects(() => stat(filePath), { code: "ENOENT" });
+}
 
 test("resolveEffectivePermissionMode prefers one-shot yolo over saved config", () => {
   const config = defaultConfig();
