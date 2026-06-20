@@ -3,6 +3,7 @@ import type { AgentDefinition } from "./agent-library.js";
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
 import { ansi, paint, stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
+import { createSwarmMonitor } from "./swarm-monitor.js";
 import {
   createSwarmPlan,
   createSwarmSynthesisAgent,
@@ -10,9 +11,24 @@ import {
   type SwarmLane,
 } from "./swarm-plan.js";
 
+export type SwarmRunProgress = {
+  readonly characters: number;
+};
+
 export type SwarmRunInput =
-  | { readonly kind: "lane"; readonly lane: SwarmLane; readonly agent: AgentDefinition; readonly prompt: string }
-  | { readonly kind: "synthesis"; readonly agent: AgentDefinition; readonly prompt: string };
+  | {
+    readonly kind: "lane";
+    readonly lane: SwarmLane;
+    readonly agent: AgentDefinition;
+    readonly prompt: string;
+    readonly report: (progress: SwarmRunProgress) => void;
+  }
+  | {
+    readonly kind: "synthesis";
+    readonly agent: AgentDefinition;
+    readonly prompt: string;
+    readonly report: (progress: SwarmRunProgress) => void;
+  };
 
 export type SwarmAgentRunner = (input: SwarmRunInput) => Promise<string>;
 
@@ -48,30 +64,74 @@ export async function runAgentSwarmWithAgents(
 ): Promise<SwarmRunSummary> {
   const plan = createSwarmPlan(options.goal, options.agents, options.maxAgents);
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
+  const monitor = createSwarmMonitor({
+    goal: options.goal,
+    lanes: plan.lanes,
+    write: options.write,
+  });
   options.write(formatSwarmHeader(plan.lanes.length));
+  monitor.start();
 
   const laneResults = await Promise.all(plan.lanes.map(async (lane) => {
     const startedAt = Date.now();
-    options.write(`${paint("↯", ansi.accent)} ${paint("launch", ansi.dim)} ${lane.title}\n`);
-    const output = await runAgent({
-      kind: "lane",
-      lane,
-      agent: lane.agent,
-      prompt: lane.prompt,
+    monitor.laneStarted(lane.id);
+    const output = await runLane(runAgent, lane, (progress) => {
+      monitor.laneProgress(lane.id, progress.characters);
     });
     const elapsedMs = Date.now() - startedAt;
-    options.write(`${paint("✓", ansi.green)} ${paint("done", ansi.dim)} ${lane.title} ${paint(`${elapsedMs}ms`, ansi.guide)}\n`);
+    if (output.startsWith("Lane failed:")) {
+      monitor.laneFailed(lane.id, output.length);
+    } else {
+      monitor.laneDone(lane.id, output.length);
+    }
     return { lane, output, elapsedMs };
   }));
 
   const synthesisAgent = createSwarmSynthesisAgent();
-  const synthesis = await runAgent({
-    kind: "synthesis",
-    agent: synthesisAgent,
-    prompt: createSwarmSynthesisPrompt(options.goal, laneResults),
-  });
+  monitor.synthesisStarted();
+  const synthesis = await runSynthesis(runAgent, synthesisAgent, createSwarmSynthesisPrompt(options.goal, laneResults));
+  if (synthesis.startsWith("Synthesis failed:")) {
+    monitor.synthesisFailed();
+  } else {
+    monitor.synthesisDone();
+  }
   options.write(formatSwarmSynthesis(synthesis));
   return { goal: options.goal, laneResults, synthesis };
+}
+
+async function runLane(
+  runAgent: SwarmAgentRunner,
+  lane: SwarmLane,
+  report: (progress: SwarmRunProgress) => void,
+): Promise<string> {
+  try {
+    return await runAgent({
+      kind: "lane",
+      lane,
+      agent: lane.agent,
+      prompt: lane.prompt,
+      report,
+    });
+  } catch (error) {
+    return `Lane failed: ${errorMessage(error)}`;
+  }
+}
+
+async function runSynthesis(
+  runAgent: SwarmAgentRunner,
+  agent: AgentDefinition,
+  prompt: string,
+): Promise<string> {
+  try {
+    return await runAgent({
+      kind: "synthesis",
+      agent,
+      prompt,
+      report: () => undefined,
+    });
+  } catch (error) {
+    return `Synthesis failed: ${errorMessage(error)}`;
+  }
 }
 
 function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
@@ -84,6 +144,7 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
       agent: input.agent,
       write: (chunk) => {
         transcript = `${transcript}${stripAnsi(chunk)}`;
+        input.report({ characters: transcript.length });
       },
     });
     return transcript.trim();
@@ -95,6 +156,10 @@ function formatSwarmHeader(agentCount: number): string {
     `${paint("✹ Dream Swarm", ansi.accent)} ${paint(`${agentCount} parallel agents`, ansi.bold)}`,
     paint("Kimi-style fan-out · token mixing on · synthesis pass enabled", ansi.guide),
   ].join("\n").concat("\n");
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown swarm failure";
 }
 
 function formatSwarmSynthesis(synthesis: string): string {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { stripAnsi } from "../src/ansi.js";
 import type { AgentDefinition } from "../src/agent-library.js";
 import { defaultConfig } from "../src/config.js";
 import { runAgentSwarmWithAgents } from "../src/swarm-runner.js";
@@ -50,6 +51,42 @@ test("runAgentSwarmWithAgents starts fan-out lanes in parallel before synthesis"
     "lane:security-reviewer",
   ]);
   assert.equal(calls[3], "synthesis:swarm-synthesizer");
+});
+
+test("runAgentSwarmWithAgents renders live monitor progress", async () => {
+  const chunks: string[] = [];
+
+  await runAgentSwarmWithAgents({
+    config: defaultConfig(),
+    configRoot: "/tmp/dream",
+    cwd: "/repo",
+    goal: "Monitor the swarm",
+    agents: [
+      agent("tech-lead", "Tech Lead", "Plan."),
+      agent("code-reviewer", "Code Reviewer", "Review."),
+    ],
+    maxAgents: 2,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+    runAgent: async (input) => {
+      if (input.kind === "lane") {
+        input.report({ characters: 1536 });
+        return `${input.agent.name} result`;
+      }
+      return "merged result";
+    },
+  });
+
+  const output = stripAnsi(chunks.join(""));
+  assert.match(output, /Dream Swarm/u);
+  assert.match(output, /Swarm Monitor/u);
+  assert.match(output, /RUNNING/u);
+  assert.match(output, /DONE/u);
+  assert.match(output, /1\.5k chars/u);
+  assert.match(output, /merging parallel outputs/u);
+  assert.match(output, /token mixing radar online/u);
+  assert.match(output, /Swarm Synthesis/u);
 });
 
 function agent(id: string, name: string, summary: string): AgentDefinition {
