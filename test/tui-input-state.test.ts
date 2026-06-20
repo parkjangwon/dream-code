@@ -14,6 +14,7 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(opened.state.palette?.matches.length, slashCommands.length);
   assert.equal(selected.effect.kind, "submit");
   assert.equal(selected.effect.text, "/help");
+  assert.equal(slashCommands.some((command) => command.name === "/models"), true);
 });
 
 test("slash command palette uses arrow keys for selection", () => {

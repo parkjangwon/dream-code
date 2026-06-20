@@ -10,6 +10,7 @@ export const slashCommands = [
   { name: "/doctor", summary: "Check local tools", acceptsArgs: false },
   { name: "/yolo", summary: "Toggle saved bypass mode", acceptsArgs: false },
   { name: "/model", summary: "Show model routing", acceptsArgs: false },
+  { name: "/models", summary: "Choose active model", acceptsArgs: true },
   { name: "/providers", summary: "List provider connections", acceptsArgs: false },
   { name: "/login", summary: "Login to a provider", acceptsArgs: true },
   { name: "/read", summary: "Read a workspace file", acceptsArgs: true },

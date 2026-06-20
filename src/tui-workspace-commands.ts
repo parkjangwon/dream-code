@@ -9,6 +9,7 @@ import {
   type DreamConfig,
   type PermissionMode,
 } from "./config.js";
+import { configureModels } from "./tui-model-commands.js";
 import { connectProvider, loginProvider, printProviders } from "./tui-provider-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
@@ -63,6 +64,16 @@ export async function runWorkspaceCommand(
     case "/providers":
       await printProviders(configRoot);
       return { config, shouldContinue: true };
+    case "/models":
+      return {
+        config: await configureModels({
+          config,
+          configRoot,
+          args: command.rest,
+          questioner,
+        }),
+        shouldContinue: true,
+      };
     case "/connect":
       return {
         config: await connectProvider({
