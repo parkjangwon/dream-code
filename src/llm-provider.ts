@@ -43,6 +43,7 @@ export type StreamChatInput = {
   readonly messages: readonly ChatMessage[];
   readonly env?: ProviderEnv;
   readonly configRoot?: string;
+  readonly signal?: AbortSignal;
   readonly onToken: (token: string) => void | Promise<void>;
 };
 
@@ -141,7 +142,7 @@ export async function resolveProviderSettingsForRequest(
 export async function streamChatCompletion(input: StreamChatInput): Promise<void> {
   const credential = await readProviderCredential(input.selectedModel.provider, input.configRoot);
   const settings = await resolveProviderSettingsForRequest(input.selectedModel.provider, input.env, credential);
-  const response = await request(endpointFor(settings), {
+  const requestOptions = input.signal === undefined ? {
     method: "POST",
     headers: buildProviderRequestHeaders(settings),
     body: JSON.stringify(buildProviderRequestBody(
@@ -151,7 +152,19 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
     )),
     headersTimeout: 15_000,
     bodyTimeout: 120_000,
-  });
+  } : {
+    method: "POST",
+    headers: buildProviderRequestHeaders(settings),
+    body: JSON.stringify(buildProviderRequestBody(
+      settings.protocol,
+      providerModelIdForRequest(settings.provider, input.selectedModel.model),
+      input.messages,
+    )),
+    signal: input.signal,
+    headersTimeout: 15_000,
+    bodyTimeout: 120_000,
+  };
+  const response = await request(endpointFor(settings), requestOptions);
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ProviderRequestError(response.statusCode, await response.body.text());

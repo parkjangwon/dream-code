@@ -1,11 +1,18 @@
 import {
   renderSwarmMonitorSnapshot,
-  type SwarmLaneStatus,
   type SwarmMonitorLane,
   type SwarmMonitorView,
   type SwarmSynthesisStatus,
 } from "./swarm-monitor-render.js";
 import { createSwarmMonitorKeyController } from "./swarm-monitor-keys.js";
+import {
+  hasLiveActivity,
+  isAbortArmed,
+  type MutableLaneState,
+  updateFinishedLane,
+  updateLane,
+  wrapIndex,
+} from "./swarm-monitor-state.js";
 import type { SwarmLane } from "./swarm-plan.js";
 
 export type SwarmMonitor = {
@@ -14,19 +21,12 @@ export type SwarmMonitor = {
   readonly laneProgress: (laneId: string, characters: number, preview?: string) => void;
   readonly laneDone: (laneId: string, characters: number, preview?: string) => void;
   readonly laneFailed: (laneId: string, characters: number, preview?: string) => void;
+  readonly laneCancelled: (laneId: string, characters: number, preview?: string) => void;
   readonly synthesisStarted: () => void;
   readonly synthesisDone: () => void;
   readonly synthesisFailed: () => void;
+  readonly synthesisCancelled: () => void;
   readonly stop: () => void;
-};
-
-type MutableLaneState = {
-  status: SwarmLaneStatus;
-  characters: number;
-  preview: string;
-  startedAt: number | undefined;
-  finishedAt: number | undefined;
-  lastRenderedCharacters: number;
 };
 
 type MonitorOptions = {
@@ -35,6 +35,7 @@ type MonitorOptions = {
   readonly write: (text: string) => void;
   readonly replaceInPlace?: boolean;
   readonly interactive?: boolean;
+  readonly onAbort?: () => void;
   readonly now?: () => number;
 };
 
@@ -50,6 +51,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   let selectedIndex = options.lanes.length === 0 ? undefined : 1;
   let view: SwarmMonitorView = "monitor";
   let animationTimer: ReturnType<typeof setInterval> | undefined;
+  let abortArmedAt: number | undefined;
   const state = new Map<string, MutableLaneState>(options.lanes.map((lane) => [lane.id, {
     status: "queued",
     characters: 0,
@@ -69,6 +71,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       selectedIndex,
       view,
       interactive: options.interactive === true,
+      abortArmed: isAbortArmed(abortArmedAt, now()),
       synthesisStatus,
     });
     if (options.replaceInPlace === true) {
@@ -99,6 +102,19 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
     view = "monitor";
     render();
   };
+  const escape = (): void => {
+    if (view === "detail") {
+      closeDetail();
+      return;
+    }
+    const current = now();
+    if (isAbortArmed(abortArmedAt, current)) {
+      options.onAbort?.();
+      return;
+    }
+    abortArmedAt = current;
+    render();
+  };
   const syncAnimation = (): void => {
     if (options.replaceInPlace !== true) {
       return;
@@ -117,7 +133,10 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   const keys = createSwarmMonitorKeyController(options.interactive === true, {
     moveSelection,
     openDetail,
-    closeDetail,
+    escape,
+    abort: () => {
+      options.onAbort?.();
+    },
   });
   const stop = (): void => {
     if (animationTimer !== undefined) {
@@ -169,14 +188,12 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       syncAnimation();
     },
     laneFailed: (laneId, characters, preview) => {
-      updateLane(state, laneId, (lane) => {
-        lane.status = "failed";
-        lane.characters = Math.max(lane.characters, characters);
-        if (preview !== undefined) {
-          lane.preview = preview;
-        }
-        lane.finishedAt = now();
-      });
+      updateFinishedLane(state, laneId, "failed", characters, preview, now());
+      render();
+      syncAnimation();
+    },
+    laneCancelled: (laneId, characters, preview) => {
+      updateFinishedLane(state, laneId, "cancelled", characters, preview, now());
       render();
       syncAnimation();
     },
@@ -195,6 +212,11 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       render();
       syncAnimation();
     },
+    synthesisCancelled: () => {
+      synthesisStatus = "cancelled";
+      render();
+      syncAnimation();
+    },
     stop,
   };
 }
@@ -210,25 +232,6 @@ function laneSnapshot(lane: SwarmLane, index: number, state: MutableLaneState | 
     startedAt: state?.startedAt,
     finishedAt: state?.finishedAt,
   };
-}
-
-function wrapIndex(index: number, length: number): number {
-  if (index < 1) {
-    return length;
-  }
-  if (index > length) {
-    return 1;
-  }
-  return index;
-}
-
-function updateLane(state: Map<string, MutableLaneState>, laneId: string, update: (lane: MutableLaneState) => boolean | void): boolean {
-  const lane = state.get(laneId);
-  return lane === undefined ? false : update(lane) === true;
-}
-
-function hasLiveActivity(state: ReadonlyMap<string, MutableLaneState>, synthesisStatus: SwarmSynthesisStatus): boolean {
-  return synthesisStatus === "running" || [...state.values()].some((lane) => lane.status === "running");
 }
 
 function clearPreviousSnapshot(lineCount: number): string {

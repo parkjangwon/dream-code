@@ -19,6 +19,7 @@ export type AgentPromptOptions = {
   readonly configRoot?: string;
   readonly prompt: string;
   readonly agent?: AgentDefinition;
+  readonly signal?: AbortSignal;
   readonly write: (text: string) => void;
 };
 
@@ -33,19 +34,19 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   response.start();
 
   try {
-    const streamInput = options.configRoot === undefined
-      ? {
+    const baseStreamInput = options.configRoot === undefined
+      ? optionalSignal({
         selectedModel,
         messages: createAgentMessages(options.prompt, skills, options.agent),
         onToken: response.token,
-      }
-      : {
+      }, options.signal)
+      : optionalSignal({
         selectedModel,
         messages: createAgentMessages(options.prompt, skills, options.agent),
         configRoot: options.configRoot,
         onToken: response.token,
-      };
-    await streamChatCompletion(streamInput);
+      }, options.signal);
+    await streamChatCompletion(baseStreamInput);
     response.finish();
   } catch (error) {
     if (error instanceof MissingProviderConfigError) {
@@ -134,4 +135,8 @@ function selectedSkillsForPrompt(prompt: string, skills: readonly DreamSkill[]):
 
 function isString(value: string | undefined): value is string {
   return value !== undefined;
+}
+
+function optionalSignal<T extends object>(input: T, signal: AbortSignal | undefined): T | T & { readonly signal: AbortSignal } {
+  return signal === undefined ? input : { ...input, signal };
 }

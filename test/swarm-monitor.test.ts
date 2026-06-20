@@ -38,6 +38,7 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
     selectedIndex: undefined,
     view: "monitor",
     interactive: false,
+    abortArmed: false,
   }));
 
   assert.match(rendered, /Swarm Monitor/u);
@@ -61,6 +62,7 @@ test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane detail
     selectedIndex: 2,
     view: "detail",
     interactive: true,
+    abortArmed: false,
     lanes: [
       {
         id: "lane-1",

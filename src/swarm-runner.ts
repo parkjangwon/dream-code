@@ -22,12 +22,14 @@ export type SwarmRunInput =
     readonly lane: SwarmLane;
     readonly agent: AgentDefinition;
     readonly prompt: string;
+    readonly signal: AbortSignal;
     readonly report: (progress: SwarmRunProgress) => void;
   }
   | {
     readonly kind: "synthesis";
     readonly agent: AgentDefinition;
     readonly prompt: string;
+    readonly signal: AbortSignal;
     readonly report: (progress: SwarmRunProgress) => void;
   };
 
@@ -53,8 +55,12 @@ export type SwarmRunOptions = {
   readonly forceAgents?: number;
   readonly write: (text: string) => void;
   readonly replaceMonitor?: boolean;
+  readonly signal?: AbortSignal;
   readonly runAgent?: SwarmAgentRunner;
 };
+
+const laneCancelledOutput = "Lane cancelled: swarm stopped by user.";
+const synthesisCancelledOutput = "Synthesis cancelled: swarm stopped by user.";
 
 export async function runAgentSwarm(options: SwarmRunOptions): Promise<SwarmRunSummary> {
   const agents = await loadAgentDefinitions(options.configRoot, options.cwd);
@@ -66,16 +72,23 @@ export async function runAgentSwarmWithAgents(
 ): Promise<SwarmRunSummary> {
   const plan = createSwarmPlan(options.goal, options.agents, swarmPlanOptions(options));
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
+  const abortController = createSwarmAbortController(options.signal);
   const monitor = createSwarmMonitor(options.replaceMonitor === undefined ? {
     goal: options.goal,
     lanes: plan.lanes,
     write: options.write,
+    onAbort: () => {
+      abortController.abort();
+    },
   } : {
     goal: options.goal,
     lanes: plan.lanes,
     write: options.write,
     replaceInPlace: options.replaceMonitor,
     interactive: options.replaceMonitor === true,
+    onAbort: () => {
+      abortController.abort();
+    },
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
@@ -85,9 +98,11 @@ export async function runAgentSwarmWithAgents(
     monitor.laneStarted(lane.id);
     const output = await runLane(runAgent, lane, (progress) => {
       monitor.laneProgress(lane.id, progress.characters, progress.preview);
-    });
+    }, abortController.signal);
     const elapsedMs = Date.now() - startedAt;
-    if (output.startsWith("Lane failed:")) {
+    if (output === laneCancelledOutput) {
+      monitor.laneCancelled(lane.id, output.length, output);
+    } else if (output.startsWith("Lane failed:")) {
       monitor.laneFailed(lane.id, output.length, output);
     } else {
       monitor.laneDone(lane.id, output.length, output);
@@ -95,10 +110,19 @@ export async function runAgentSwarmWithAgents(
     return { lane, output, elapsedMs };
   }));
 
+  if (abortController.signal.aborted) {
+    monitor.synthesisCancelled();
+    monitor.stop();
+    options.write(formatSwarmCancelled());
+    return { goal: options.goal, laneResults, synthesis: synthesisCancelledOutput };
+  }
+
   const synthesisAgent = createSwarmSynthesisAgent();
   monitor.synthesisStarted();
-  const synthesis = await runSynthesis(runAgent, synthesisAgent, createSwarmSynthesisPrompt(options.goal, laneResults));
-  if (synthesis.startsWith("Synthesis failed:")) {
+  const synthesis = await runSynthesis(runAgent, synthesisAgent, createSwarmSynthesisPrompt(options.goal, laneResults), abortController.signal);
+  if (synthesis === synthesisCancelledOutput) {
+    monitor.synthesisCancelled();
+  } else if (synthesis.startsWith("Synthesis failed:")) {
     monitor.synthesisFailed();
   } else {
     monitor.synthesisDone();
@@ -112,15 +136,17 @@ async function runLane(
   runAgent: SwarmAgentRunner,
   lane: SwarmLane,
   report: (progress: SwarmRunProgress) => void,
+  signal: AbortSignal,
 ): Promise<string> {
   try {
-    return await runAgent({
+    return await runWithAbort(runAgent({
       kind: "lane",
       lane,
       agent: lane.agent,
       prompt: lane.prompt,
+      signal,
       report,
-    });
+    }), signal, laneCancelledOutput);
   } catch (error) {
     return `Lane failed: ${errorMessage(error)}`;
   }
@@ -130,14 +156,16 @@ async function runSynthesis(
   runAgent: SwarmAgentRunner,
   agent: AgentDefinition,
   prompt: string,
+  signal: AbortSignal,
 ): Promise<string> {
   try {
-    return await runAgent({
+    return await runWithAbort(runAgent({
       kind: "synthesis",
       agent,
       prompt,
+      signal,
       report: () => undefined,
-    });
+    }), signal, synthesisCancelledOutput);
   } catch (error) {
     return `Synthesis failed: ${errorMessage(error)}`;
   }
@@ -151,6 +179,7 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
       configRoot: options.configRoot,
       prompt: input.prompt,
       agent: input.agent,
+      signal: input.signal,
       write: (chunk) => {
         transcript = `${transcript}${stripAnsi(chunk)}`;
         input.report({ characters: transcript.length, preview: tailPreview(transcript) });
@@ -158,6 +187,34 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
     });
     return transcript.trim();
   };
+}
+
+function createSwarmAbortController(externalSignal: AbortSignal | undefined): AbortController {
+  const controller = new AbortController();
+  const abort = (): void => {
+    controller.abort();
+  };
+  if (externalSignal?.aborted === true) {
+    abort();
+    return controller;
+  }
+  externalSignal?.addEventListener("abort", abort, { once: true });
+  return controller;
+}
+
+function runWithAbort(task: Promise<string>, signal: AbortSignal, cancelledOutput: string): Promise<string> {
+  if (signal.aborted) {
+    return Promise.resolve(cancelledOutput);
+  }
+  return new Promise((resolve, reject) => {
+    const abort = (): void => {
+      resolve(cancelledOutput);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    task.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", abort);
+    });
+  });
 }
 
 function tailPreview(text: string): string {
@@ -187,4 +244,8 @@ function formatSwarmSynthesis(synthesis: string): string {
     ...body.split(/\r?\n/u).map((line) => `${paint("│", ansi.guide)} ${line}`),
     `${paint("✓", ansi.green)} ${paint("Swarm complete", ansi.dim)}`,
   ].join("\n").concat("\n");
+}
+
+function formatSwarmCancelled(): string {
+  return `${paint("✓", ansi.yellow)} ${paint("Swarm stopped", ansi.dim)}\n`;
 }

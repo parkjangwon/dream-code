@@ -4,6 +4,7 @@ import test from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import type { AgentDefinition } from "../src/agent-library.js";
 import { defaultConfig } from "../src/config.js";
+import { renderSwarmMonitorSnapshot } from "../src/swarm-monitor-render.js";
 import { runAgentSwarmWithAgents } from "../src/swarm-runner.js";
 
 test("runAgentSwarmWithAgents starts fan-out lanes in parallel before synthesis", async () => {
@@ -87,6 +88,73 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
   assert.match(output, /merging parallel outputs/u);
   assert.match(output, /token mixing radar online/u);
   assert.match(output, /Swarm Synthesis/u);
+});
+
+test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", async () => {
+  const chunks: string[] = [];
+  const laneStarted = deferred<void>();
+  const abortController = new AbortController();
+  const calls: string[] = [];
+  const runPromise = runAgentSwarmWithAgents({
+    config: defaultConfig(),
+    configRoot: "/tmp/dream",
+    cwd: "/repo",
+    goal: "Stop the swarm",
+    agents: [
+      agent("tech-lead", "Tech Lead", "Plan."),
+    ],
+    forceAgents: 1,
+    signal: abortController.signal,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+    runAgent: async (input) => {
+      calls.push(input.kind);
+      if (input.kind === "lane") {
+        laneStarted.resolve();
+        return await new Promise<string>(() => undefined);
+      }
+      return "should not synthesize";
+    },
+  });
+
+  await laneStarted.promise;
+  abortController.abort();
+  const summary = await runPromise;
+
+  const output = stripAnsi(chunks.join(""));
+  assert.equal(summary.synthesis, "Synthesis cancelled: swarm stopped by user.");
+  assert.deepEqual(calls, ["lane"]);
+  assert.match(output, /STOPPED/u);
+  assert.match(output, /Swarm stopped/u);
+});
+
+test("renderSwarmMonitorSnapshot shows an armed escape stop hint", () => {
+  const rendered = stripAnsi(renderSwarmMonitorSnapshot({
+    goal: "Stop hint",
+    startedAt: 1000,
+    now: 1100,
+    frame: 1,
+    synthesisStatus: "waiting",
+    selectedIndex: 1,
+    view: "monitor",
+    interactive: true,
+    abortArmed: true,
+    lanes: [
+      {
+        id: "lane-1",
+        index: 1,
+        title: "Tech Lead",
+        status: "running",
+        characters: 0,
+        preview: "",
+        startedAt: 1000,
+        finishedAt: undefined,
+      },
+    ],
+  }));
+
+  assert.match(rendered, /esc again stop swarm/u);
 });
 
 function agent(id: string, name: string, summary: string): AgentDefinition {

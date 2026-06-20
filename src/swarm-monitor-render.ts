@@ -1,8 +1,8 @@
 import { ansi, paint } from "./ansi.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 
-export type SwarmLaneStatus = "queued" | "running" | "done" | "failed";
-export type SwarmSynthesisStatus = "waiting" | "running" | "done" | "failed";
+export type SwarmLaneStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+export type SwarmSynthesisStatus = "waiting" | "running" | "done" | "failed" | "cancelled";
 
 export type SwarmMonitorLane = {
   readonly id: string;
@@ -26,6 +26,7 @@ export type SwarmMonitorSnapshot = {
   readonly selectedIndex: number | undefined;
   readonly view: SwarmMonitorView;
   readonly interactive: boolean;
+  readonly abortArmed: boolean;
   readonly synthesisStatus: SwarmSynthesisStatus;
 };
 
@@ -42,7 +43,7 @@ export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): stri
     ...(showActivity ? [`${paint("│", ansi.guide)} activity ${activityStrip(snapshot.frame)} ${paint("parallel lanes mixing", ansi.dim)}`] : []),
     ...snapshot.lanes.map((lane) => renderLane(lane, snapshot.now, isSelected(snapshot, lane.index))),
     `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot.synthesisStatus)}`,
-    `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive)}`,
+    `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive, snapshot.abortArmed)}`,
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -74,7 +75,7 @@ function renderLaneDetail(snapshot: SwarmMonitorSnapshot): string {
     `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
     `${paint("│", ansi.guide)} latest`,
     ...previewLines.map((line) => `${paint("│", ansi.guide)} ${truncate(line, 96)}`),
-    `${paint("╰─", ansi.accent)} ${paint("esc back", ansi.guide)} ${paint("·", ansi.guide)} ${paint("↑/↓ switch lane", ansi.guide)}`,
+    `${paint("╰─", ansi.accent)} ${paint("esc back", ansi.guide)} ${paint("·", ansi.guide)} ${paint("↑/↓ switch lane", ansi.guide)} ${paint("·", ansi.guide)} ${paint("ctrl+c stop", ansi.guide)}`,
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -92,10 +93,14 @@ function isSelected(snapshot: SwarmMonitorSnapshot, laneIndex: number): boolean 
   return snapshot.interactive && snapshot.selectedIndex === laneIndex;
 }
 
-function footerText(interactive: boolean): string {
-  return interactive
-    ? paint("↑/↓ select lane · enter inspect · esc back · token mixing radar online", ansi.guide)
-    : paint("token mixing radar online", ansi.guide);
+function footerText(interactive: boolean, abortArmed: boolean): string {
+  if (!interactive) {
+    return paint("token mixing radar online", ansi.guide);
+  }
+  if (abortArmed) {
+    return paint("esc again stop swarm · ctrl+c stop · token mixing radar online", ansi.yellow);
+  }
+  return paint("↑/↓ select lane · enter inspect · esc esc stop · ctrl+c stop · token mixing radar online", ansi.guide);
 }
 
 function statusLabel(status: SwarmLaneStatus): string {
@@ -108,6 +113,8 @@ function statusLabel(status: SwarmLaneStatus): string {
       return paint("DONE   ", ansi.green);
     case "failed":
       return paint("FAILED ", ansi.red);
+    case "cancelled":
+      return paint("STOPPED", ansi.yellow);
     default:
       return assertNever(status);
   }
@@ -123,6 +130,8 @@ function statusBar(status: SwarmLaneStatus): string {
       return paint("████████", ansi.green);
     case "failed":
       return paint("██░░░░░░", ansi.red);
+    case "cancelled":
+      return paint("▒▒▒▒░░░░", ansi.yellow);
     default:
       return assertNever(status);
   }
@@ -145,6 +154,8 @@ function formatSynthesis(status: SwarmSynthesisStatus): string {
       return paint("complete", ansi.green);
     case "failed":
       return paint("failed", ansi.red);
+    case "cancelled":
+      return paint("stopped", ansi.yellow);
     default:
       return assertNever(status);
   }

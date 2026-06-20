@@ -4,7 +4,8 @@ import { emitKeypressEvents, type Key } from "node:readline";
 export type SwarmMonitorKeyActions = {
   readonly moveSelection: (direction: number) => void;
   readonly openDetail: () => void;
-  readonly closeDetail: () => void;
+  readonly escape: () => void;
+  readonly abort: () => void;
 };
 
 export type SwarmMonitorKeyController = {
@@ -50,6 +51,10 @@ export function createSwarmMonitorKeyController(
 }
 
 function handleKey(key: Key, actions: SwarmMonitorKeyActions): void {
+  if (key.ctrl === true && key.name === "c") {
+    actions.abort();
+    return;
+  }
   switch (key.name) {
     case "up":
       actions.moveSelection(-1);
@@ -61,7 +66,7 @@ function handleKey(key: Key, actions: SwarmMonitorKeyActions): void {
       actions.openDetail();
       return;
     case "escape":
-      actions.closeDetail();
+      actions.escape();
       return;
     default:
       return;
