@@ -4,7 +4,7 @@ import type { Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
-import { clearRenderedLines } from "./tui-input-render.js";
+import { clearRenderedLines, renderPaletteDescription } from "./tui-input-render.js";
 import {
   createPickerState,
   pickerSelection,
@@ -87,6 +87,7 @@ export function readInteractivePicker(
 }
 
 function renderPickerView(title: string, state: PickerState): number {
+  const width = Math.max(64, output.columns ?? 80);
   const visible = pickerVisibleChoices(state);
   const selected = pickerSelection(state);
   const start = visibleStart(state.selectedIndex, visible.length);
@@ -99,7 +100,7 @@ function renderPickerView(title: string, state: PickerState): number {
   for (let index = 0; index < windowed.length; index += 1) {
     const choice = windowed[index];
     if (choice !== undefined) {
-      lines.push(formatChoiceLine(choice, selected?.value === choice.value));
+      lines.push(formatChoiceLine(choice, selected?.value === choice.value, width));
     }
   }
   if (visible.length === 0) {
@@ -140,18 +141,26 @@ function visibleStart(selectedIndex: number, visibleCount: number): number {
   return Math.max(0, Math.min(selectedIndex, visibleCount - maxVisibleChoices));
 }
 
-function formatChoiceLine(choice: PickerChoice, selected: boolean): string {
+export function formatChoiceLine(choice: PickerChoice, selected: boolean, width = 80): string {
   const marker = selected ? paint(">", ansi.accent) : " ";
+  const labelWidth = Math.min(34, Math.max(16, Math.floor(width * 0.3)));
+  const label = padVisible(renderPaletteDescription(choice.label, labelWidth), labelWidth);
+  const prefix = `${marker} ${label}`;
   const description = choice.description.length > 0
-    ? ` ${formatDescription(choice)}`
+    ? ` ${formatDescription(choice, width - terminalVisibleWidth(prefix) - 1)}`
     : "";
-  return `${marker} ${choice.label}${description}`;
+  return `${prefix}${description}`;
 }
 
-function formatDescription(choice: PickerChoice): string {
+function formatDescription(choice: PickerChoice, width: number): string {
+  const description = renderPaletteDescription(choice.description, width);
   return choice.descriptionStyle === "raw"
-    ? choice.description
-    : paint(choice.description, ansi.dim);
+    ? description
+    : paint(description, ansi.dim);
+}
+
+function padVisible(text: string, width: number): string {
+  return `${text}${" ".repeat(Math.max(0, width - terminalVisibleWidth(text)))}`;
 }
 
 function moveCursorToSearchLine(lineCount: number, query: string): void {
