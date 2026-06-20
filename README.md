@@ -20,6 +20,7 @@ Inside the TUI:
 /yolo
 /providers
 /login <provider> [region]
+/skills
 /read <path>
 /write <path> <text>
 /edit <path> old text => new text
@@ -36,6 +37,11 @@ Session history uses a Termux-friendly file layout inspired by Kimi Code:
 `~/.dream/session_index.jsonl` for the lightweight picker index and
 `~/.dream/sessions/<workspace>/<session>/state.json` plus `wire.jsonl` for
 per-session metadata and append-only turns.
+
+Skills are loaded from `~/.dream/skills` and `~/.agents/skills`. A skill can be
+a directory with `SKILL.md` or a single Markdown file. Use `/skills` to list or
+enable/disable skills, and mention `@skill-name` in a prompt to activate that
+skill without injecting every skill into context.
 
 Current built-in providers:
 

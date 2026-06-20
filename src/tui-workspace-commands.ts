@@ -15,6 +15,7 @@ import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
+import { showSkillMenu } from "./tui-skill-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
   readWorkspaceFile,
@@ -109,6 +110,9 @@ export async function runWorkspaceCommand(
         }),
         shouldContinue: true,
       };
+    case "/skills":
+      await showSkillMenu(configRoot, questioner);
+      return { config, shouldContinue: true };
     case "/read":
       await printFile(command.rest);
       return { config, shouldContinue: true };
