@@ -87,6 +87,7 @@ test("buildProviderRequestBody omits temperature by default for model compatibil
   assert.deepEqual(buildProviderRequestBody("responses", "gpt-5.5", messages), {
     model: "gpt-5.5",
     input: messages,
+    store: false,
     stream: true,
   });
 });
@@ -101,6 +102,7 @@ test("buildProviderRequestBody moves system messages into Responses instructions
     model: "gpt-5.5",
     input: [{ role: "user", content: "hello" }],
     instructions: "Be concise.",
+    store: false,
     stream: true,
   });
 });

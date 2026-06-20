@@ -219,8 +219,8 @@ function responseRequestBody(
     .join("\n\n");
   const input = messages.filter((message) => message.role !== "system");
   return instructions.length === 0
-    ? { model, input: messages, stream: true }
-    : { model, input, instructions, stream: true };
+    ? { model, input: messages, store: false, stream: true }
+    : { model, input, instructions, store: false, stream: true };
 }
 
 function firstEnv(env: ProviderEnv, keys: readonly string[]): string | undefined {
