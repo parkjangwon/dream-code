@@ -79,6 +79,7 @@ export async function runWorkspaceCommand(
         }),
         shouldContinue: true,
       };
+    case "/model":
     case "/models":
       return {
         config: await configureModels({
