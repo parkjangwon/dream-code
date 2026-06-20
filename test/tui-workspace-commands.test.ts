@@ -30,6 +30,34 @@ test("runWorkspaceCommand routes /model to model configuration", async () => {
   }
 });
 
+test("runWorkspaceCommand fires postCommand hooks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-hook-"));
+  const outputPath = join(root, "hook-command.txt");
+  const previous = process.env["DREAM_HOOK_OUT"];
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    process.env["DREAM_HOOK_OUT"] = outputPath;
+    await writeFile(join(root, "hooks.toml"), [
+      "[[hook]]",
+      "event = \"postCommand\"",
+      "command = node -e 'require(\"node:fs\").writeFileSync(process.env.DREAM_HOOK_OUT, process.env.DREAM_COMMAND)'",
+      "enabled = true",
+    ].join("\n"), "utf8");
+
+    await runWorkspaceCommand("/tasks", defaultConfig(), true, { question: async () => "" }, root);
+
+    assert.equal(await readFile(outputPath, "utf8"), "/tasks");
+  } finally {
+    stdout.mock.restore();
+    if (previous === undefined) {
+      delete process.env["DREAM_HOOK_OUT"];
+    } else {
+      process.env["DREAM_HOOK_OUT"] = previous;
+    }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runWorkspaceCommand lists installed skills", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-skills-"));
   const originalHome = process.env["HOME"];

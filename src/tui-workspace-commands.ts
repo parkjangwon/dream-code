@@ -8,6 +8,7 @@ import {
   resolveEffectivePermissionMode,
   type DreamConfig,
 } from "./config.js";
+import { runHookEvent } from "./hooks.js";
 import { appendSessionTurn } from "./session-store.js";
 import { maybeAutoCompactSession } from "./session-actions.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
@@ -42,6 +43,20 @@ export async function runWorkspaceCommand(
   configRoot = defaultConfigRoot(),
   sessionRuntime?: SessionRuntime,
   cwd = currentWorkingDirectory(),
+): Promise<CommandResult> {
+  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd);
+  await runHookEvent(configRoot, "postCommand", { command: text, ok: String(result.shouldContinue) });
+  return result;
+}
+
+async function runWorkspaceCommandBody(
+  text: string,
+  config: DreamConfig,
+  oneShotYolo: boolean,
+  questioner: Questioner,
+  configRoot: string,
+  sessionRuntime: SessionRuntime | undefined,
+  cwd: string,
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
