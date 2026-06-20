@@ -75,3 +75,11 @@ test("createAgentMessages injects a selected subagent profile", () => {
   assert.match(system, /Report findings first\./u);
   assert.match(system, /read, shell/u);
 });
+
+test("createAgentMessages includes additional workspace directories", () => {
+  const messages = createAgentMessages("inspect workspace", [], undefined, undefined, ["/repo/shared"]);
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /Additional workspace directories/u);
+  assert.match(system, /\/repo\/shared/u);
+});

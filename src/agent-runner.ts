@@ -1,7 +1,7 @@
 import { cwd } from "node:process";
 
 import type { AgentDefinition } from "./agent-library.js";
-import type { DreamConfig } from "./config.js";
+import { defaultConfigRoot, type DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
 import {
   extractAgentToolRequests,
@@ -21,6 +21,7 @@ import { selectModelForPrompt } from "./model-routing.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
+import { loadWorkspaceDirs } from "./workspace-state.js";
 
 export type AgentPromptOptions = {
   readonly config: DreamConfig;
@@ -38,7 +39,8 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const settings = await loadSkillSettings(options.configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
-  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs);
+  const workspaceDirs = await loadWorkspaceDirs(options.configRoot ?? defaultConfigRoot());
+  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs);
 
   try {
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
@@ -106,6 +108,7 @@ export function createAgentMessages(
   skills: readonly DreamSkill[] = [],
   agent?: AgentDefinition,
   contextDocs?: ContextDocs,
+  workspaceDirs: readonly string[] = [],
 ): readonly ChatMessage[] {
   return [
     {
@@ -114,6 +117,7 @@ export function createAgentMessages(
         "You are Dream Code, a fast coding harness CLI.",
         "Answer concisely, prefer actionable engineering steps, and mention files or commands when useful.",
         `Workspace: ${cwd()}`,
+        formatWorkspaceDirs(workspaceDirs),
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatToolProtocol(),
         formatAgentProfile(agent),
@@ -122,6 +126,13 @@ export function createAgentMessages(
     },
     { role: "user", content: prompt },
   ];
+}
+
+function formatWorkspaceDirs(workspaceDirs: readonly string[]): string {
+  if (workspaceDirs.length === 0) {
+    return "Additional workspace directories: none.";
+  }
+  return ["Additional workspace directories:", ...workspaceDirs.map((directory) => `- ${directory}`)].join("\n");
 }
 
 function formatToolProtocol(): string {
