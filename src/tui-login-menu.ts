@@ -1,4 +1,5 @@
 import { ansi, paint } from "./ansi.js";
+import type { ProviderCredential } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
 import {
   apiKeyEnvKeys,
@@ -15,10 +16,10 @@ export type LoginChoice = {
 };
 
 export function loginChoices(
-  savedProviderIds: ReadonlySet<string>,
+  providers: Readonly<Record<string, ProviderCredential>>,
   env: ProviderEnv,
 ): readonly LoginChoice[] {
-  return listProviderDefinitions().flatMap((definition) => choicesForDefinition(definition, savedProviderIds, env));
+  return listProviderDefinitions().flatMap((definition) => choicesForDefinition(definition, providers, env));
 }
 
 export function formatLoginMenu(
@@ -86,27 +87,32 @@ export function formatLoginSource(source: LoginChoice["source"]): string {
 
 function loginSource(
   definition: ProviderDefinition,
-  savedProviderIds: ReadonlySet<string>,
+  authMode: LoginChoice["authMode"],
+  credential: ProviderCredential | undefined,
   env: ProviderEnv,
 ): LoginChoice["source"] {
-  if (apiKeyEnvKeys(definition).some((key) => isNonEmptyString(env[key]))) {
-    return "env";
+  if (authMode === "api-key") {
+    if (apiKeyEnvKeys(definition).some((key) => isNonEmptyString(env[key]))) {
+      return "env";
+    }
+    return isNonEmptyString(credential?.apiKey) ? "saved" : "missing";
   }
-  return savedProviderIds.has(definition.id) ? "saved" : "missing";
+  return credential?.authMode === "oauth" ? "saved" : "missing";
 }
 
 function choicesForDefinition(
   definition: ProviderDefinition,
-  savedProviderIds: ReadonlySet<string>,
+  providers: Readonly<Record<string, ProviderCredential>>,
   env: ProviderEnv,
 ): readonly LoginChoice[] {
+  const credential = providers[definition.id];
   const apiChoice = {
     definition,
     authMode: "api-key",
-    source: loginSource(definition, savedProviderIds, env),
+    source: loginSource(definition, "api-key", credential, env),
   } satisfies LoginChoice;
   return definition.auth.includes("oauth")
-    ? [apiChoice, { ...apiChoice, authMode: "oauth" }]
+    ? [apiChoice, { ...apiChoice, authMode: "oauth", source: loginSource(definition, "oauth", credential, env) }]
     : [apiChoice];
 }
 

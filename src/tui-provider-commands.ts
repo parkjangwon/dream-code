@@ -25,7 +25,7 @@ import {
 } from "./tui-login-menu.js";
 import { connectOpenAiOauth } from "./tui-openai-oauth.js";
 import { promptProvider, type ProviderQuestioner } from "./tui-provider-picker.js";
-import { formatProviderLine, savedProviderIds } from "./tui-provider-status.js";
+import { formatProviderLine } from "./tui-provider-status.js";
 
 export type LoginProviderOptions = {
   readonly config: DreamConfig;
@@ -50,7 +50,7 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   const parts = options.args.trim().split(/\s+/u).filter((part) => part.length > 0);
   const env = options.env ?? process.env;
   const credentials = await loadCredentials(options.configRoot);
-  const choices = loginChoices(savedProviderIds(credentials.providers), env);
+  const choices = loginChoices(credentials.providers, env);
   const providerArg = parts[0];
   const selectedChoice = providerArg === undefined
     ? await promptProvider(options.questioner, choices)
