@@ -20,7 +20,7 @@ export function renderInputView(
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
     borderLine("bottom", width),
-    ...renderAuxiliaryLines(state, secret),
+    ...renderAuxiliaryLines(state, secret, width),
   ];
   output.write(lines.join("\n"));
   moveCursorToPrompt(lines.length, 2 + terminalVisibleWidth(prompt) + terminalVisibleWidth(cursorText));
@@ -49,12 +49,13 @@ export function clearRenderedLines(count: number): void {
 function renderAuxiliaryLines(
   state: InputState,
   secret: boolean,
+  width: number,
 ): readonly string[] {
   if (secret) {
     return [];
   }
 
-  const paletteLines = renderPaletteLines(state);
+  const paletteLines = renderPaletteLines(state, width);
   if (paletteLines.length > 0) {
     return paletteLines;
   }
@@ -66,22 +67,25 @@ function renderAuxiliaryLines(
   return [paint("? for shortcuts", ansi.guide)];
 }
 
-function renderPaletteLines(state: InputState): readonly string[] {
+function renderPaletteLines(state: InputState, width: number): readonly string[] {
   if (state.palette === undefined) {
     return [];
   }
 
   switch (state.palette.kind) {
     case "command":
-      return renderCommandPaletteLines(state.palette);
+      return renderCommandPaletteLines(state.palette, width);
     case "skill":
-      return renderSkillPaletteLines(state.palette);
+      return renderSkillPaletteLines(state.palette, width);
     default:
       return assertNever(state.palette);
   }
 }
 
-function renderCommandPaletteLines(palette: NonNullable<InputState["palette"]> & { readonly kind: "command" }): readonly string[] {
+function renderCommandPaletteLines(
+  palette: NonNullable<InputState["palette"]> & { readonly kind: "command" },
+  width: number,
+): readonly string[] {
   const start = Math.max(
     0,
     Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
@@ -93,14 +97,18 @@ function renderCommandPaletteLines(palette: NonNullable<InputState["palette"]> &
     const command = visible[index];
     if (command !== undefined) {
       const selected = start + index === palette.selectedIndex ? ">" : " ";
-      lines.push(`${selected} ${command.name.padEnd(12)} ${paint(command.summary, ansi.dim)}`);
+      const prefix = `${selected} ${command.name.padEnd(12)} `;
+      lines.push(`${prefix}${paint(renderPaletteDescription(command.summary, width - terminalVisibleWidth(prefix)), ansi.dim)}`);
     }
   }
 
   return lines;
 }
 
-function renderSkillPaletteLines(palette: NonNullable<InputState["palette"]> & { readonly kind: "skill" }): readonly string[] {
+function renderSkillPaletteLines(
+  palette: NonNullable<InputState["palette"]> & { readonly kind: "skill" },
+  width: number,
+): readonly string[] {
   const start = Math.max(
     0,
     Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
@@ -112,7 +120,8 @@ function renderSkillPaletteLines(palette: NonNullable<InputState["palette"]> & {
     const skill = visible[index];
     if (skill !== undefined) {
       const selected = start + index === palette.selectedIndex ? ">" : " ";
-      lines.push(`${selected} @${skill.name.padEnd(12)} ${paint(skill.description, ansi.dim)}`);
+      const prefix = `${selected} @${skill.name.padEnd(12)} `;
+      lines.push(`${prefix}${paint(renderPaletteDescription(skill.description, width - terminalVisibleWidth(prefix)), ansi.dim)}`);
     }
   }
 
@@ -151,6 +160,24 @@ export function shouldShowInlineShortcutGuide(text: string): boolean {
 
 export function displayInputText(text: string, secret: boolean): string {
   return secret ? "*".repeat(text.length) : text;
+}
+
+export function renderPaletteDescription(text: string, width: number): string {
+  if (width <= 1) {
+    return "";
+  }
+  if (terminalVisibleWidth(text) <= width) {
+    return text;
+  }
+
+  let outputText = "";
+  for (const char of text) {
+    if (terminalVisibleWidth(`${outputText}${char}…`) > width) {
+      return `${outputText}…`;
+    }
+    outputText = `${outputText}${char}`;
+  }
+  return outputText;
 }
 
 function assertNever(value: never): never {
