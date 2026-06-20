@@ -11,7 +11,7 @@ import {
 } from "./config.js";
 import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
-import { connectProvider, loginProvider, printProviders } from "./tui-provider-commands.js";
+import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import { printScaffold } from "./tui-render.js";
 import {
@@ -65,7 +65,6 @@ export async function runWorkspaceCommand(
 
   switch (command.name) {
     case "/provider":
-    case "/providers":
       if (command.rest.trim() === "list") {
         await printProviders(configRoot);
         return { config, shouldContinue: true };
@@ -80,19 +79,8 @@ export async function runWorkspaceCommand(
         shouldContinue: true,
       };
     case "/model":
-    case "/models":
       return {
         config: await configureModels({
-          config,
-          configRoot,
-          args: command.rest,
-          questioner,
-        }),
-        shouldContinue: true,
-      };
-    case "/connect":
-      return {
-        config: await connectProvider({
           config,
           configRoot,
           args: command.rest,

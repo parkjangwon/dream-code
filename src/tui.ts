@@ -8,7 +8,6 @@ import {
   type DreamConfig,
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
-import { describeModelMode } from "./model-routing.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
@@ -103,7 +102,7 @@ function isInteractiveTerminal(): boolean {
   return input.isTTY === true && output.isTTY === true;
 }
 
-async function handleInput(
+export async function handleInput(
   text: string,
   config: DreamConfig,
   options: TuiOptions,
@@ -123,18 +122,13 @@ async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  if (text === "/quit" || text === "/exit") {
+  if (text === "/quit") {
     output.write("Good night. Dream Code is ready when you are.\n");
     return { config, shouldContinue: false };
   }
 
   if (text === "/status") {
     printStatus(config, options.oneShotYolo);
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/model") {
-    output.write(`${describeModelMode(config.model)}\n`);
     return { config, shouldContinue: true };
   }
 

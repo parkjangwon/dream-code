@@ -5,18 +5,17 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
 import { defaultConfig, loadConfig } from "../src/config.js";
-import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
+import { handleInput } from "../src/tui.js";
 
-test("runWorkspaceCommand routes /model to model configuration", async () => {
-  const root = await mkdtemp(join(tmpdir(), "dream-workspace-command-"));
+test("handleInput routes /model to model selection instead of status output", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-"));
   const stdout = mock.method(process.stdout, "write", () => true);
   try {
-    const result = await runWorkspaceCommand(
+    const result = await handleInput(
       "/model high",
       defaultConfig(),
-      true,
+      { oneShotYolo: true, configRoot: root },
       { question: async () => "" },
-      root,
     );
     const saved = await loadConfig(root);
 

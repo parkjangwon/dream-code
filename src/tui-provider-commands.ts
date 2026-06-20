@@ -92,11 +92,6 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   return nextConfig;
 }
 
-export async function connectProvider(options: LoginProviderOptions): Promise<DreamConfig> {
-  output.write("Use /login next time. /connect is an alias.\n");
-  return loginProvider(options);
-}
-
 async function connectOauth(
   definition: ProviderDefinition,
   options: LoginProviderOptions,

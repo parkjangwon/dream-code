@@ -25,7 +25,7 @@ export function printHelp(): void {
     "  /status                 show current config",
     "  /doctor                 check local tools",
     "  /yolo                   toggle persisted unconditional bypass",
-    "  /model                  show model routing mode",
+    "  /model                  choose active model",
     "  /read <path>            read a file with token-saving truncation",
     "  /write <path> <text>    write a text file",
     "  /edit <path> a => b     replace first matching text",
