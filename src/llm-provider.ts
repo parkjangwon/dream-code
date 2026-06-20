@@ -107,7 +107,7 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
   const response = await request(endpointFor(settings), {
     method: "POST",
     headers: requestHeaders(settings),
-    body: JSON.stringify(requestBody(
+    body: JSON.stringify(buildProviderRequestBody(
       settings.protocol,
       providerModelIdForRequest(settings.provider, input.selectedModel.model),
       input.messages,
@@ -156,16 +156,16 @@ function requestHeaders(settings: ProviderSettings): Record<string, string> {
   };
 }
 
-function requestBody(
+export function buildProviderRequestBody(
   protocol: ProviderProtocol,
   model: string,
   messages: readonly ChatMessage[],
 ): Readonly<Record<string, unknown>> {
   switch (protocol) {
     case "chat-completions":
-      return { model, messages, stream: true, temperature: 0.2 };
+      return { model, messages, stream: true };
     case "responses":
-      return { model, input: messages, stream: true, temperature: 0.2 };
+      return { model, input: messages, stream: true };
     default:
       return assertNever(protocol);
   }

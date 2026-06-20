@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildProviderRequestBody,
   parseOpenAiResponsesLine,
   parseOpenAiStreamLine,
   resolveProviderSettings,
@@ -33,6 +34,21 @@ test("resolveProviderSettings supports Responses protocol providers", () => {
 
   assert.equal(settings.protocol, "responses");
   assert.equal(settings.baseUrl, "https://opencode.ai/zen/v1");
+});
+
+test("buildProviderRequestBody omits temperature by default for model compatibility", () => {
+  const messages = [{ role: "user", content: "hello" }] as const;
+
+  assert.deepEqual(buildProviderRequestBody("chat-completions", "kimi-k2.7-code", messages), {
+    model: "kimi-k2.7-code",
+    messages,
+    stream: true,
+  });
+  assert.deepEqual(buildProviderRequestBody("responses", "gpt-5.5", messages), {
+    model: "gpt-5.5",
+    input: messages,
+    stream: true,
+  });
 });
 
 test("parseOpenAiStreamLine extracts streamed content deltas", () => {
