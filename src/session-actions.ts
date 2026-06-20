@@ -37,9 +37,9 @@ export async function exportCurrentSession(root: string, sessionId: string): Pro
   return `exported: ${filePath}`;
 }
 
-export async function copyLastAssistantResponse(root: string, sessionId: string): Promise<string> {
+export async function copyLastAssistantResponse(root: string, sessionId: string, offset = 1): Promise<string> {
   const session = await currentSession(root, sessionId);
-  const response = [...(session?.turns ?? [])].reverse().find((turn) => turn.role === "assistant")?.content;
+  const response = [...(session?.turns ?? [])].reverse().filter((turn) => turn.role === "assistant")[offset - 1]?.content;
   if (response === undefined) {
     return "copy skipped: no assistant response";
   }

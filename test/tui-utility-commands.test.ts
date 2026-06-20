@@ -8,6 +8,7 @@ import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
 import { appendSessionTurn, startSession } from "../src/session-store.js";
+import { copyLastAssistantResponse } from "../src/session-actions.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
 test("utility commands show rules, compact, export, and logout state", async () => {
@@ -109,5 +110,20 @@ test("plan and goal commands save workflow notes before model execution", async 
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });
     await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("copyLastAssistantResponse accepts nth latest assistant response", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-copy-nth-"));
+  try {
+    const session = await startSession(root, "/tmp/dream-copy");
+    await appendSessionTurn(root, session.id, "assistant", "first answer");
+    await appendSessionTurn(root, session.id, "assistant", "second answer");
+
+    const result = await copyLastAssistantResponse(root, session.id, 3);
+
+    assert.equal(result, "copy skipped: no assistant response");
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

@@ -48,7 +48,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(await formatSessionActionResult(await compactCurrentSession(options.configRoot, currentSessionId(options))));
       return true;
     case "/copy":
-      output.write(await formatSessionActionResult(await copyLastAssistantResponse(options.configRoot, currentSessionId(options))));
+      output.write(await formatSessionActionResult(await copyLastAssistantResponse(options.configRoot, currentSessionId(options), copyOffset(options.rest))));
       return true;
     case "/export":
       output.write(await formatSessionActionResult(await exportCurrentSession(options.configRoot, currentSessionId(options))));
@@ -165,4 +165,9 @@ async function restOrAsk(rest: string, prompt: string, questioner: Questioner): 
 
 function currentSessionId(options: UtilityCommandOptions): string {
   return options.sessionRuntime?.currentId() ?? "";
+}
+
+function copyOffset(rest: string): number {
+  const parsed = Number.parseInt(rest.trim(), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
