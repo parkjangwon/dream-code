@@ -8,6 +8,7 @@ import { formatHooksStatus } from "./hooks.js";
 import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
 import { formatMcpStatus } from "./mcp-config.js";
+import { runResearch } from "./research-tool.js";
 import {
   compactCurrentSession,
   copyLastAssistantResponse,
@@ -85,7 +86,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(`${await formatRulesCommand(options.configRoot, options.cwd)}\n`);
       return true;
     case "/research":
-      await runFramedAgentPrompt(options, "Research", "Research the request with preference for official sources. If live web search is unavailable, identify the exact sources to verify.");
+      await runResearchCommand(options);
       return true;
     case "/review":
       await runFramedAgentPrompt(options, "Review", "Review the current work for bugs, regressions, missing tests, and UX risks. Findings first.");
@@ -122,6 +123,28 @@ async function runInterview(options: UtilityCommandOptions): Promise<void> {
     return;
   }
   await runFramedAgentPrompt({ ...options, rest: answers.join("\n") }, "Interview", "Turn these interview answers into durable project guidance and a short implementation direction.");
+}
+
+async function runResearchCommand(options: UtilityCommandOptions): Promise<void> {
+  const query = await restOrAsk(options.rest, "Research: ", options.questioner);
+  if (query.trim().length === 0) {
+    output.write("research skipped: no query\n");
+    return;
+  }
+  const result = await runResearch(query);
+  output.write(`${paint("Research", `${ansi.bold}${ansi.accent}`)} ${result.ok ? paint("ready", ansi.green) : paint("failed", ansi.yellow)}\n`);
+  output.write(`${result.output}\n`);
+  await runAgentPrompt({
+    config: options.config,
+    configRoot: options.configRoot,
+    prompt: [
+      "Research the request with preference for official sources.",
+      `User request: ${query}`,
+      "Search results:",
+      result.output,
+    ].join("\n"),
+    write: (chunk) => output.write(chunk),
+  });
 }
 
 async function runFramedAgentPrompt(options: UtilityCommandOptions, title: string, instruction: string): Promise<void> {

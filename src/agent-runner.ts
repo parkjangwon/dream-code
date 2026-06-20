@@ -148,6 +148,7 @@ function formatToolProtocol(): string {
     "When local project data is required, request tools in a fenced block named dream-tool.",
     "Each line must be one JSON object:",
     "{\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
     "{\"tool\":\"shell\",\"command\":\"pnpm test\"}",
     "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
     "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",

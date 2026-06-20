@@ -14,13 +14,15 @@ test("extractAgentToolRequests parses JSONL dream-tool blocks", () => {
   const requests = extractAgentToolRequests([
     "```dream-tool",
     "{\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"research\",\"query\":\"Dream Code docs\"}",
     "{\"tool\":\"shell\",\"command\":\"pwd\"}",
     "```",
   ].join("\n"));
 
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
   assert.equal(requests[0]?.tool, "read");
-  assert.equal(requests[1]?.tool, "shell");
+  assert.equal(requests[1]?.tool, "research");
+  assert.equal(requests[2]?.tool, "shell");
 });
 
 test("runAgentToolRequest gates shell tools behind yolo permission", async () => {

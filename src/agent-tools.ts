@@ -8,8 +8,10 @@ import {
   replaceInWorkspaceFile,
   writeWorkspaceFile,
 } from "./workspace-tools.js";
+import { runResearch } from "./research-tool.js";
 
 const readRequestSchema = z.object({ tool: z.literal("read"), path: z.string().min(1) });
+const researchRequestSchema = z.object({ tool: z.literal("research"), query: z.string().min(1) });
 const shellRequestSchema = z.object({ tool: z.literal("shell"), command: z.string().min(1) });
 const writeRequestSchema = z.object({ tool: z.literal("write"), path: z.string().min(1), content: z.string() });
 const editRequestSchema = z.object({
@@ -20,6 +22,7 @@ const editRequestSchema = z.object({
 });
 const toolRequestSchema = z.discriminatedUnion("tool", [
   readRequestSchema,
+  researchRequestSchema,
   shellRequestSchema,
   writeRequestSchema,
   editRequestSchema,
@@ -44,7 +47,7 @@ export async function runAgentToolRequest(
   request: AgentToolRequest,
   mode: PermissionMode,
 ): Promise<AgentToolResult> {
-  if (request.tool !== "read" && mode !== "yolo") {
+  if (request.tool !== "read" && request.tool !== "research" && mode !== "yolo") {
     return { request, ok: false, output: "Permission required. Enable YOLO or run the command manually." };
   }
 
@@ -53,6 +56,10 @@ export async function runAgentToolRequest(
       case "read": {
         const result = await readWorkspaceFile(request.path);
         return { request, ok: true, output: `${result.path} (${result.bytes} bytes)\n${result.content}` };
+      }
+      case "research": {
+        const result = await runResearch(request.query);
+        return { request, ok: result.ok, output: result.output };
       }
       case "shell":
         return { request, ...(await runShellCapture(request.command)) };
@@ -129,6 +136,8 @@ function toolLabel(request: AgentToolRequest): string {
   switch (request.tool) {
     case "read":
       return `read ${request.path}`;
+    case "research":
+      return `research ${request.query}`;
     case "shell":
       return `shell ${request.command}`;
     case "write":
