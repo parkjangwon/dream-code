@@ -88,7 +88,39 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
   assert.match(output, /merging parallel outputs/u);
   assert.match(output, /token mixing radar online/u);
   assert.match(output, /Swarm Synthesis/u);
-  assert.match(chunks.join(""), /\u001B\[38;5;114m\u001B\[1m✓ Swarm complete/u);
+  assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Swarm complete/u);
+});
+
+test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time", async () => {
+  const chunks: string[] = [];
+  let clock = 1_000;
+  await runAgentSwarmWithAgents({
+    config: defaultConfig(),
+    configRoot: "/tmp/dream",
+    cwd: "/repo",
+    goal: "Format total elapsed",
+    agents: [
+      agent("tech-lead", "Tech Lead", "Plan."),
+    ],
+    forceAgents: 1,
+    now: () => clock,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+    runAgent: async (input) => {
+      if (input.kind === "lane") {
+        clock = 31_000;
+        return "lane result";
+      }
+      clock = 57_000;
+      return "summary\n✓ Done 26.0s · ~1000 tokens";
+    },
+  });
+
+  const output = stripAnsi(chunks.join(""));
+  assert.match(output, /✓ Done 56\.0s · ~1000 tokens/u);
+  assert.doesNotMatch(output, /✓ Done 26\.0s/u);
+  assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Done 56\.0s/u);
 });
 
 test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", async () => {

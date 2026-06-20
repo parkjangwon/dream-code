@@ -1,10 +1,11 @@
 import { runAgentPrompt } from "./agent-runner.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
-import { ansi, paint, stripAnsi } from "./ansi.js";
+import { stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
+import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
 import {
   createSwarmPlan,
   createSwarmSynthesisAgent,
@@ -58,6 +59,7 @@ export type SwarmRunOptions = {
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
   readonly signal?: AbortSignal;
+  readonly now?: () => number;
   readonly runAgent?: SwarmAgentRunner;
 };
 
@@ -72,6 +74,8 @@ export async function runAgentSwarm(options: SwarmRunOptions): Promise<SwarmRunS
 export async function runAgentSwarmWithAgents(
   options: SwarmRunOptions & { readonly agents: readonly AgentDefinition[] },
 ): Promise<SwarmRunSummary> {
+  const now = options.now ?? Date.now;
+  const swarmStartedAt = now();
   const plan = createSwarmPlan(options.goal, options.agents, swarmPlanOptions(options));
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
   const abortController = createSwarmAbortController(options.signal);
@@ -82,6 +86,7 @@ export async function runAgentSwarmWithAgents(
     onAbort: () => {
       abortController.abort();
     },
+    ...monitorNowOption(options.now),
     ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   } : {
     goal: options.goal,
@@ -92,18 +97,19 @@ export async function runAgentSwarmWithAgents(
     onAbort: () => {
       abortController.abort();
     },
+    ...monitorNowOption(options.now),
     ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
 
   const laneResults = await Promise.all(plan.lanes.map(async (lane) => {
-    const startedAt = Date.now();
+    const startedAt = now();
     monitor.laneStarted(lane.id);
     const output = await runLane(runAgent, lane, (progress) => {
       monitor.laneProgress(lane.id, progress.characters, progress.preview);
     }, abortController.signal);
-    const elapsedMs = Date.now() - startedAt;
+    const elapsedMs = now() - startedAt;
     if (output === laneCancelledOutput) {
       monitor.laneCancelled(lane.id, output.length, output);
     } else if (output.startsWith("Lane failed:")) {
@@ -132,7 +138,7 @@ export async function runAgentSwarmWithAgents(
     monitor.synthesisDone();
   }
   monitor.stop();
-  options.write(formatSwarmSynthesis(synthesis));
+  options.write(formatSwarmSynthesis(synthesis, now() - swarmStartedAt));
   return { goal: options.goal, laneResults, synthesis };
 }
 
@@ -229,27 +235,10 @@ function swarmPlanOptions(options: SwarmRunOptions): { readonly forceAgents?: nu
   return options.forceAgents === undefined ? {} : { forceAgents: options.forceAgents };
 }
 
-function formatSwarmHeader(agentCount: number, forced: boolean): string {
-  const mode = forced ? "forced overdrive" : "adaptive fan-out";
-  return [
-    `${paint("✹ Dream Swarm", ansi.accent)} ${paint(`${agentCount} parallel agents`, ansi.bold)}`,
-    paint(`Kimi-style ${mode} · token mixing on · synthesis pass enabled`, ansi.guide),
-  ].join("\n").concat("\n");
+function monitorNowOption(now: (() => number) | undefined): { readonly now?: () => number } {
+  return now === undefined ? {} : { now };
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown swarm failure";
-}
-
-function formatSwarmSynthesis(synthesis: string): string {
-  const body = synthesis.trim().length === 0 ? "No synthesis output." : synthesis.trim();
-  return [
-    `${paint("●", ansi.green)} ${paint("Swarm Synthesis", ansi.bold)}`,
-    ...body.split(/\r?\n/u).map((line) => `${paint("│", ansi.guide)} ${line}`),
-    paint("✓ Swarm complete", `${ansi.green}${ansi.bold}`),
-  ].join("\n").concat("\n");
-}
-
-function formatSwarmCancelled(): string {
-  return `${paint("✓", ansi.yellow)} ${paint("Swarm stopped", ansi.dim)}\n`;
 }
