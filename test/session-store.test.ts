@@ -49,6 +49,41 @@ test("session store uses an index and per-session wire log", async () => {
   }
 });
 
+test("startSession prunes previous sessions with no turns", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-session-prune-empty-"));
+  try {
+    const empty = await startSession(root, "/tmp/dream-code");
+    const emptyIndexLine = (await readFile(sessionIndexPath(root), "utf8")).trim();
+    const emptyIndexEntry = JSON.parse(emptyIndexLine);
+    const next = await startSession(root, "/tmp/dream-code");
+    const indexLines = (await readFile(sessionIndexPath(root), "utf8")).trim().split(/\r?\n/u);
+    const remaining = indexLines.map((line) => JSON.parse(line));
+
+    assert.equal(empty.id.startsWith("session_"), true);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0]?.sessionId, next.id);
+    await assert.rejects(readFile(join(emptyIndexEntry.sessionDir, "state.json"), "utf8"), /ENOENT/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("startSession keeps previous sessions with turns", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-session-keep-nonempty-"));
+  try {
+    const kept = await startSession(root, "/tmp/dream-code");
+    await appendSessionTurn(root, kept.id, "user", "Keep this session.");
+    const next = await startSession(root, "/tmp/dream-code");
+    const indexLines = (await readFile(sessionIndexPath(root), "utf8")).trim().split(/\r?\n/u);
+    const sessionIds = indexLines.map((line) => JSON.parse(line).sessionId);
+
+    assert.equal(sessionIds.includes(kept.id), true);
+    assert.equal(sessionIds.includes(next.id), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("renameSession updates the current session name and summary", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-session-rename-"));
   try {

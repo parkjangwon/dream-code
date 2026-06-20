@@ -57,6 +57,7 @@ test("handleInput opens saved sessions through picker", async () => {
   const stdout = mock.method(process.stdout, "write", () => true);
   try {
     const first = await startSession(root, "/tmp/dream-code");
+    await appendSessionTurn(root, first.id, "user", "Keep this session.");
     const second = await startSession(root, "/tmp/other-project");
     let switched = "";
     await handleInput(

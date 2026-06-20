@@ -4,6 +4,7 @@ import { cwd } from "node:process";
 import { z } from "zod";
 
 import { defaultConfigRoot } from "./config.js";
+import { pruneEmptySessions } from "./session-gc.js";
 import { sessionDirFor, sessionIndexPath as layoutSessionIndexPath } from "./session-layout.js";
 
 const sessionRoleSchema = z.enum(["user", "assistant"]);
@@ -74,6 +75,7 @@ export async function loadSessionStore(root = defaultConfigRoot()): Promise<Sess
 }
 
 export async function startSession(root = defaultConfigRoot(), directory = cwd()): Promise<DreamSession> {
+  await pruneEmptySessions(root);
   const now = new Date().toISOString();
   const session: DreamSession = {
     id: createSessionId(now),
