@@ -61,7 +61,7 @@ export function skillEnabled(settings: SkillSettings, skillName: string): boolea
   return !settings.disabled.includes(skillName);
 }
 
-async function saveSkillSettings(root: string, settings: SkillSettings): Promise<void> {
+export async function saveSkillSettings(root: string, settings: SkillSettings): Promise<void> {
   await mkdir(root, { recursive: true, mode: 0o700 });
   await writeFile(skillSettingsFilePath(root), serializeSkillSettings(settings), "utf8");
 }

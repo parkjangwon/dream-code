@@ -1,44 +1,16 @@
 import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
-import { loadSkillSettings, skillEnabled, toggleSkill } from "./skill-settings.js";
+import { loadSkillSettings, saveSkillSettings } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
-import type { PickerOptions } from "./tui-picker.js";
+import type { SkillManagerOptions } from "./tui-skill-manager.js";
 
 export type SkillQuestioner = {
-  readonly select?: (options: PickerOptions) => Promise<string | undefined>;
+  readonly manageSkills?: (options: SkillManagerOptions) => Promise<readonly string[] | undefined>;
 };
 
-const skillActions = {
-  list: "list",
-  toggle: "toggle",
-} as const;
-
 export async function showSkillMenu(configRoot: string, questioner: SkillQuestioner): Promise<void> {
-  if (questioner.select === undefined) {
-    await printSkillList(configRoot);
-    return;
-  }
-
-  const action = await questioner.select({
-    title: "Skills",
-    choices: [
-      { value: skillActions.list, label: "List skills", description: "Show installed skills", keywords: ["skills", "list"] },
-      { value: skillActions.toggle, label: "Enable/Disable Skills", description: "Turn skills on or off", keywords: ["enable", "disable", "toggle"] },
-    ],
-  });
-
-  if (action === skillActions.list) {
-    await printSkillList(configRoot);
-    return;
-  }
-  if (action === skillActions.toggle) {
-    await showSkillToggle(configRoot, questioner);
-  }
-}
-
-async function printSkillList(configRoot: string): Promise<void> {
   const skills = await loadSkills();
   const settings = await loadSkillSettings(configRoot);
   if (skills.length === 0) {
@@ -46,31 +18,17 @@ async function printSkillList(configRoot: string): Promise<void> {
     return;
   }
 
-  output.write(formatSkillList(skills, settings.disabled, output.columns ?? 100));
-}
-
-async function showSkillToggle(configRoot: string, questioner: SkillQuestioner): Promise<void> {
-  const skills = await loadSkills();
-  if (questioner.select === undefined || skills.length === 0) {
-    await printSkillList(configRoot);
+  if (questioner.manageSkills === undefined) {
+    output.write(formatSkillList(skills, settings.disabled, output.columns ?? 100));
     return;
   }
 
-  const settings = await loadSkillSettings(configRoot);
-  const selected = await questioner.select({
-    title: "Enable/Disable Skills",
-    choices: skills.map((skill) => ({
-      value: skill.name,
-      label: `${skillEnabled(settings, skill.name) ? "[x]" : "[ ]"} ${skill.name}`,
-      description: skill.description,
-      keywords: [skill.name, skill.description, skill.source],
-    })),
-  });
-  if (selected === undefined) {
+  const disabled = await questioner.manageSkills({ skills, disabled: settings.disabled });
+  if (disabled === undefined) {
     return;
   }
-  const next = await toggleSkill(configRoot, selected);
-  output.write(`${skillEnabled(next, selected) ? "enabled" : "disabled"} skill: ${selected}\n`);
+  await saveSkillSettings(configRoot, { version: 1, disabled: [...disabled].sort() });
+  output.write("skills saved\n");
 }
 
 export function formatSkillList(
@@ -83,7 +41,7 @@ export function formatSkillList(
   const contentWidth = Math.max(72, Math.min(width, 140));
   const lines = [
     `${paint("Skills", ansi.accent)} ${paint(`${skills.length} installed · ${enabledCount} enabled`, ansi.dim)}\n`,
-    `${paint("type @ to insert · /skills > Enable/Disable to manage", ansi.guide)}\n`,
+    `${paint("type @ to insert · /skills to manage", ansi.guide)}\n`,
     `${paint("─".repeat(contentWidth), ansi.guide)}\n`,
     `${paint("state", ansi.dim)}  ${paint("skill", ansi.dim).padEnd(30)} ${paint("source", ansi.dim).padEnd(12)} ${paint("description", ansi.dim)}\n`,
   ];
@@ -91,7 +49,7 @@ export function formatSkillList(
     lines.push(formatSkillRow(skill, disabledSet, contentWidth));
   }
   lines.push(`${paint("─".repeat(contentWidth), ansi.guide)}\n`);
-  lines.push(`${paint("enter inserts from @ autocomplete · esc closes menus · disabled skills are hidden from @", ansi.guide)}\n`);
+  lines.push(`${paint("↑/↓ navigate · type to search · space toggle · enter save · esc discard", ansi.guide)}\n`);
   return lines.join("");
 }
 

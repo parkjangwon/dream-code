@@ -15,6 +15,7 @@ import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
+import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
@@ -33,6 +34,7 @@ export type Questioner = {
   readonly question: (prompt: string) => Promise<string>;
   readonly secret?: (prompt: string) => Promise<string>;
   readonly select?: (options: PickerOptions) => Promise<string | undefined>;
+  readonly manageSkills?: (options: SkillManagerOptions) => Promise<readonly string[] | undefined>;
 };
 
 export async function runWorkspaceCommand(

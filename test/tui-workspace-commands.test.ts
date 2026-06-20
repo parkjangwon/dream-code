@@ -105,8 +105,8 @@ test("runWorkspaceCommand lists installed skills", async () => {
   }
 });
 
-test("runWorkspaceCommand toggles skills through the menu", async () => {
-  const root = await mkdtemp(join(tmpdir(), "dream-workspace-skill-toggle-"));
+test("runWorkspaceCommand saves skill manager changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-skill-save-"));
   const originalHome = process.env["HOME"];
   const stdout = mock.method(process.stdout, "write", () => true);
   try {
@@ -114,7 +114,38 @@ test("runWorkspaceCommand toggles skills through the menu", async () => {
     const skillDir = join(root, ".dream", "skills", "review");
     await mkdir(skillDir, { recursive: true });
     await writeFile(join(skillDir, "SKILL.md"), "---\nname: review\ndescription: Review code.\n---\nFind bugs.", "utf8");
-    const selections = ["toggle", "review"];
+    await runWorkspaceCommand(
+      "/skills",
+      defaultConfig(),
+      true,
+      {
+        question: async () => "",
+        manageSkills: async () => ["review"],
+      },
+      root,
+    );
+
+    assert.deepEqual((await loadSkillSettings(root)).disabled, ["review"]);
+  } finally {
+    stdout.mock.restore();
+    if (originalHome === undefined) {
+      delete process.env["HOME"];
+    } else {
+      process.env["HOME"] = originalHome;
+    }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand discards cancelled skill manager changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-skill-cancel-"));
+  const originalHome = process.env["HOME"];
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    process.env["HOME"] = root;
+    const skillDir = join(root, ".dream", "skills", "review");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: review\ndescription: Review code.\n---\nFind bugs.", "utf8");
 
     await runWorkspaceCommand(
       "/skills",
@@ -122,12 +153,12 @@ test("runWorkspaceCommand toggles skills through the menu", async () => {
       true,
       {
         question: async () => "",
-        select: async () => selections.shift(),
+        manageSkills: async () => undefined,
       },
       root,
     );
 
-    assert.deepEqual((await loadSkillSettings(root)).disabled, ["review"]);
+    assert.deepEqual((await loadSkillSettings(root)).disabled, []);
   } finally {
     stdout.mock.restore();
     if (originalHome === undefined) {

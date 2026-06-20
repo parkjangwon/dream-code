@@ -28,6 +28,7 @@ import {
   showSessionMenu,
   type SessionRuntime,
 } from "./tui-session-commands.js";
+import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -208,6 +209,12 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
     },
     select: async (pickerOptions) => readInteractivePicker({
       ...pickerOptions,
+      redrawHeader: () => {
+        renderHeader(config, options.oneShotYolo);
+      },
+    }),
+    manageSkills: async (skillOptions) => readInteractiveSkillManager({
+      ...skillOptions,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },
