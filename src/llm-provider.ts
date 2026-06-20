@@ -1,5 +1,6 @@
 import { request } from "undici";
 
+import { CodexOAuthError, readCodexOAuthCredential } from "./codex-oauth.js";
 import { readProviderCredential, type ProviderCredential } from "./credentials.js";
 import type { SelectedModel } from "./model-routing.js";
 import {
@@ -32,6 +33,7 @@ export type ProviderSettings = {
   readonly apiKey: string;
   readonly apiKeyHeader: ApiKeyHeader;
   readonly protocol: ProviderProtocol;
+  readonly extraHeaders: Readonly<Record<string, string>>;
 };
 
 export type ProviderEnv = Readonly<Record<string, string | undefined>>;
@@ -98,15 +100,50 @@ export function resolveProviderSettings(
     apiKey,
     apiKeyHeader: definition.apiKeyHeader,
     protocol: definition.protocol,
+    extraHeaders: {},
   };
+}
+
+export async function resolveProviderSettingsForRequest(
+  provider: string,
+  env: ProviderEnv = process.env,
+  credential?: ProviderCredential,
+): Promise<ProviderSettings> {
+  const definition = resolveProviderDefinition(provider);
+  if (definition?.id !== "openai" || credential?.authMode !== "oauth") {
+    return resolveProviderSettings(provider, env, credential);
+  }
+
+  try {
+    const oauthCredential = await readCodexOAuthCredential(env);
+    const extraHeaders = oauthCredential.accountId === undefined
+      ? { originator: "codex_cli_rs" }
+      : {
+        originator: "codex_cli_rs",
+        "chatgpt-account-id": oauthCredential.accountId,
+      };
+    return {
+      provider: definition.id,
+      baseUrl: oauthCredential.baseUrl,
+      apiKey: oauthCredential.accessToken,
+      apiKeyHeader: "authorization",
+      protocol: "responses",
+      extraHeaders,
+    };
+  } catch (error) {
+    if (error instanceof CodexOAuthError) {
+      throw new ProviderProtocolError(error.message);
+    }
+    throw error;
+  }
 }
 
 export async function streamChatCompletion(input: StreamChatInput): Promise<void> {
   const credential = await readProviderCredential(input.selectedModel.provider, input.configRoot);
-  const settings = resolveProviderSettings(input.selectedModel.provider, input.env, credential);
+  const settings = await resolveProviderSettingsForRequest(input.selectedModel.provider, input.env, credential);
   const response = await request(endpointFor(settings), {
     method: "POST",
-    headers: requestHeaders(settings),
+    headers: buildProviderRequestHeaders(settings),
     body: JSON.stringify(buildProviderRequestBody(
       settings.protocol,
       providerModelIdForRequest(settings.provider, input.selectedModel.model),
@@ -146,11 +183,12 @@ function endpointFor(settings: ProviderSettings): string {
   }
 }
 
-function requestHeaders(settings: ProviderSettings): Record<string, string> {
+export function buildProviderRequestHeaders(settings: ProviderSettings): Record<string, string> {
   const authHeader = settings.apiKeyHeader === "api-key"
     ? { "api-key": settings.apiKey }
     : { authorization: `Bearer ${settings.apiKey}` };
   return {
+    ...settings.extraHeaders,
     ...authHeader,
     "content-type": "application/json",
   };
@@ -165,10 +203,24 @@ export function buildProviderRequestBody(
     case "chat-completions":
       return { model, messages, stream: true };
     case "responses":
-      return { model, input: messages, stream: true };
+      return responseRequestBody(model, messages);
     default:
       return assertNever(protocol);
   }
+}
+
+function responseRequestBody(
+  model: string,
+  messages: readonly ChatMessage[],
+): Readonly<Record<string, unknown>> {
+  const instructions = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const input = messages.filter((message) => message.role !== "system");
+  return instructions.length === 0
+    ? { model, input: messages, stream: true }
+    : { model, input, instructions, stream: true };
 }
 
 function firstEnv(env: ProviderEnv, keys: readonly string[]): string | undefined {

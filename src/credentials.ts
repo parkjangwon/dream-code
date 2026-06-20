@@ -5,9 +5,11 @@ import { z } from "zod";
 import { defaultConfigRoot } from "./config.js";
 
 export type ProviderCredential = {
+  readonly authMode?: "api-key" | "oauth" | undefined;
   readonly apiKey?: string | undefined;
   readonly baseUrl?: string | undefined;
   readonly region?: string | undefined;
+  readonly accountId?: string | undefined;
 };
 
 export type DreamCredentials = {
@@ -16,9 +18,11 @@ export type DreamCredentials = {
 };
 
 const providerCredentialSchema = z.object({
+  authMode: z.enum(["api-key", "oauth"]).optional(),
   apiKey: z.string().min(1).optional(),
   baseUrl: z.string().url().optional(),
   region: z.string().min(1).optional(),
+  accountId: z.string().min(1).optional(),
 });
 
 const credentialsSchema = z.object({
@@ -114,11 +118,16 @@ export async function writeProviderCredential(
 
 function compactCredential(credential: ProviderCredential): ProviderCredential {
   const result: {
+    authMode?: "api-key" | "oauth";
     apiKey?: string;
     baseUrl?: string;
     region?: string;
+    accountId?: string;
   } = {};
 
+  if (credential.authMode !== undefined) {
+    result.authMode = credential.authMode;
+  }
   if (isNonEmptyString(credential.apiKey)) {
     result.apiKey = credential.apiKey.trim();
   }
@@ -127,6 +136,9 @@ function compactCredential(credential: ProviderCredential): ProviderCredential {
   }
   if (isNonEmptyString(credential.region)) {
     result.region = credential.region.trim();
+  }
+  if (isNonEmptyString(credential.accountId)) {
+    result.accountId = credential.accountId.trim();
   }
   return result;
 }

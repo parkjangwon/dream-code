@@ -23,7 +23,9 @@ import {
   resolveRegionInput,
   shouldPromptRegion,
 } from "./tui-login-menu.js";
+import { connectOpenAiOauth } from "./tui-openai-oauth.js";
 import { promptProvider, type ProviderQuestioner } from "./tui-provider-picker.js";
+import { formatProviderLine, savedProviderIds } from "./tui-provider-status.js";
 
 export type LoginProviderOptions = {
   readonly config: DreamConfig;
@@ -33,11 +35,6 @@ export type LoginProviderOptions = {
   readonly env?: ProviderEnv;
 };
 
-type CredentialSource =
-  | { readonly kind: "env"; readonly key: string }
-  | { readonly kind: "saved" }
-  | { readonly kind: "missing" };
-
 export async function printProviders(
   configRoot: string,
   env: ProviderEnv = process.env,
@@ -45,8 +42,7 @@ export async function printProviders(
   const credentials = await loadCredentials(configRoot);
   output.write(`${paint("Providers", ansi.accent)}\n`);
   for (const definition of listProviderDefinitions()) {
-    const source = credentialSource(definition, credentials.providers[definition.id], env);
-    output.write(formatProviderLine(definition, source));
+    output.write(formatProviderLine(definition, credentials.providers[definition.id], env));
   }
 }
 
@@ -66,7 +62,7 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
 
   const optionParts = parts.slice(1);
   if (optionParts.includes("oauth")) {
-    return connectOauth(definition, options.config);
+    return connectOauth(definition, options);
   }
 
   const regionArg = optionParts.find((part) => part !== "api-key");
@@ -101,14 +97,24 @@ export async function connectProvider(options: LoginProviderOptions): Promise<Dr
   return loginProvider(options);
 }
 
-function connectOauth(definition: ProviderDefinition, config: DreamConfig): DreamConfig {
+async function connectOauth(
+  definition: ProviderDefinition,
+  options: LoginProviderOptions,
+): Promise<DreamConfig> {
   if (!definition.auth.includes("oauth")) {
     output.write(`${definition.displayName} does not support OAuth in Dream Code.\n`);
-    return config;
+    return options.config;
   }
-  output.write("OpenAI OAuth uses the official Codex login flow.\n");
-  output.write("Run `codex login` or use `/login openai` with an API key.\n");
-  return config;
+  if (definition.id === "openai") {
+    return connectOpenAiOauth({
+      config: options.config,
+      configRoot: options.configRoot,
+      env: options.env,
+      definition,
+    });
+  }
+  output.write(`${definition.displayName} OAuth is not wired yet.\n`);
+  return options.config;
 }
 
 async function resolveLoginRegion(
@@ -176,55 +182,6 @@ function configWithProvider(config: DreamConfig, definition: ProviderDefinition)
   };
 }
 
-function credentialSource(
-  definition: ProviderDefinition,
-  credential: ProviderCredential | undefined,
-  env: ProviderEnv,
-): CredentialSource {
-  const envKey = firstEnvKey(env, apiKeyEnvKeys(definition));
-  if (envKey !== undefined) {
-    return { kind: "env", key: envKey };
-  }
-  if (credential?.apiKey !== undefined) {
-    return { kind: "saved" };
-  }
-  return { kind: "missing" };
-}
-
-function savedProviderIds(
-  providers: Readonly<Record<string, ProviderCredential>>,
-): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const [id, credential] of Object.entries(providers)) {
-    if (credential.apiKey !== undefined) {
-      ids.add(id);
-    }
-  }
-  return ids;
-}
-
-function formatProviderLine(
-  definition: ProviderDefinition,
-  source: CredentialSource,
-): string {
-  const status = formatCredentialSource(source);
-  const regions = definition.regions.map((region) => region.id).join("/");
-  return `${definition.id.padEnd(16)} ${definition.displayName.padEnd(18)} ${status.padEnd(12)} ${regions}\n`;
-}
-
-function formatCredentialSource(source: CredentialSource): string {
-  switch (source.kind) {
-    case "env":
-      return paint(`env:${source.key}`, ansi.green);
-    case "saved":
-      return paint("saved", ansi.green);
-    case "missing":
-      return paint("missing", ansi.yellow);
-    default:
-      return assertNever(source);
-  }
-}
-
 function firstEnvKey(env: ProviderEnv, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = env[key];
@@ -243,8 +200,4 @@ function firstEnvValue(env: ProviderEnv, keys: readonly string[]): string | unde
     }
   }
   return undefined;
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected credential source: ${String(value)}`);
 }

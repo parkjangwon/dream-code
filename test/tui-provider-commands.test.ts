@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
 import { defaultConfig } from "../src/config.js";
+import { codexAuthFilePath, codexOAuthBaseUrl } from "../src/codex-oauth.js";
 import { readProviderCredential } from "../src/credentials.js";
 import { loginProvider } from "../src/tui-provider-commands.js";
 
@@ -92,3 +93,49 @@ test("loginProvider prompts for region and stores a secret API key", async () =>
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("loginProvider connects OpenAI with Codex OAuth", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const codexHome = await mkdtemp(join(tmpdir(), "dream-codex-home-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await mkdir(codexHome, { recursive: true });
+    await writeFile(codexAuthFilePath({ CODEX_HOME: codexHome }), JSON.stringify({
+      auth_mode: "chatgpt",
+      tokens: {
+        access_token: fakeJwt(4_102_444_800),
+        refresh_token: "refresh-token",
+        account_id: "acct_test",
+      },
+    }));
+
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "openai oauth",
+      env: { CODEX_HOME: codexHome },
+      questioner: {
+        question: async () => "",
+      },
+    });
+    const credential = await readProviderCredential("openai", root);
+
+    assert.equal(nextConfig.model.single.provider, "openai");
+    assert.deepEqual(credential, {
+      authMode: "oauth",
+      region: "chatgpt",
+      baseUrl: codexOAuthBaseUrl,
+      accountId: "acct_test",
+    });
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+function fakeJwt(exp: number): string {
+  const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ exp })).toString("base64url");
+  return `${header}.${payload}.signature`;
+}

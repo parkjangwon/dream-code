@@ -40,3 +40,25 @@ test("writeProviderCredential saves API key and region metadata", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("writeProviderCredential saves OAuth metadata without an API key", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-creds-"));
+  try {
+    await writeProviderCredential(root, "openai", {
+      authMode: "oauth",
+      region: "chatgpt",
+      baseUrl: "https://chatgpt.com/backend-api/codex/",
+      accountId: " acct_test ",
+    });
+    const credential = await readProviderCredential("openai", root);
+
+    assert.deepEqual(credential, {
+      authMode: "oauth",
+      region: "chatgpt",
+      baseUrl: "https://chatgpt.com/backend-api/codex",
+      accountId: "acct_test",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
