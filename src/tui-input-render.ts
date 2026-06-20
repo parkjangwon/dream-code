@@ -15,8 +15,8 @@ export function renderInputView(
 ): number {
   const width = Math.max(64, output.columns ?? 80);
   const contentWidth = width - 4;
-  const promptLine = `${paint(prompt, ansi.accent)}${displayInputText(state.text, secret)}`;
-  const cursorText = displayInputText(state.text.slice(0, state.cursor), secret);
+  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(state.text, secret)}`;
+  const cursorText = renderInputText(state.text.slice(0, state.cursor), secret);
   const lines = [
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
@@ -172,6 +172,16 @@ export function shouldShowInlineShortcutGuide(text: string): boolean {
 
 export function displayInputText(text: string, secret: boolean): string {
   return secret ? "*".repeat(text.length) : text;
+}
+
+export function renderInputText(text: string, secret: boolean): string {
+  return secret ? displayInputText(text, true) : highlightSkillMentions(text);
+}
+
+function highlightSkillMentions(text: string): string {
+  return text.replace(/(^|\s)(@[a-zA-Z0-9._-]+)/gu, (_, prefix: string, mention: string) => {
+    return `${prefix}${paint(mention, ansi.blue)}`;
+  });
 }
 
 export function renderPaletteDescription(text: string, width: number): string {

@@ -6,6 +6,7 @@ import {
   cursorUpToPromptLineCount,
   displayInputText,
   formatSkillPaletteLine,
+  renderInputText,
   renderPaletteDescription,
   shouldShowInlineShortcutGuide,
 } from "../src/tui-input-render.js";
@@ -25,6 +26,18 @@ test("inline shortcut guide is derived from a literal question mark input", () =
 test("displayInputText masks secret input without changing cursor width", () => {
   assert.equal(displayInputText("secret", true), "******");
   assert.equal(displayInputText("secret", false), "secret");
+});
+
+test("renderInputText highlights skill mentions inside the prompt input", () => {
+  const rendered = renderInputText("@cso review email@example.com", false);
+
+  assert.equal(rendered.includes(`${ansi.blue}@cso`), true);
+  assert.equal(rendered.includes(`${ansi.blue}@example`), false);
+  assert.equal(terminalVisibleWidth(rendered), terminalVisibleWidth("@cso review email@example.com"));
+});
+
+test("renderInputText keeps secret input masked without mention highlighting", () => {
+  assert.equal(renderInputText("@cso", true), "****");
 });
 
 test("terminalVisibleWidth counts Korean text by terminal cell width", () => {

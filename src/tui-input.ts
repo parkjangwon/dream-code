@@ -3,7 +3,7 @@ import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
-import { clearRenderedLines, displayInputText, renderInputView } from "./tui-input-render.js";
+import { clearRenderedLines, renderInputText, renderInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
@@ -48,7 +48,7 @@ export function readInteractiveInput(
       clearRenderedLines(renderedLines);
       cleanup();
       if (result.kind === "submit") {
-        output.write(`${paint(options.prompt, ansi.accent)}${displayInputText(result.text, options.secret === true)}\n`);
+        output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true)}\n`);
       } else {
         output.write("^C\n");
       }
