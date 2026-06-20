@@ -3,11 +3,12 @@ import { stdout as output } from "node:process";
 import {
   formatLoginMenu,
   formatLoginSource,
+  authLabel,
+  loginChoiceValue,
   resolveLoginSelection,
   type LoginChoice,
 } from "./tui-login-menu.js";
 import type { PickerOptions } from "./tui-picker.js";
-import type { ProviderDefinition } from "./provider-registry.js";
 
 export type ProviderQuestioner = {
   readonly question: (prompt: string) => Promise<string>;
@@ -18,16 +19,23 @@ export type ProviderQuestioner = {
 export async function promptProvider(
   questioner: ProviderQuestioner,
   choices: readonly LoginChoice[],
-): Promise<ProviderDefinition | undefined> {
+): Promise<LoginChoice | undefined> {
   if (questioner.select !== undefined) {
     const selection = await questioner.select({
       title: "Login",
       choices: choices.map((choice) => ({
-        value: choice.definition.id,
+        value: loginChoiceValue(choice),
         label: choice.definition.displayName,
-        description: `${choice.definition.id} ${formatLoginSource(choice.source)}`,
+        description: `${choice.definition.id} ${authLabel(choice)} ${formatLoginSource(choice.source)}`,
         descriptionStyle: "raw",
-        keywords: [choice.definition.id, choice.definition.displayName, ...choice.definition.envKeys],
+        keywords: [
+          choice.definition.id,
+          choice.definition.displayName,
+          choice.authMode,
+          authLabel(choice),
+          authKeyword(choice),
+          ...choice.definition.envKeys,
+        ],
       })),
     });
     return selection === undefined ? undefined : resolveLoginSelection(selection, choices);
@@ -39,4 +47,8 @@ export async function promptProvider(
     return undefined;
   }
   return resolveLoginSelection(selection, choices);
+}
+
+function authKeyword(choice: LoginChoice): string {
+  return choice.authMode === "oauth" ? "subscription" : "api";
 }

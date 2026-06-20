@@ -52,16 +52,17 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   const credentials = await loadCredentials(options.configRoot);
   const choices = loginChoices(savedProviderIds(credentials.providers), env);
   const providerArg = parts[0];
-  const definition = providerArg === undefined
+  const selectedChoice = providerArg === undefined
     ? await promptProvider(options.questioner, choices)
-    : resolveProviderDefinition(providerArg);
-  if (definition === undefined) {
+    : resolveChoiceFromArgs(providerArg, parts.slice(1), choices);
+  if (selectedChoice === undefined) {
     output.write(providerArg === undefined ? "login cancelled\n" : `unknown provider: ${providerArg}\n`);
     return options.config;
   }
+  const definition = selectedChoice.definition;
 
   const optionParts = parts.slice(1);
-  if (optionParts.includes("oauth")) {
+  if (selectedChoice.authMode === "oauth" || optionParts.includes("oauth")) {
     return connectOauth(definition, options);
   }
 
@@ -90,6 +91,18 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   await saveConfig(options.configRoot, nextConfig);
   output.write(`connected ${definition.displayName} (${region.label})\n`);
   return nextConfig;
+}
+
+function resolveChoiceFromArgs(
+  providerArg: string,
+  optionParts: readonly string[],
+  choices: ReturnType<typeof loginChoices>,
+) {
+  const authSuffix = optionParts.includes("oauth") || optionParts.includes("subscription") ? ":oauth" : "";
+  return choices.find((choice) => {
+    return choice.definition.id === resolveProviderDefinition(providerArg)?.id
+      && (authSuffix === ":oauth" ? choice.authMode === "oauth" : choice.authMode === "api-key");
+  });
 }
 
 async function connectOauth(

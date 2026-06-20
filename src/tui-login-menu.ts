@@ -10,6 +10,7 @@ import {
 
 export type LoginChoice = {
   readonly definition: ProviderDefinition;
+  readonly authMode: "api-key" | "oauth";
   readonly source: "env" | "saved" | "missing";
 };
 
@@ -17,10 +18,7 @@ export function loginChoices(
   savedProviderIds: ReadonlySet<string>,
   env: ProviderEnv,
 ): readonly LoginChoice[] {
-  return listProviderDefinitions().map((definition) => ({
-    definition,
-    source: loginSource(definition, savedProviderIds, env),
-  }));
+  return listProviderDefinitions().flatMap((definition) => choicesForDefinition(definition, savedProviderIds, env));
 }
 
 export function formatLoginMenu(
@@ -40,13 +38,13 @@ export function formatLoginMenu(
 export function resolveLoginSelection(
   selection: string,
   choices: readonly LoginChoice[],
-): ProviderDefinition | undefined {
+): LoginChoice | undefined {
   const trimmed = selection.trim();
   const index = Number.parseInt(trimmed, 10);
   if (Number.isInteger(index) && String(index) === trimmed) {
-    return choices[index - 1]?.definition;
+    return choices[index - 1];
   }
-  return resolveProviderDefinition(trimmed);
+  return resolveChoiceByText(trimmed, choices);
 }
 
 export function shouldPromptRegion(definition: ProviderDefinition, suppliedRegion: string | undefined): boolean {
@@ -70,8 +68,7 @@ function formatLoginMenuLine(index: number, choice: LoginChoice): string {
   const number = `${index}.`.padStart(3);
   const name = choice.definition.displayName.padEnd(20);
   const status = formatLoginSource(choice.source).padEnd(10);
-  const auth = choice.definition.auth.join("/");
-  return `${paint(number, ansi.guide)} ${choice.definition.id.padEnd(16)} ${name} ${status} ${paint(auth, ansi.dim)}\n`;
+  return `${paint(number, ansi.guide)} ${choice.definition.id.padEnd(16)} ${name} ${status} ${paint(authLabel(choice), ansi.dim)}\n`;
 }
 
 export function formatLoginSource(source: LoginChoice["source"]): string {
@@ -96,6 +93,43 @@ function loginSource(
     return "env";
   }
   return savedProviderIds.has(definition.id) ? "saved" : "missing";
+}
+
+function choicesForDefinition(
+  definition: ProviderDefinition,
+  savedProviderIds: ReadonlySet<string>,
+  env: ProviderEnv,
+): readonly LoginChoice[] {
+  const apiChoice = {
+    definition,
+    authMode: "api-key",
+    source: loginSource(definition, savedProviderIds, env),
+  } satisfies LoginChoice;
+  return definition.auth.includes("oauth")
+    ? [apiChoice, { ...apiChoice, authMode: "oauth" }]
+    : [apiChoice];
+}
+
+function resolveChoiceByText(
+  text: string,
+  choices: readonly LoginChoice[],
+): LoginChoice | undefined {
+  const normalized = text.toLowerCase();
+  const [providerPart, authPart] = normalized.split(":");
+  const definition = providerPart === undefined ? undefined : resolveProviderDefinition(providerPart);
+  if (definition === undefined) {
+    return undefined;
+  }
+  const requestedAuth = authPart === "oauth" || authPart === "subscription" ? "oauth" : "api-key";
+  return choices.find((choice) => choice.definition.id === definition.id && choice.authMode === requestedAuth);
+}
+
+export function loginChoiceValue(choice: LoginChoice): string {
+  return choice.authMode === "oauth" ? `${choice.definition.id}:oauth` : choice.definition.id;
+}
+
+export function authLabel(choice: LoginChoice): string {
+  return choice.authMode === "oauth" ? "(oauth)" : "(api)";
 }
 
 function isNonEmptyString(value: string | undefined): value is string {

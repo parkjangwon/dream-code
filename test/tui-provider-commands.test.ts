@@ -66,6 +66,72 @@ test("loginProvider can select a provider through the picker", async () => {
   }
 });
 
+test("loginProvider exposes OpenAI API and OAuth choices in the picker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "",
+      env: { OPENAI_API_KEY: "sk-openai" },
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          const openAiApi = options.choices.find((choice) => choice.value === "openai");
+          const openAiOauth = options.choices.find((choice) => choice.value === "openai:oauth");
+          assert.equal(openAiApi?.description.includes("(api)"), true);
+          assert.equal(openAiOauth?.description.includes("(oauth)"), true);
+          assert.equal(openAiOauth?.keywords.includes("(oauth)"), true);
+          assert.equal(openAiOauth?.keywords.includes("subscription"), true);
+          return "openai";
+        },
+      },
+    });
+
+    assert.equal(nextConfig.model.single.provider, "openai");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("loginProvider connects OpenAI OAuth when selected from the picker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const codexHome = await mkdtemp(join(tmpdir(), "dream-codex-home-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await mkdir(codexHome, { recursive: true });
+    await writeFile(codexAuthFilePath({ CODEX_HOME: codexHome }), JSON.stringify({
+      auth_mode: "chatgpt",
+      tokens: {
+        access_token: fakeJwt(4_102_444_800),
+        refresh_token: "refresh-token",
+        account_id: "acct_test",
+      },
+    }));
+
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "",
+      env: { CODEX_HOME: codexHome },
+      questioner: {
+        question: async () => "",
+        select: async () => "openai:oauth",
+      },
+    });
+    const credential = await readProviderCredential("openai", root);
+
+    assert.equal(nextConfig.model.single.provider, "openai");
+    assert.equal(credential?.authMode, "oauth");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("loginProvider prompts for region and stores a secret API key", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-login-"));
   const stdout = mock.method(process.stdout, "write", () => true);
