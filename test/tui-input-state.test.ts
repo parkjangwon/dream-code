@@ -31,8 +31,9 @@ test("slash input opens a command palette and enter submits the selected command
 
   assert.equal(opened.state.palette?.matches.length, slashCommands.length);
   assert.equal(selected.effect.kind, "submit");
-  assert.equal(selected.effect.text, "/help");
+  assert.equal(selected.effect.text, "/agents");
   const names: readonly string[] = slashCommands.map((command) => command.name);
+  assert.deepEqual(names, [...names].sort((left, right) => left.localeCompare(right)));
   assert.equal(names.includes("/model"), true);
   assert.equal(names.includes("/models"), false);
   assert.equal(names.includes("/provider"), true);
@@ -63,7 +64,7 @@ test("slash command palette uses arrow keys for selection", () => {
 
   assert.equal(moved.state.palette?.selectedIndex, 1);
   assert.equal(selected.effect.kind, "submit");
-  assert.equal(selected.effect.text, "/status");
+  assert.equal(selected.effect.text, "/doctor");
 });
 
 test("argument commands complete into the input instead of submitting", () => {
