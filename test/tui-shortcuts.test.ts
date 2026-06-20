@@ -6,10 +6,15 @@ import { shortcutGuideText } from "../src/tui-shortcuts.js";
 test("shortcut guide uses compact codex-style inline entries", () => {
   const guide = shortcutGuideText();
 
-  assert.match(guide, /\/ for commands/);
-  assert.match(guide, /! for shell commands/);
-  assert.match(guide, /tab to submit message/);
-  assert.match(guide, /ctrl\+l to redraw screen/);
+  assert.match(guide, /\/ command menu/);
+  assert.match(guide, /! shell command/);
+  assert.match(guide, /enter\/tab submit/);
+  assert.match(guide, /esc close menu/);
+  assert.match(guide, /ctrl\+l redraw screen/);
+  assert.match(guide, /ctrl\+u\/ctrl\+k clear line/);
   assert.match(guide, /ctrl\+c twice to exit/);
+  assert.match(guide, /\? show shortcuts/);
+  assert.doesNotMatch(guide, /@ for file paths/);
+  assert.doesNotMatch(guide, /shift\+enter/);
   assert.doesNotMatch(guide, /\/help for commands/);
 });

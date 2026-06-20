@@ -19,6 +19,16 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/models"), false);
   assert.equal(names.includes("/provider"), true);
   assert.equal(names.includes("/providers"), false);
+  assert.equal(names.includes("/read"), false);
+  assert.equal(names.includes("/write"), false);
+  assert.equal(names.includes("/edit"), false);
+  assert.equal(names.includes("/shell"), false);
+  assert.equal(names.includes("/goal"), false);
+  assert.equal(names.includes("/plan"), false);
+  assert.equal(names.includes("/swarm"), false);
+  assert.equal(names.includes("/team"), false);
+  assert.equal(names.includes("/research"), false);
+  assert.equal(names.includes("/lsp"), false);
   assert.equal(slashCommands.find((command) => command.name === "/model")?.summary, "Choose active model");
 });
 
@@ -38,12 +48,12 @@ test("slash command palette uses arrow keys for selection", () => {
 test("argument commands complete into the input instead of submitting", () => {
   const withPrefix = reduceInputState(createInputState([], slashCommands), {
     kind: "insert",
-    value: "/rea",
+    value: "/mod",
   });
   const completed = reduceInputState(withPrefix.state, { kind: "enter" });
 
   assert.equal(completed.effect.kind, "none");
-  assert.equal(completed.state.text, "/read ");
+  assert.equal(completed.state.text, "/model ");
   assert.equal(completed.state.palette, undefined);
 });
 
