@@ -1,6 +1,5 @@
 import { cwd } from "node:process";
 
-import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import {
   MissingProviderConfigError,
@@ -10,6 +9,7 @@ import {
   type ChatMessage,
 } from "./llm-provider.js";
 import { selectModelForPrompt } from "./model-routing.js";
+import { createAgentResponseSession } from "./tui-agent-response.js";
 
 export type AgentPromptOptions = {
   readonly config: DreamConfig;
@@ -20,30 +20,34 @@ export type AgentPromptOptions = {
 
 export async function runAgentPrompt(options: AgentPromptOptions): Promise<void> {
   const selectedModel = selectModelForPrompt(options.config.model, options.prompt);
-  options.write(`${paint(`dream ${selectedModel.model} (${selectedModel.reason})`, ansi.guide)}\n`);
+  const response = createAgentResponseSession({
+    selectedModel,
+    write: options.write,
+  });
+  response.start();
 
   try {
     const streamInput = options.configRoot === undefined
       ? {
         selectedModel,
         messages: createAgentMessages(options.prompt),
-        onToken: options.write,
+        onToken: response.token,
       }
       : {
         selectedModel,
         messages: createAgentMessages(options.prompt),
         configRoot: options.configRoot,
-        onToken: options.write,
+        onToken: response.token,
       };
     await streamChatCompletion(streamInput);
-    options.write("\n");
+    response.finish();
   } catch (error) {
     if (error instanceof MissingProviderConfigError) {
-      options.write(`${paint(error.message, ansi.yellow)}\n`);
+      response.fail(error.message, "warn");
       return;
     }
     if (error instanceof ProviderRequestError || error instanceof ProviderProtocolError) {
-      options.write(`${paint(error.message, ansi.red)}\n`);
+      response.fail(error.message, "error");
       return;
     }
     throw error;

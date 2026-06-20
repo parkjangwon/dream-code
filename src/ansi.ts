@@ -20,3 +20,7 @@ export function paint(text: string, code: string): string {
 export function clearScreen(): string {
   return "\u001B[2J\u001B[H";
 }
+
+export function stripAnsi(text: string): string {
+  return text.replace(/\u001B\[[0-9;]*m/gu, "");
+}
