@@ -69,15 +69,15 @@ export function resolveRegionInput(
 function formatLoginMenuLine(index: number, choice: LoginChoice): string {
   const number = `${index}.`.padStart(3);
   const name = choice.definition.displayName.padEnd(20);
-  const status = statusText(choice.source).padEnd(10);
+  const status = formatLoginSource(choice.source).padEnd(10);
   const auth = choice.definition.auth.join("/");
   return `${paint(number, ansi.guide)} ${choice.definition.id.padEnd(16)} ${name} ${status} ${paint(auth, ansi.dim)}\n`;
 }
 
-function statusText(source: LoginChoice["source"]): string {
+export function formatLoginSource(source: LoginChoice["source"]): string {
   switch (source) {
     case "env":
-      return paint("env", ansi.green);
+      return paint("env", ansi.blue);
     case "saved":
       return paint("saved", ansi.green);
     case "missing":

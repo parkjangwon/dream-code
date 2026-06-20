@@ -10,5 +10,6 @@ test("shortcut guide uses compact codex-style inline entries", () => {
   assert.match(guide, /! for shell commands/);
   assert.match(guide, /tab to submit message/);
   assert.match(guide, /ctrl\+l to redraw screen/);
+  assert.match(guide, /ctrl\+c twice to exit/);
   assert.doesNotMatch(guide, /\/help for commands/);
 });

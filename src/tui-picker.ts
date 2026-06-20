@@ -55,15 +55,11 @@ export function readInteractivePicker(
         render();
         return;
       }
-      if (key.ctrl === true && key.name === "c") {
-        finish(undefined);
-        return;
-      }
       if (key.name === "return" || key.name === "enter" || key.name === "tab") {
         finish(pickerSelection(state)?.value);
         return;
       }
-      if (key.name === "escape") {
+      if (isPickerBackKey(key.name)) {
         finish(undefined);
         return;
       }
@@ -134,6 +130,10 @@ function pickerActionForKey(
     return undefined;
   }
   return { kind: "insert", value };
+}
+
+export function isPickerBackKey(keyName: string | undefined): boolean {
+  return keyName === "escape";
 }
 
 function visibleStart(selectedIndex: number, visibleCount: number): number {

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { defaultConfig } from "../src/config.js";
 import { codexAuthFilePath, codexOAuthBaseUrl } from "../src/codex-oauth.js";
 import { readProviderCredential } from "../src/credentials.js";
+import { ansi } from "../src/ansi.js";
 import { loginProvider } from "../src/tui-provider-commands.js";
 
 test("loginProvider prompts for a provider when no argument is supplied", async () => {
@@ -48,7 +49,9 @@ test("loginProvider can select a provider through the picker", async () => {
         question: async () => "",
         select: async (options) => {
           assert.equal(options.title, "Login");
-          assert.equal(options.choices.some((choice) => choice.value === "opencode-go"), true);
+          const opencodeGo = options.choices.find((choice) => choice.value === "opencode-go");
+          assert.notEqual(opencodeGo, undefined);
+          assert.equal(opencodeGo?.description.includes(`${ansi.blue}env${ansi.reset}`), true);
           return "opencode-go";
         },
       },

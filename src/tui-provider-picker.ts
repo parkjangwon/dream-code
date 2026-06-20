@@ -2,6 +2,7 @@ import { stdout as output } from "node:process";
 
 import {
   formatLoginMenu,
+  formatLoginSource,
   resolveLoginSelection,
   type LoginChoice,
 } from "./tui-login-menu.js";
@@ -24,7 +25,7 @@ export async function promptProvider(
       choices: choices.map((choice) => ({
         value: choice.definition.id,
         label: choice.definition.displayName,
-        description: `${choice.definition.id} ${choice.source}`,
+        description: `${choice.definition.id} ${formatLoginSource(choice.source)}`,
         keywords: [choice.definition.id, choice.definition.displayName, ...choice.definition.envKeys],
       })),
     });

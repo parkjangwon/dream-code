@@ -6,7 +6,7 @@ const shortcutRows = [
   ["/ for commands", "! for shell commands"],
   ["shift+enter for newline", "tab to submit message"],
   ["@ for file paths", "ctrl+l to redraw screen"],
-  ["ctrl+a/ctrl+e move cursor", "ctrl+c to exit"],
+  ["ctrl+a/ctrl+e move cursor", "ctrl+c twice to exit"],
 ] as const satisfies readonly (readonly [string, string])[];
 
 export function shortcutGuideText(): string {

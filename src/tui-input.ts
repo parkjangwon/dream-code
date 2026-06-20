@@ -19,12 +19,22 @@ export type InteractiveInputResult =
   | { readonly kind: "submit"; readonly text: string }
   | { readonly kind: "cancel" };
 
+export const ctrlCExitWindowMs = 1_500;
+
+export function shouldExitOnRepeatedCtrlC(
+  lastCtrlCAt: number | undefined,
+  now: number,
+): boolean {
+  return lastCtrlCAt !== undefined && now - lastCtrlCAt <= ctrlCExitWindowMs;
+}
+
 export function readInteractiveInput(
   options: InteractiveInputOptions,
 ): Promise<InteractiveInputResult> {
   return new Promise((resolve) => {
     let state = createInputState(options.history, options.commands);
     let renderedLines = 0;
+    let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
 
     const render = (): void => {
@@ -51,6 +61,9 @@ export function readInteractiveInput(
 
       const update = reduceInputState(state, action);
       state = update.state;
+      if (action.kind !== "ctrlC") {
+        lastCtrlCAt = undefined;
+      }
 
       switch (update.effect.kind) {
         case "none":
@@ -65,7 +78,17 @@ export function readInteractiveInput(
           render();
           return;
         case "cancel":
-          finish({ kind: "cancel" });
+          {
+            const now = Date.now();
+            if (shouldExitOnRepeatedCtrlC(lastCtrlCAt, now)) {
+              finish({ kind: "cancel" });
+              return;
+            }
+            lastCtrlCAt = now;
+            clearRenderedLines(renderedLines);
+            output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
+            renderedLines = renderInputView(state, options.prompt, options.secret === true);
+          }
           return;
         default:
           assertNever(update.effect);
