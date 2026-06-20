@@ -5,6 +5,7 @@ import type { DreamSkill } from "../src/skills.js";
 import {
   createSkillManagerState,
   reduceSkillManagerState,
+  searchCursorUpCount,
   skillManagerVisibleSkills,
 } from "../src/tui-skill-manager.js";
 
@@ -37,6 +38,10 @@ test("skill manager preserves disabled names outside the installed list", () => 
   const toggled = reduceSkillManagerState(createSkillManagerState(skills, ["external"]), { kind: "toggle" });
 
   assert.deepEqual(toggled.disabled, ["cso", "external"]);
+});
+
+test("skill manager keeps the search cursor on the second rendered line", () => {
+  assert.equal(searchCursorUpCount(12), 10);
 });
 
 function skill(name: string, description: string): DreamSkill {

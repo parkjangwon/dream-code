@@ -13,7 +13,7 @@ test("formatChoiceLine truncates long labels and descriptions", () => {
   const line = formatChoiceLine(
     {
       value: "cso",
-      label: "[x] chief-security-officer-with-a-long-name",
+      label: "[v] chief-security-officer-with-a-long-name",
       description: "Chief Security Officer security audit with a very long explanation that should not wrap.",
       keywords: [],
     },

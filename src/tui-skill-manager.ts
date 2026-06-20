@@ -122,8 +122,8 @@ function renderSkillManagerView(state: SkillManagerState): number {
   const windowed = visible.slice(start, start + maxVisibleSkills);
   const lines = [
     `${paint("Skills", ansi.accent)} ${paint(`${state.skills.length} skills · ${enabledCount} enabled`, ansi.dim)}`,
-    paint("↑/↓ navigate · type to search · space toggle · enter save · esc discard", ansi.guide),
     `${paint("Search:", ansi.guide)} ${state.query}`,
+    paint("↑/↓ navigate · type to search · space toggle · enter save · esc discard", ansi.guide),
     paint("─".repeat(contentWidth), ansi.guide),
     `${paint("state", ansi.dim)}  ${paint("skill", ansi.dim).padEnd(30)} ${paint("source", ansi.dim).padEnd(12)} ${paint("description", ansi.dim)}`,
   ];
@@ -155,7 +155,7 @@ function formatManagedSkillLine(
 ): string {
   const enabled = !state.disabled.includes(skill.name);
   const marker = selected ? paint(">", ansi.accent) : " ";
-  const checkbox = enabled ? paint("[x]", ansi.green) : paint("[ ]", ansi.yellow);
+  const checkbox = enabled ? paint("[v]", ansi.green) : paint("[ ]", ansi.yellow);
   const name = padVisible(paint(`@${renderPaletteDescription(skill.name, 24)}`, ansi.blue), 28);
   const source = padVisible(paint(skill.source, ansi.dim), 10);
   const prefix = `${marker} ${checkbox} ${name} ${source} `;
@@ -225,12 +225,16 @@ function scrollHint(start: number, visibleCount: number): string {
 }
 
 function moveCursorToSearchLine(lineCount: number, query: string): void {
-  const linesToSearch = Math.max(0, lineCount - 3);
+  const linesToSearch = searchCursorUpCount(lineCount);
   if (linesToSearch > 0) {
     output.write(`\u001B[${linesToSearch}A`);
   }
   output.write("\r");
   output.write(`\u001B[${8 + terminalVisibleWidth(query)}C`);
+}
+
+export function searchCursorUpCount(lineCount: number): number {
+  return Math.max(0, lineCount - 2);
 }
 
 function padVisible(text: string, width: number): string {
