@@ -28,7 +28,9 @@ Inside the TUI:
 
 Provider setup is env-first. If Dream Code detects a provider API key, `/login`
 uses it without asking again. Otherwise it prompts inside the TUI and stores the
-credential in `~/.dream/credentials.json` with owner-only file permissions.
+credential in `~/.dream/credentials.json` with owner-only file permissions. Main
+user-editable settings live in TOML files; credentials stay in JSON because they
+are app-owned secrets rather than hand-edited configuration.
 
 Current built-in providers:
 

@@ -31,6 +31,7 @@ rests.
 
 2. **Config**
    - Store main config at `~/.dream/config.toml`, model routing at `~/.dream/models.toml`, and team members at `~/.dream/team.toml`.
+   - Keep provider credentials in `~/.dream/credentials.json` as an app-owned secret store with owner-only permissions.
    - Persist `/yolo` toggles.
    - Keep a single default visual theme; do not expose theme settings.
 
