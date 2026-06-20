@@ -65,6 +65,44 @@ test("agent response session applies lightweight markdown styling", () => {
   assert.equal(rawOutput.includes(paint("bold", ansi.bold)), true);
 });
 
+test("agent response session styles markdown across token boundaries", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("Read `READ");
+  session.token("ME.md` before `code`");
+  session.finish();
+
+  const rawOutput = chunks.join("");
+  const plainOutput = stripAnsi(rawOutput);
+  assert.match(plainOutput, /│ Read `README.md` before `code`/);
+  assert.equal(rawOutput.includes(paint("README.md", ansi.blue)), true);
+  assert.equal(rawOutput.includes(paint("code", ansi.yellow)), true);
+});
+
+test("agent response session renders fenced code blocks", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("```bash\nls -la /tmp\n```\nDone");
+  session.finish();
+
+  const rawOutput = chunks.join("");
+  const plainOutput = stripAnsi(rawOutput);
+  assert.match(plainOutput, /│ ╭─ bash\n│   ls -la \/tmp\n│ ╰─\n│ Done/);
+  assert.equal(rawOutput.includes(paint("ls -la /tmp", ansi.yellow)), true);
+});
+
 const selectedModelFixture = {
   provider: "openai",
   model: "gpt-test",

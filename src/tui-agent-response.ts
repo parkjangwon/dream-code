@@ -14,14 +14,36 @@ export type AgentResponseSessionOptions = {
   readonly now?: () => number;
 };
 
+type MarkdownState = {
+  readonly inFence: boolean;
+};
+
+type RenderedMarkdownLine = {
+  readonly text: string;
+  readonly state: MarkdownState;
+};
+
 export function createAgentResponseSession(options: AgentResponseSessionOptions): AgentResponseSession {
   const now = options.now ?? Date.now;
   const startedAt = now();
   let receivedToken = false;
-  let atLineStart = true;
   let characterCount = 0;
+  let lineBuffer = "";
+  let markdownState: MarkdownState = { inFence: false };
 
   const model = modelLabel(options.selectedModel);
+  const writeLine = (line: string): void => {
+    const rendered = renderMarkdownLine(line, markdownState);
+    markdownState = rendered.state;
+    options.write(`${responseRail()}${rendered.text}\n`);
+  };
+  const flushLineBuffer = (): void => {
+    if (lineBuffer.length === 0) {
+      return;
+    }
+    writeLine(lineBuffer);
+    lineBuffer = "";
+  };
 
   return {
     start: () => {
@@ -33,21 +55,19 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
         options.write(`${paint("●", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
       }
       characterCount += token.length;
-      atLineStart = writeWithRail(token, atLineStart, options.write);
+      lineBuffer = writeBufferedLines(token, lineBuffer, writeLine);
     },
     finish: () => {
       if (!receivedToken) {
         options.write(`${paint("●", ansi.green)} ${paint("Dream", ansi.bold)}\n`);
         options.write(`${responseRail()}${paint("No response received.", ansi.dim)}\n`);
-      } else if (!atLineStart) {
-        options.write("\n");
+      } else {
+        flushLineBuffer();
       }
       options.write(`${paint("✓", ansi.green)} ${paint("Done", ansi.dim)} ${paint(responseStats(startedAt, now(), characterCount), ansi.guide)}\n`);
     },
     fail: (message, tone) => {
-      if (!atLineStart) {
-        options.write("\n");
-      }
+      flushLineBuffer();
       const color = tone === "warn" ? ansi.yellow : ansi.red;
       options.write(`${paint("✕", color)} ${paint("Error", `${ansi.bold}${color}`)}\n`);
       options.write(`${responseRail()}${paint(message, color)}\n`);
@@ -55,33 +75,27 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
   };
 }
 
-function writeWithRail(
+function writeBufferedLines(
   text: string,
-  lineStart: boolean,
-  write: (text: string) => void,
-): boolean {
-  let atLineStart = lineStart;
+  initialBuffer: string,
+  writeLine: (line: string) => void,
+): string {
+  let lineBuffer = initialBuffer;
   let cursor = 0;
 
   while (cursor < text.length) {
-    const segmentStartsLine = atLineStart;
-    if (atLineStart) {
-      write(responseRail());
-      atLineStart = false;
-    }
-
     const newlineIndex = text.indexOf("\n", cursor);
     if (newlineIndex === -1) {
-      write(renderMarkdownSegment(text.slice(cursor), segmentStartsLine));
-      return atLineStart;
+      return `${lineBuffer}${text.slice(cursor)}`;
     }
 
-    write(`${renderMarkdownSegment(text.slice(cursor, newlineIndex), segmentStartsLine)}\n`);
-    atLineStart = true;
+    lineBuffer = `${lineBuffer}${text.slice(cursor, newlineIndex)}`;
+    writeLine(lineBuffer);
+    lineBuffer = "";
     cursor = newlineIndex + 1;
   }
 
-  return atLineStart;
+  return lineBuffer;
 }
 
 function modelLabel(selectedModel: SelectedModel): string {
@@ -92,9 +106,26 @@ function responseRail(): string {
   return `${paint("│", ansi.guide)} `;
 }
 
-function renderMarkdownSegment(segment: string, lineStart: boolean): string {
-  const blockStyled = lineStart ? renderMarkdownLineStart(segment) : segment;
-  return renderInlineMarkdown(blockStyled);
+function renderMarkdownLine(line: string, state: MarkdownState): RenderedMarkdownLine {
+  const fence = /^```([A-Za-z0-9_-]+)?\s*$/u.exec(line.trim());
+  if (fence !== null) {
+    return state.inFence
+      ? { text: paint("╰─", ansi.guide), state: { inFence: false } }
+      : {
+        text: paint(`╭─ ${fence[1] ?? "code"}`, ansi.guide),
+        state: { inFence: true },
+      };
+  }
+
+  if (state.inFence) {
+    return {
+      text: `${paint("  ", ansi.guide)}${paint(line, ansi.yellow)}`,
+      state,
+    };
+  }
+
+  const blockStyled = renderMarkdownLineStart(line);
+  return { text: renderInlineMarkdown(blockStyled), state };
 }
 
 function renderMarkdownLineStart(segment: string): string {
