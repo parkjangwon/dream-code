@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
 import { defaultConfig, loadConfig } from "../src/config.js";
-import { listSessions, startSession } from "../src/session-store.js";
+import { appendSessionTurn, listSessions, startSession } from "../src/session-store.js";
 import { handleInput } from "../src/tui.js";
 
 test("handleInput routes /model to model selection instead of status output", async () => {
@@ -80,6 +80,48 @@ test("handleInput opens saved sessions through picker", async () => {
     );
 
     assert.equal(switched, second.id);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("handleInput restores selected session transcript", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-session-restore-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const current = await startSession(root, "/tmp/dream-code");
+    const previous = await startSession(root, "/tmp/older-project");
+    await appendSessionTurn(root, previous.id, "user", "explain this project");
+    await appendSessionTurn(root, previous.id, "assistant", "This is an older answer.");
+    let restoredUserPrompt = "";
+
+    await handleInput(
+      "/session",
+      defaultConfig(),
+      { oneShotYolo: true, configRoot: root },
+      {
+        question: async () => "",
+        select: async () => previous.id,
+      },
+      {
+        currentId: () => current.id,
+        switchTo: () => undefined,
+        restore: (session) => {
+          restoredUserPrompt = session.turns.find((turn) => turn.role === "user")?.content ?? "";
+        },
+      },
+    );
+
+    const outputText = chunks.join("");
+    assert.match(outputText, /session: older-project/u);
+    assert.match(outputText, /explain this project/u);
+    assert.match(outputText, /This is an older answer\./u);
+    assert.equal(restoredUserPrompt, "explain this project");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

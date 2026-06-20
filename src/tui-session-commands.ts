@@ -11,6 +11,7 @@ import type { PickerOptions } from "./tui-picker.js";
 export type SessionRuntime = {
   readonly currentId: () => string;
   readonly switchTo: (sessionId: string) => void;
+  readonly restore?: (session: DreamSession) => void;
 };
 
 export type SessionQuestioner = {
@@ -40,8 +41,12 @@ export async function showSessionMenu(
       })),
     });
     if (selected !== undefined) {
-      runtime?.switchTo(selected);
-      output.write(`session: ${selectedSessionName(sessions, selected)}\n`);
+      const session = selectedSession(sessions, selected);
+      if (session !== undefined) {
+        restoreRuntimeSession(runtime, session);
+        output.write(`session: ${session.name}\n`);
+        output.write(formatSessionTranscript(session));
+      }
     }
     return;
   }
@@ -80,6 +85,44 @@ function sessionDescription(session: DreamSession, runtime: SessionRuntime | und
   return `${current}${session.summary}`;
 }
 
-function selectedSessionName(sessions: readonly DreamSession[], sessionId: string): string {
-  return sessions.find((session) => session.id === sessionId)?.name ?? sessionId;
+function selectedSession(sessions: readonly DreamSession[], sessionId: string): DreamSession | undefined {
+  return sessions.find((session) => session.id === sessionId);
+}
+
+function restoreRuntimeSession(runtime: SessionRuntime | undefined, session: DreamSession): void {
+  runtime?.switchTo(session.id);
+  runtime?.restore?.(session);
+}
+
+function formatSessionTranscript(session: DreamSession): string {
+  if (session.turns.length === 0) {
+    return "";
+  }
+
+  const lines = [paint("Transcript", ansi.dim), "\n"];
+  for (const turn of session.turns) {
+    switch (turn.role) {
+      case "user":
+        lines.push(`${paint(">", ansi.accent)} ${turn.content}\n`);
+        break;
+      case "assistant":
+        lines.push(`${paint("Dream", ansi.green)}\n${formatAssistantTurn(turn.content)}\n`);
+        break;
+      default:
+        assertNever(turn.role);
+    }
+  }
+  return lines.join("");
+}
+
+function formatAssistantTurn(content: string): string {
+  return content
+    .trimEnd()
+    .split(/\r?\n/u)
+    .map((line) => `${paint("│", ansi.dim)} ${line}`)
+    .join("\n");
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled session turn role: ${value}`);
 }

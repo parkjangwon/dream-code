@@ -9,7 +9,7 @@ import {
   type DreamConfig,
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
-import { startSession } from "./session-store.js";
+import { startSession, type DreamSession } from "./session-store.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
@@ -66,6 +66,10 @@ async function runInteractiveLoop(
     currentId: () => currentSessionId,
     switchTo: (sessionId) => {
       currentSessionId = sessionId;
+    },
+    restore: (session) => {
+      currentSessionId = session.id;
+      history = historyFromSession(session);
     },
   };
   let shouldContinue = true;
@@ -215,4 +219,11 @@ function appendHistory(history: readonly string[], text: string): readonly strin
     return history;
   }
   return [...history, trimmed].slice(-100);
+}
+
+function historyFromSession(session: DreamSession): readonly string[] {
+  return session.turns
+    .filter((turn) => turn.role === "user")
+    .map((turn) => turn.content)
+    .slice(-100);
 }
