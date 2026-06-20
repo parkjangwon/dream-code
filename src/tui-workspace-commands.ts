@@ -1,0 +1,196 @@
+import { stdout as output } from "node:process";
+
+import { runAgentPrompt } from "./agent-runner.js";
+import { ansi, paint } from "./ansi.js";
+import { splitCommand } from "./command-parser.js";
+import {
+  defaultConfigRoot,
+  resolveEffectivePermissionMode,
+  type DreamConfig,
+  type PermissionMode,
+} from "./config.js";
+import { connectProvider, loginProvider, printProviders } from "./tui-provider-commands.js";
+import { printScaffold } from "./tui-render.js";
+import {
+  readWorkspaceFile,
+  replaceInWorkspaceFile,
+  runShellCommand,
+  writeWorkspaceFile,
+} from "./workspace-tools.js";
+
+export type CommandResult = {
+  readonly config: DreamConfig;
+  readonly shouldContinue: boolean;
+};
+
+export type Questioner = {
+  readonly question: (prompt: string) => Promise<string>;
+  readonly secret?: (prompt: string) => Promise<string>;
+};
+
+export async function runWorkspaceCommand(
+  text: string,
+  config: DreamConfig,
+  oneShotYolo: boolean,
+  questioner: Questioner,
+  configRoot = defaultConfigRoot(),
+): Promise<CommandResult> {
+  const mode = resolveEffectivePermissionMode(config, oneShotYolo);
+
+  if (text.startsWith("!")) {
+    await maybeRunShell(text.slice(1).trim(), mode, questioner);
+    return { config, shouldContinue: true };
+  }
+
+  if (!text.startsWith("/")) {
+    await runAgentPrompt({
+      config,
+      configRoot,
+      prompt: text,
+      write: (chunk) => {
+        output.write(chunk);
+      },
+    });
+    return { config, shouldContinue: true };
+  }
+
+  const command = splitCommand(text);
+  if (command === undefined) {
+    return { config, shouldContinue: true };
+  }
+
+  switch (command.name) {
+    case "/providers":
+      await printProviders(configRoot);
+      return { config, shouldContinue: true };
+    case "/connect":
+      return {
+        config: await connectProvider({
+          config,
+          configRoot,
+          args: command.rest,
+          questioner,
+        }),
+        shouldContinue: true,
+      };
+    case "/login":
+      return {
+        config: await loginProvider({
+          config,
+          configRoot,
+          args: command.rest,
+          questioner,
+        }),
+        shouldContinue: true,
+      };
+    case "/read":
+      await printFile(command.rest);
+      return { config, shouldContinue: true };
+    case "/write":
+      await maybeWriteFile(command.rest, mode, questioner);
+      return { config, shouldContinue: true };
+    case "/edit":
+      await maybeEditFile(command.rest, mode, questioner);
+      return { config, shouldContinue: true };
+    case "/shell":
+      await maybeRunShell(command.rest, mode, questioner);
+      return { config, shouldContinue: true };
+    case "/goal":
+    case "/plan":
+    case "/interview":
+    case "/swarm":
+    case "/team":
+    case "/research":
+    case "/lsp":
+      printScaffold(command.name, command.rest, config);
+      return { config, shouldContinue: true };
+    default:
+      output.write(`unknown command: ${command.name}\n`);
+      return { config, shouldContinue: true };
+  }
+}
+
+async function printFile(path: string): Promise<void> {
+  if (path.length === 0) {
+    output.write("usage: /read <path>\n");
+    return;
+  }
+
+  const result = await readWorkspaceFile(path);
+  output.write(`${paint(result.path, ansi.dim)} (${result.bytes} bytes)\n`);
+  output.write(result.content);
+  if (!result.content.endsWith("\n")) {
+    output.write("\n");
+  }
+  if (result.truncated) {
+    output.write(paint("truncated by token-saving read limit\n", ansi.yellow));
+  }
+}
+
+async function maybeWriteFile(
+  rest: string,
+  mode: PermissionMode,
+  questioner: Questioner,
+): Promise<void> {
+  const command = splitCommand(rest);
+  if (command === undefined) {
+    output.write("usage: /write <path> <text>\n");
+    return;
+  }
+  if (!(await confirmWrite(`write ${command.name}`, mode, questioner))) {
+    return;
+  }
+  const filePath = await writeWorkspaceFile(command.name, command.rest);
+  output.write(`wrote ${filePath}\n`);
+}
+
+async function maybeEditFile(
+  rest: string,
+  mode: PermissionMode,
+  questioner: Questioner,
+): Promise<void> {
+  const command = splitCommand(rest);
+  const separator = " => ";
+  if (command === undefined || !command.rest.includes(separator)) {
+    output.write("usage: /edit <path> old text => new text\n");
+    return;
+  }
+
+  const splitAt = command.rest.indexOf(separator);
+  const searchText = command.rest.slice(0, splitAt);
+  const replacementText = command.rest.slice(splitAt + separator.length);
+  if (!(await confirmWrite(`edit ${command.name}`, mode, questioner))) {
+    return;
+  }
+  const result = await replaceInWorkspaceFile(command.name, searchText, replacementText);
+  output.write(result.replaced ? `edited ${result.path}\n` : `no match in ${result.path}\n`);
+}
+
+async function maybeRunShell(
+  command: string,
+  mode: PermissionMode,
+  questioner: Questioner,
+): Promise<void> {
+  if (command.length === 0) {
+    output.write("usage: /shell <command>\n");
+    return;
+  }
+  if (!(await confirmWrite(`run shell: ${command}`, mode, questioner))) {
+    return;
+  }
+  const code = await runShellCommand(command);
+  output.write(`exit ${code}\n`);
+}
+
+async function confirmWrite(
+  label: string,
+  mode: PermissionMode,
+  questioner: Questioner,
+): Promise<boolean> {
+  if (mode === "yolo") {
+    return true;
+  }
+
+  const answer = await questioner.question(`${label}? [y/N] `);
+  return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
+}
