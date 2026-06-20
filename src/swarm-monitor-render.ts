@@ -29,6 +29,8 @@ export type SwarmMonitorSnapshot = {
   readonly abortArmed: boolean;
   readonly maxVisibleLanes: number | undefined;
   readonly synthesisStatus: SwarmSynthesisStatus;
+  readonly synthesisStartedAt: number | undefined;
+  readonly synthesisFinishedAt: number | undefined;
 };
 
 export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): string {
@@ -44,7 +46,7 @@ export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): stri
     `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
     ...(showActivity ? [`${paint("│", ansi.guide)} activity ${activityStrip(snapshot.frame)} ${paint("parallel lanes mixing", ansi.dim)}`] : []),
     ...laneWindowLines(laneWindow, snapshot),
-    `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot.synthesisStatus)}`,
+    `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot)}`,
     `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive, snapshot.abortArmed)}`,
   ];
   return `${lines.join("\n")}\n`;
@@ -185,21 +187,30 @@ function activityStrip(frame: number): string {
   return paint(shifted, ansi.accent);
 }
 
-function formatSynthesis(status: SwarmSynthesisStatus): string {
-  switch (status) {
+function formatSynthesis(snapshot: SwarmMonitorSnapshot): string {
+  const elapsed = synthesisElapsed(snapshot);
+  const suffix = elapsed === undefined ? "" : ` ${paint(elapsed, ansi.dim)}`;
+  switch (snapshot.synthesisStatus) {
     case "waiting":
       return paint("waiting for lanes", ansi.dim);
     case "running":
-      return paint("merging parallel outputs", ansi.yellow);
+      return `${paint("merging parallel outputs", ansi.yellow)}${suffix}`;
     case "done":
-      return paint("complete", ansi.green);
+      return `${paint("complete", ansi.green)}${suffix}`;
     case "failed":
-      return paint("failed", ansi.red);
+      return `${paint("failed", ansi.red)}${suffix}`;
     case "cancelled":
-      return paint("stopped", ansi.yellow);
+      return `${paint("stopped", ansi.yellow)}${suffix}`;
     default:
-      return assertNever(status);
+      return assertNever(snapshot.synthesisStatus);
   }
+}
+
+function synthesisElapsed(snapshot: SwarmMonitorSnapshot): string | undefined {
+  if (snapshot.synthesisStartedAt === undefined) {
+    return undefined;
+  }
+  return formatDuration((snapshot.synthesisFinishedAt ?? snapshot.now) - snapshot.synthesisStartedAt);
 }
 
 function formatDuration(milliseconds: number): string {

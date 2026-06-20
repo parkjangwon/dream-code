@@ -88,6 +88,7 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
   assert.match(output, /merging parallel outputs/u);
   assert.match(output, /token mixing radar online/u);
   assert.match(output, /Swarm Synthesis/u);
+  assert.match(chunks.join(""), /\u001B\[38;5;114m\u001B\[1m✓ Swarm complete/u);
 });
 
 test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", async () => {
@@ -141,6 +142,8 @@ test("renderSwarmMonitorSnapshot shows an armed escape stop hint", () => {
     interactive: true,
     abortArmed: true,
     maxVisibleLanes: undefined,
+    synthesisStartedAt: undefined,
+    synthesisFinishedAt: undefined,
     lanes: [
       {
         id: "lane-1",

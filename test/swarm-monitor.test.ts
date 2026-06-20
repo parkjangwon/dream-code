@@ -40,6 +40,8 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
     interactive: false,
     abortArmed: false,
     maxVisibleLanes: undefined,
+    synthesisStartedAt: 1000,
+    synthesisFinishedAt: undefined,
   }));
 
   assert.match(rendered, /Swarm Monitor/u);
@@ -50,6 +52,7 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /1\.5k chars/u);
   assert.match(rendered, /parallel lanes mixing/u);
   assert.match(rendered, /merging parallel outputs/u);
+  assert.match(rendered, /1\.5s/u);
   assert.match(rendered, /token mixing radar online/u);
 });
 
@@ -65,6 +68,8 @@ test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane detail
     interactive: true,
     abortArmed: false,
     maxVisibleLanes: undefined,
+    synthesisStartedAt: undefined,
+    synthesisFinishedAt: undefined,
     lanes: [
       {
         id: "lane-1",
@@ -108,6 +113,8 @@ test("renderSwarmMonitorSnapshot windows large swarms around the focused lane", 
     interactive: true,
     abortArmed: false,
     maxVisibleLanes: 5,
+    synthesisStartedAt: 1500,
+    synthesisFinishedAt: undefined,
     lanes: Array.from({ length: 100 }, (_item, index) => ({
       id: `lane-${index + 1}`,
       index: index + 1,

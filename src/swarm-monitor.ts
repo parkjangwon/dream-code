@@ -48,6 +48,8 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   const now = options.now ?? Date.now;
   const startedAt = now();
   let synthesisStatus: SwarmSynthesisStatus = "waiting";
+  let synthesisStartedAt: number | undefined;
+  let synthesisFinishedAt: number | undefined;
   let renderedLineCount = 0;
   let frame = 0;
   let selectedIndex: number | undefined;
@@ -76,6 +78,8 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       abortArmed: isAbortArmed(abortArmedAt, now()),
       maxVisibleLanes: options.maxVisibleLanes,
       synthesisStatus,
+      synthesisStartedAt,
+      synthesisFinishedAt,
     });
     if (options.replaceInPlace === true) {
       options.write(`${clearPreviousSnapshot(renderedLineCount)}${snapshot}`);
@@ -205,21 +209,26 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
     },
     synthesisStarted: () => {
       synthesisStatus = "running";
+      synthesisStartedAt = now();
+      synthesisFinishedAt = undefined;
       render();
       syncAnimation();
     },
     synthesisDone: () => {
       synthesisStatus = "done";
+      synthesisFinishedAt = now();
       render();
       syncAnimation();
     },
     synthesisFailed: () => {
       synthesisStatus = "failed";
+      synthesisFinishedAt = now();
       render();
       syncAnimation();
     },
     synthesisCancelled: () => {
       synthesisStatus = "cancelled";
+      synthesisFinishedAt = now();
       render();
       syncAnimation();
     },

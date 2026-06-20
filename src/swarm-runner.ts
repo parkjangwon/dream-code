@@ -246,7 +246,7 @@ function formatSwarmSynthesis(synthesis: string): string {
   return [
     `${paint("●", ansi.green)} ${paint("Swarm Synthesis", ansi.bold)}`,
     ...body.split(/\r?\n/u).map((line) => `${paint("│", ansi.guide)} ${line}`),
-    `${paint("✓", ansi.green)} ${paint("Swarm complete", ansi.dim)}`,
+    paint("✓ Swarm complete", `${ansi.green}${ansi.bold}`),
   ].join("\n").concat("\n");
 }
 
