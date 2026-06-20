@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { stripAnsi } from "../src/ansi.js";
+import { ansi, paint, stripAnsi } from "../src/ansi.js";
 import type { SelectedModel } from "../src/model-routing.js";
 import { createAgentResponseSession } from "../src/tui-agent-response.js";
 
@@ -41,6 +41,28 @@ test("agent response session renders provider errors as a response block", () =>
   assert.match(output, /○ Thinking openai\/gpt-test · mid/);
   assert.match(output, /✕ Error/);
   assert.match(output, /│ Missing API key/);
+});
+
+test("agent response session applies lightweight markdown styling", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("### Summary\n- Read `README.md` and `src/`\nUse **bold** and `code`.");
+  session.finish();
+
+  const rawOutput = chunks.join("");
+  const plainOutput = stripAnsi(rawOutput);
+  assert.match(plainOutput, /│ ### Summary/);
+  assert.match(plainOutput, /│ • Read `README.md` and `src\/`/);
+  assert.equal(rawOutput.includes(paint("README.md", ansi.blue)), true);
+  assert.equal(rawOutput.includes(paint("src/", ansi.blue)), true);
+  assert.equal(rawOutput.includes(paint("code", ansi.yellow)), true);
+  assert.equal(rawOutput.includes(paint("bold", ansi.bold)), true);
 });
 
 const selectedModelFixture = {

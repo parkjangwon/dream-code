@@ -64,6 +64,7 @@ function writeWithRail(
   let cursor = 0;
 
   while (cursor < text.length) {
+    const segmentStartsLine = atLineStart;
     if (atLineStart) {
       write(responseRail());
       atLineStart = false;
@@ -71,11 +72,11 @@ function writeWithRail(
 
     const newlineIndex = text.indexOf("\n", cursor);
     if (newlineIndex === -1) {
-      write(text.slice(cursor));
+      write(renderMarkdownSegment(text.slice(cursor), segmentStartsLine));
       return atLineStart;
     }
 
-    write(text.slice(cursor, newlineIndex + 1));
+    write(`${renderMarkdownSegment(text.slice(cursor, newlineIndex), segmentStartsLine)}\n`);
     atLineStart = true;
     cursor = newlineIndex + 1;
   }
@@ -89,6 +90,51 @@ function modelLabel(selectedModel: SelectedModel): string {
 
 function responseRail(): string {
   return `${paint("│", ansi.guide)} `;
+}
+
+function renderMarkdownSegment(segment: string, lineStart: boolean): string {
+  const blockStyled = lineStart ? renderMarkdownLineStart(segment) : segment;
+  return renderInlineMarkdown(blockStyled);
+}
+
+function renderMarkdownLineStart(segment: string): string {
+  const heading = /^(#{1,6})\s+(.+)$/u.exec(segment);
+  if (heading !== null) {
+    return `${paint(heading[1] ?? "", ansi.guide)} ${paint(heading[2] ?? "", `${ansi.bold}${ansi.accent}`)}`;
+  }
+
+  const unordered = /^(\s*)[-*]\s+(.+)$/u.exec(segment);
+  if (unordered !== null) {
+    return `${unordered[1] ?? ""}${paint("•", ansi.guide)} ${unordered[2] ?? ""}`;
+  }
+
+  const ordered = /^(\s*)(\d+\.)\s+(.+)$/u.exec(segment);
+  if (ordered !== null) {
+    return `${ordered[1] ?? ""}${paint(ordered[2] ?? "", ansi.guide)} ${ordered[3] ?? ""}`;
+  }
+
+  return segment;
+}
+
+function renderInlineMarkdown(segment: string): string {
+  return segment
+    .replace(/\*\*([^*\n]+)\*\*/gu, (_match, text: string) => paint(text, ansi.bold))
+    .replace(/`([^`\n]+)`/gu, (_match, text: string) => renderInlineCode(text))
+    .replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/gu, (_match, label: string, url: string) => {
+      return `${paint(label, ansi.blue)}${paint(` (${url})`, ansi.dim)}`;
+    });
+}
+
+function renderInlineCode(text: string): string {
+  const color = isFileReference(text) ? ansi.blue : ansi.yellow;
+  return `${paint("`", ansi.dim)}${paint(text, color)}${paint("`", ansi.dim)}`;
+}
+
+function isFileReference(text: string): boolean {
+  return /(^|[/\\])[^/\\]+\.[A-Za-z0-9]{1,8}$/u.test(text)
+    || /[/\\]$/u.test(text)
+    || text.includes("/")
+    || text.includes("\\");
 }
 
 function responseStats(startedAt: number, finishedAt: number, characterCount: number): string {
