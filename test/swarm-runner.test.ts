@@ -140,6 +140,7 @@ test("renderSwarmMonitorSnapshot shows an armed escape stop hint", () => {
     view: "monitor",
     interactive: true,
     abortArmed: true,
+    maxVisibleLanes: undefined,
     lanes: [
       {
         id: "lane-1",

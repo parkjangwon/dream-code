@@ -27,6 +27,7 @@ export type SwarmMonitorSnapshot = {
   readonly view: SwarmMonitorView;
   readonly interactive: boolean;
   readonly abortArmed: boolean;
+  readonly maxVisibleLanes: number | undefined;
   readonly synthesisStatus: SwarmSynthesisStatus;
 };
 
@@ -37,15 +38,55 @@ export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): stri
   const completed = snapshot.lanes.filter((lane) => lane.status === "done").length;
   const active = snapshot.lanes.filter((lane) => lane.status === "running").length;
   const showActivity = active > 0 || snapshot.synthesisStatus === "running";
+  const laneWindow = visibleLaneWindow(snapshot);
   const lines = [
     `${paint("╭─ Swarm Monitor", ansi.accent)} ${paint(`${active} active`, ansi.bold)} ${paint("·", ansi.guide)} ${completed}/${snapshot.lanes.length} done ${paint("·", ansi.guide)} ${formatDuration(snapshot.now - snapshot.startedAt)}`,
     `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
     ...(showActivity ? [`${paint("│", ansi.guide)} activity ${activityStrip(snapshot.frame)} ${paint("parallel lanes mixing", ansi.dim)}`] : []),
-    ...snapshot.lanes.map((lane) => renderLane(lane, snapshot.now, isSelected(snapshot, lane.index))),
+    ...laneWindowLines(laneWindow, snapshot),
     `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot.synthesisStatus)}`,
     `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive, snapshot.abortArmed)}`,
   ];
   return `${lines.join("\n")}\n`;
+}
+
+type VisibleLaneWindow = {
+  readonly lanes: readonly SwarmMonitorLane[];
+  readonly before: number;
+  readonly after: number;
+};
+
+function laneWindowLines(window: VisibleLaneWindow, snapshot: SwarmMonitorSnapshot): readonly string[] {
+  return [
+    ...(window.before > 0 ? [`${paint("│", ansi.guide)} ${paint(`↑ ${window.before} lanes above`, ansi.dim)}`] : []),
+    ...window.lanes.map((lane) => renderLane(lane, snapshot.now, isSelected(snapshot, lane.index))),
+    ...(window.after > 0 ? [`${paint("│", ansi.guide)} ${paint(`↓ ${window.after} lanes below`, ansi.dim)}`] : []),
+  ];
+}
+
+function visibleLaneWindow(snapshot: SwarmMonitorSnapshot): VisibleLaneWindow {
+  const max = snapshot.maxVisibleLanes;
+  if (max === undefined || snapshot.lanes.length <= max) {
+    return { lanes: snapshot.lanes, before: 0, after: 0 };
+  }
+  const visibleCount = Math.max(1, max);
+  const anchor = anchorLaneIndex(snapshot);
+  const start = clamp(anchor - Math.floor(visibleCount / 2), 0, snapshot.lanes.length - visibleCount);
+  const end = start + visibleCount;
+  return {
+    lanes: snapshot.lanes.slice(start, end),
+    before: start,
+    after: snapshot.lanes.length - end,
+  };
+}
+
+function anchorLaneIndex(snapshot: SwarmMonitorSnapshot): number {
+  const selected = snapshot.selectedIndex === undefined ? undefined : snapshot.lanes.findIndex((lane) => lane.index === snapshot.selectedIndex);
+  if (selected !== undefined && selected >= 0) {
+    return selected;
+  }
+  const active = snapshot.lanes.findIndex((lane) => lane.status === "running");
+  return active >= 0 ? active : 0;
 }
 
 function renderLane(lane: SwarmMonitorLane, now: number, selected: boolean): string {
@@ -167,6 +208,10 @@ function formatDuration(milliseconds: number): string {
 
 function formatCharacters(characters: number): string {
   return characters < 1000 ? `${characters} chars` : `${(characters / 1000).toFixed(1)}k chars`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function padVisible(text: string, width: number): string {

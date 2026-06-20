@@ -39,6 +39,7 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
     view: "monitor",
     interactive: false,
     abortArmed: false,
+    maxVisibleLanes: undefined,
   }));
 
   assert.match(rendered, /Swarm Monitor/u);
@@ -63,6 +64,7 @@ test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane detail
     view: "detail",
     interactive: true,
     abortArmed: false,
+    maxVisibleLanes: undefined,
     lanes: [
       {
         id: "lane-1",
@@ -92,6 +94,37 @@ test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane detail
   assert.match(rendered, /6\.7k chars/u);
   assert.match(rendered, /Checking changed files/u);
   assert.match(rendered, /esc back/u);
+});
+
+test("renderSwarmMonitorSnapshot windows large swarms around the focused lane", () => {
+  const rendered = stripAnsi(renderSwarmMonitorSnapshot({
+    goal: "Keep a hundred-lane swarm inside the viewport",
+    startedAt: 1000,
+    now: 2000,
+    frame: 1,
+    synthesisStatus: "running",
+    selectedIndex: 58,
+    view: "monitor",
+    interactive: true,
+    abortArmed: false,
+    maxVisibleLanes: 5,
+    lanes: Array.from({ length: 100 }, (_item, index) => ({
+      id: `lane-${index + 1}`,
+      index: index + 1,
+      title: "Code Reviewer",
+      status: index === 57 ? "running" : "done",
+      characters: 100,
+      preview: "",
+      startedAt: 1000,
+      finishedAt: index === 57 ? undefined : 1500,
+    })),
+  }));
+
+  assert.match(rendered, /↑ 55 lanes above/u);
+  assert.match(rendered, /› 58 RUNNING/u);
+  assert.match(rendered, /↓ 40 lanes below/u);
+  assert.doesNotMatch(rendered, /01 DONE/u);
+  assert.doesNotMatch(rendered, /100 DONE/u);
 });
 
 test("createSwarmMonitor can redraw the same live panel in place", () => {

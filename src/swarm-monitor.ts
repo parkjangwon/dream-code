@@ -6,6 +6,7 @@ import {
 } from "./swarm-monitor-render.js";
 import { createSwarmMonitorKeyController } from "./swarm-monitor-keys.js";
 import {
+  effectiveSelectedIndex,
   hasLiveActivity,
   isAbortArmed,
   type MutableLaneState,
@@ -36,6 +37,7 @@ type MonitorOptions = {
   readonly replaceInPlace?: boolean;
   readonly interactive?: boolean;
   readonly onAbort?: () => void;
+  readonly maxVisibleLanes?: number;
   readonly now?: () => number;
 };
 
@@ -48,7 +50,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   let synthesisStatus: SwarmSynthesisStatus = "waiting";
   let renderedLineCount = 0;
   let frame = 0;
-  let selectedIndex = options.lanes.length === 0 ? undefined : 1;
+  let selectedIndex: number | undefined;
   let view: SwarmMonitorView = "monitor";
   let animationTimer: ReturnType<typeof setInterval> | undefined;
   let abortArmedAt: number | undefined;
@@ -68,10 +70,11 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       now: now(),
       frame,
       lanes: options.lanes.map((lane, index) => laneSnapshot(lane, index + 1, state.get(lane.id))),
-      selectedIndex,
+      selectedIndex: effectiveSelectedIndex(options.lanes, state, selectedIndex),
       view,
       interactive: options.interactive === true,
       abortArmed: isAbortArmed(abortArmedAt, now()),
+      maxVisibleLanes: options.maxVisibleLanes,
       synthesisStatus,
     });
     if (options.replaceInPlace === true) {
@@ -82,16 +85,19 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
     options.write(snapshot);
   };
   const moveSelection = (direction: number): void => {
-    if (selectedIndex === undefined || options.lanes.length === 0) {
+    const current = effectiveSelectedIndex(options.lanes, state, selectedIndex);
+    if (current === undefined || options.lanes.length === 0) {
       return;
     }
-    selectedIndex = wrapIndex(selectedIndex + direction, options.lanes.length);
+    selectedIndex = wrapIndex(current + direction, options.lanes.length);
     render();
   };
   const openDetail = (): void => {
-    if (selectedIndex === undefined) {
+    const current = effectiveSelectedIndex(options.lanes, state, selectedIndex);
+    if (current === undefined) {
       return;
     }
+    selectedIndex = current;
     view = "detail";
     render();
   };

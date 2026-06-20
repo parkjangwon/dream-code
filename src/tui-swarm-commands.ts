@@ -38,6 +38,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     goal,
     write: (chunk: string) => output.write(chunk),
     replaceMonitor,
+    monitorRows: output.rows,
   };
   await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
 }

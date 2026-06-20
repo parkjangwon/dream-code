@@ -4,6 +4,7 @@ import { loadAgentDefinitions } from "./agent-definition-loader.js";
 import { ansi, paint, stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
+import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import {
   createSwarmPlan,
   createSwarmSynthesisAgent,
@@ -55,6 +56,7 @@ export type SwarmRunOptions = {
   readonly forceAgents?: number;
   readonly write: (text: string) => void;
   readonly replaceMonitor?: boolean;
+  readonly monitorRows?: number;
   readonly signal?: AbortSignal;
   readonly runAgent?: SwarmAgentRunner;
 };
@@ -80,6 +82,7 @@ export async function runAgentSwarmWithAgents(
     onAbort: () => {
       abortController.abort();
     },
+    ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   } : {
     goal: options.goal,
     lanes: plan.lanes,
@@ -89,6 +92,7 @@ export async function runAgentSwarmWithAgents(
     onAbort: () => {
       abortController.abort();
     },
+    ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
