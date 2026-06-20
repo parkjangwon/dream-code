@@ -1,5 +1,10 @@
 import { ansi, paint } from "./ansi.js";
 import type { SelectedModel } from "./model-routing.js";
+import {
+  isMarkdownTableDivider,
+  isMarkdownTableRow,
+  renderMarkdownTable,
+} from "./tui-markdown-table.js";
 
 export type AgentResponseSession = {
   readonly start: () => void;
@@ -30,19 +35,40 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
   let characterCount = 0;
   let lineBuffer = "";
   let markdownState: MarkdownState = { inFence: false };
+  let tableBuffer: readonly string[] = [];
 
   const model = modelLabel(options.selectedModel);
+  const writeRenderedLine = (line: string): void => {
+    options.write(`${responseRail()}${line}\n`);
+  };
+  const flushTable = (): void => {
+    if (tableBuffer.length === 0) {
+      return;
+    }
+    for (const line of renderMarkdownTable(tableBuffer, renderInlineMarkdown)) {
+      writeRenderedLine(line);
+    }
+    tableBuffer = [];
+  };
   const writeLine = (line: string): void => {
+    if (!markdownState.inFence && (isMarkdownTableRow(line) || isMarkdownTableDivider(line))) {
+      tableBuffer = [...tableBuffer, line];
+      return;
+    }
+
+    flushTable();
     const rendered = renderMarkdownLine(line, markdownState);
     markdownState = rendered.state;
-    options.write(`${responseRail()}${rendered.text}\n`);
+    writeRenderedLine(rendered.text);
   };
   const flushLineBuffer = (): void => {
     if (lineBuffer.length === 0) {
+      flushTable();
       return;
     }
     writeLine(lineBuffer);
     lineBuffer = "";
+    flushTable();
   };
 
   return {
@@ -129,14 +155,6 @@ function renderMarkdownLine(line: string, state: MarkdownState): RenderedMarkdow
 }
 
 function renderMarkdownLineStart(segment: string): string {
-  if (isTableDivider(segment)) {
-    return paint("─".repeat(Math.max(12, segment.trim().length)), ansi.guide);
-  }
-
-  if (isTableRow(segment)) {
-    return renderTableRow(segment);
-  }
-
   const heading = /^(#{1,6})\s+(.+)$/u.exec(segment);
   if (heading !== null) {
     return `${paint(heading[1] ?? "", ansi.guide)} ${paint(heading[2] ?? "", `${ansi.bold}${ansi.accent}`)}`;
@@ -153,24 +171,6 @@ function renderMarkdownLineStart(segment: string): string {
   }
 
   return segment;
-}
-
-function isTableDivider(segment: string): boolean {
-  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/u.test(segment);
-}
-
-function isTableRow(segment: string): boolean {
-  const trimmed = segment.trim();
-  return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.slice(1, -1).includes("|");
-}
-
-function renderTableRow(segment: string): string {
-  return segment
-    .trim()
-    .slice(1, -1)
-    .split("|")
-    .map((cell) => cell.trim())
-    .join(paint(" │ ", ansi.guide));
 }
 
 function renderInlineMarkdown(segment: string): string {

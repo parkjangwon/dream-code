@@ -117,7 +117,7 @@ test("agent response session renders markdown tables as terminal rows", () => {
 
   const rawOutput = chunks.join("");
   const plainOutput = stripAnsi(rawOutput);
-  assert.match(plainOutput, /│ 파일 경로 │ 역할\n│ ─+\n│ `package\.json` │ scripts/);
+  assert.match(plainOutput, /│ │ 파일 경로      │ 역할    │\n│ │ `package\.json` │ scripts │/);
   assert.equal(rawOutput.includes(paint("package.json", ansi.blue)), true);
 });
 
