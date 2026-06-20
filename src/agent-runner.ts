@@ -2,6 +2,7 @@ import { cwd } from "node:process";
 
 import type { AgentDefinition } from "./agent-library.js";
 import type { DreamConfig } from "./config.js";
+import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
 import {
   MissingProviderConfigError,
   ProviderProtocolError,
@@ -27,6 +28,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent));
   const settings = await loadSkillSettings(options.configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
+  const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
   const response = createAgentResponseSession({
     selectedModel,
     write: options.write,
@@ -37,12 +39,12 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     const baseStreamInput = options.configRoot === undefined
       ? optionalSignal({
         selectedModel,
-        messages: createAgentMessages(options.prompt, skills, options.agent),
+        messages: createAgentMessages(options.prompt, skills, options.agent, contextDocs),
         onToken: response.token,
       }, options.signal)
       : optionalSignal({
         selectedModel,
-        messages: createAgentMessages(options.prompt, skills, options.agent),
+        messages: createAgentMessages(options.prompt, skills, options.agent, contextDocs),
         configRoot: options.configRoot,
         onToken: response.token,
       }, options.signal);
@@ -65,6 +67,7 @@ export function createAgentMessages(
   prompt: string,
   skills: readonly DreamSkill[] = [],
   agent?: AgentDefinition,
+  contextDocs?: ContextDocs,
 ): readonly ChatMessage[] {
   return [
     {
@@ -73,6 +76,7 @@ export function createAgentMessages(
         "You are Dream Code, a fast coding harness CLI.",
         "Answer concisely, prefer actionable engineering steps, and mention files or commands when useful.",
         `Workspace: ${cwd()}`,
+        formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatAgentProfile(agent),
         formatSelectedSkills(prompt, skills),
       ].join("\n"),

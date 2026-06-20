@@ -1,0 +1,79 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import assert from "node:assert/strict";
+import test, { mock } from "node:test";
+
+import { stripAnsi } from "../src/ansi.js";
+import { defaultConfig } from "../src/config.js";
+import { writeProviderCredential } from "../src/credentials.js";
+import { appendSessionTurn, startSession } from "../src/session-store.js";
+import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
+
+test("utility commands show rules, compact, export, and logout state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-utility-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-utility-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    await writeFile(join(project, "AGENTS.md"), "Project rules.", "utf8");
+    await writeProviderCredential(root, "deepseek", { apiKey: "secret" });
+    const session = await startSession(root, project);
+    await appendSessionTurn(root, session.id, "user", "Build a plan");
+    await appendSessionTurn(root, session.id, "assistant", "Done.");
+    const runtime = { currentId: () => session.id, switchTo: () => undefined };
+
+    await runWorkspaceCommand("/rules", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+    await runWorkspaceCommand("/compact", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+    await runWorkspaceCommand("/export", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+    await runWorkspaceCommand("/logout deepseek", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(outputText, /Rules/u);
+    assert.match(outputText, /Project rules/u);
+    assert.match(outputText, /compact saved:/u);
+    assert.match(outputText, /exported:/u);
+    assert.match(outputText, /logged out: deepseek/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("add-dir and tasks persist lightweight workspace state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-state-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-workspace-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    await mkdir(join(root, "artifacts"), { recursive: true });
+    await writeFile(join(root, "artifacts", "note.md"), "# Artifact", "utf8");
+
+    await runWorkspaceCommand("/add-dir", defaultConfig(), true, { question: async () => project }, root, undefined, project);
+    await runWorkspaceCommand("/tasks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/artifact", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/mcp", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/hooks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+
+    const state = await readFile(join(root, "workspace.toml"), "utf8");
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(state, /paths = \[/u);
+    assert.match(outputText, /Tasks/u);
+    assert.match(outputText, /No tasks yet/u);
+    assert.match(outputText, /Artifacts/u);
+    assert.match(outputText, /note\.md/u);
+    assert.match(outputText, /mcp\.toml/u);
+    assert.match(outputText, /hooks\.toml/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});

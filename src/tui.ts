@@ -147,7 +147,7 @@ export async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  if (text === "/quit") {
+  if (text === "/exit" || text === "/quit") {
     output.write("Good night. Dream Code is ready when you are.\n");
     return { config, shouldContinue: false };
   }

@@ -116,6 +116,20 @@ export async function writeProviderCredential(
   return nextCredentials;
 }
 
+export async function deleteProviderCredential(
+  root: string,
+  providerId: string,
+): Promise<boolean> {
+  const credentials = await loadCredentials(root);
+  if (credentials.providers[providerId] === undefined) {
+    return false;
+  }
+  const nextProviders = { ...credentials.providers };
+  delete nextProviders[providerId];
+  await saveCredentials(root, { version: 1, providers: nextProviders });
+  return true;
+}
+
 function compactCredential(credential: ProviderCredential): ProviderCredential {
   const result: {
     authMode?: "api-key" | "oauth";

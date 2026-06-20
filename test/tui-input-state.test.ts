@@ -30,8 +30,8 @@ test("slash input opens a command palette and enter submits the selected command
   const selected = reduceInputState(opened.state, { kind: "enter" });
 
   assert.equal(opened.state.palette?.matches.length, slashCommands.length);
-  assert.equal(selected.effect.kind, "submit");
-  assert.equal(selected.effect.text, "/agents");
+  assert.equal(selected.effect.kind, "none");
+  assert.equal(selected.state.text, "/add-dir ");
   const names: readonly string[] = slashCommands.map((command) => command.name);
   assert.deepEqual(names, [...names].sort((left, right) => left.localeCompare(right)));
   assert.equal(names.includes("/model"), true);
@@ -45,8 +45,8 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/write"), false);
   assert.equal(names.includes("/edit"), false);
   assert.equal(names.includes("/shell"), false);
-  assert.equal(names.includes("/goal"), false);
-  assert.equal(names.includes("/plan"), false);
+  assert.equal(names.includes("/goal"), true);
+  assert.equal(names.includes("/plan"), true);
   assert.equal(names.includes("/swarm"), true);
   assert.equal(names.includes("/team"), false);
   assert.equal(names.includes("/research"), false);
@@ -64,7 +64,7 @@ test("slash command palette uses arrow keys for selection", () => {
 
   assert.equal(moved.state.palette?.selectedIndex, 1);
   assert.equal(selected.effect.kind, "submit");
-  assert.equal(selected.effect.text, "/doctor");
+  assert.equal(selected.effect.text, "/agents");
 });
 
 test("argument commands complete into the input instead of submitting", () => {
