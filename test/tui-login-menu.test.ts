@@ -7,7 +7,7 @@ import { authLabel, formatLoginSource, loginChoices, loginChoiceValue } from "..
 test("formatLoginSource colors provider connection states", () => {
   assert.equal(formatLoginSource("env"), `${ansi.bold}${ansi.blue}env${ansi.reset}`);
   assert.equal(formatLoginSource("saved"), `${ansi.bold}${ansi.green}saved${ansi.reset}`);
-  assert.equal(formatLoginSource("missing"), `${ansi.bold}${ansi.yellow}missing${ansi.reset}`);
+  assert.equal(formatLoginSource("missing"), `${ansi.bold}${ansi.yellow}not set${ansi.reset}`);
 });
 
 test("loginChoices separates OpenAI API and OAuth login paths", () => {

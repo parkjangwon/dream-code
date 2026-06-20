@@ -79,7 +79,7 @@ export function formatLoginSource(source: LoginChoice["source"]): string {
     case "saved":
       return paint("saved", `${ansi.bold}${ansi.green}`);
     case "missing":
-      return paint("missing", `${ansi.bold}${ansi.yellow}`);
+      return paint("not set", `${ansi.bold}${ansi.yellow}`);
     default:
       return assertNever(source);
   }
