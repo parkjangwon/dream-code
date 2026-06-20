@@ -103,6 +103,24 @@ test("agent response session renders fenced code blocks", () => {
   assert.equal(rawOutput.includes(paint("ls -la /tmp", ansi.yellow)), true);
 });
 
+test("agent response session renders markdown tables as terminal rows", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("| 파일 경로 | 역할 |\n|---|---|\n| `package.json` | scripts |\n");
+  session.finish();
+
+  const rawOutput = chunks.join("");
+  const plainOutput = stripAnsi(rawOutput);
+  assert.match(plainOutput, /│ 파일 경로 │ 역할\n│ ─+\n│ `package\.json` │ scripts/);
+  assert.equal(rawOutput.includes(paint("package.json", ansi.blue)), true);
+});
+
 const selectedModelFixture = {
   provider: "openai",
   model: "gpt-test",
