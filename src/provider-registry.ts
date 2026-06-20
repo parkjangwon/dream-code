@@ -55,7 +55,7 @@ export const providerDefinitions = [
   ], "global", models("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-pro"), ["api-key"], "https://api-docs.deepseek.com/"),
   define("opencode-go", "OpenCode Go", "chat-completions", "authorization", ["OPENCODE_GO_API_KEY", "OPENCODE_API_KEY"], [
     region("global", "Global", "https://opencode.ai/zen/go/v1"),
-  ], "global", models("deepseek-v4-flash", "kimi-k2.7", "glm-5.2"), ["api-key"], "https://opencode.ai/docs/go/"),
+  ], "global", models("deepseek-v4-flash", "kimi-k2.7-code", "glm-5.2"), ["api-key"], "https://opencode.ai/docs/go/"),
   define("opencode-zen", "OpenCode Zen", "responses", "authorization", ["OPENCODE_ZEN_API_KEY", "OPENCODE_API_KEY"], [
     region("global", "Global", "https://opencode.ai/zen/v1"),
   ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key"], "https://opencode.ai/docs/zen/"),
@@ -148,7 +148,7 @@ export function providerModelIdForRequest(providerId: string, model: string): st
   const rawModel = model.startsWith("opencode-go/")
     ? model.slice("opencode-go/".length)
     : model;
-  return rawModel === "kimi-k2.7-code" ? "kimi-k2.7" : rawModel;
+  return rawModel === "kimi-k2.7" ? "kimi-k2.7-code" : rawModel;
 }
 
 function define(

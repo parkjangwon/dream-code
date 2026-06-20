@@ -48,7 +48,7 @@ test("OpenCode Go defaults use direct API model IDs", () => {
 
   assert.deepEqual(go.defaultModels, {
     low: "deepseek-v4-flash",
-    mid: "kimi-k2.7",
+    mid: "kimi-k2.7-code",
     high: "glm-5.2",
   });
 });
@@ -74,8 +74,9 @@ test("provider defaults track official coding model tiers", () => {
 test("providerModelIdForRequest normalizes existing OpenCode Go config model IDs", () => {
   assert.equal(
     providerModelIdForRequest("opencode-go", "opencode-go/kimi-k2.7-code"),
-    "kimi-k2.7",
+    "kimi-k2.7-code",
   );
+  assert.equal(providerModelIdForRequest("opencode-go", "kimi-k2.7"), "kimi-k2.7-code");
   assert.equal(providerModelIdForRequest("opencode-go", "opencode-go/glm-5.2"), "glm-5.2");
 });
 

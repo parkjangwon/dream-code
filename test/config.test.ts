@@ -84,10 +84,10 @@ test("loadConfig normalizes legacy OpenCode Go model IDs", async () => {
 
     assert.deepEqual(loaded.model.single.models, {
       low: "deepseek-v4-flash",
-      mid: "kimi-k2.7",
+      mid: "kimi-k2.7-code",
       high: "glm-5.2",
     });
-    assert.equal(loaded.model.auto.routes[0]?.model, "kimi-k2.7");
+    assert.equal(loaded.model.auto.routes[0]?.model, "kimi-k2.7-code");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
