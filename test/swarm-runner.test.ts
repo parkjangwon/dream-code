@@ -88,7 +88,7 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
   assert.match(output, /merging parallel outputs/u);
   assert.match(output, /token mixing radar online/u);
   assert.match(output, /Swarm Synthesis/u);
-  assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Swarm complete/u);
+  assert.match(chunks.join(""), /\u001B\[38;5;240m✓ Swarm complete/u);
 });
 
 test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time", async () => {

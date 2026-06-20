@@ -13,7 +13,7 @@ export function formatSwarmSynthesis(synthesis: string, totalElapsedMs: number):
   return [
     `${paint("●", ansi.green)} ${paint("Swarm Synthesis", ansi.bold)}`,
     ...body.split(/\r?\n/u).map((line) => formatSynthesisLine(line, totalElapsedMs)),
-    paint("✓ Swarm complete", `${ansi.accent}${ansi.bold}`),
+    paint("✓ Swarm complete", ansi.guide),
   ].join("\n").concat("\n");
 }
 
