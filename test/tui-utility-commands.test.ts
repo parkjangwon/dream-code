@@ -71,7 +71,7 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     assert.match(outputText, /Artifacts/u);
     assert.match(outputText, /note\.md/u);
     assert.match(outputText, /mcp\.toml/u);
-    assert.match(outputText, /hooks\.toml/u);
+    assert.match(outputText, /No hooks configured/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

@@ -4,6 +4,7 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { deleteProviderCredential } from "./credentials.js";
 import { runAgentPrompt } from "./agent-runner.js";
+import { formatHooksStatus } from "./hooks.js";
 import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
 import {
@@ -62,7 +63,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       });
       return true;
     case "/hooks":
-      output.write(`${await formatSettingsFile(options.configRoot, "hooks")}\n`);
+      output.write(`${await formatHooksStatus(options.configRoot)}\n`);
       return true;
     case "/interview":
       await runInterview(options);

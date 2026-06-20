@@ -3,6 +3,7 @@ import { cwd } from "node:process";
 import type { AgentDefinition } from "./agent-library.js";
 import { defaultConfigRoot, type DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
+import { runHookEvent } from "./hooks.js";
 import {
   extractAgentToolRequests,
   formatToolProgress,
@@ -51,7 +52,9 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
       }
       const results: AgentToolResult[] = [];
       for (const request of requests) {
+        await runHookEvent(options.configRoot ?? defaultConfigRoot(), "preTool", { tool: request.tool });
         const result = await runAgentToolRequest(request, options.config.permissions.mode);
+        await runHookEvent(options.configRoot ?? defaultConfigRoot(), "postTool", { tool: request.tool, ok: String(result.ok) });
         options.write(formatToolProgress(result));
         results.push(result);
       }
