@@ -72,6 +72,32 @@ test("configureModels prompts for a tier when no args are supplied", async () =>
   }
 });
 
+test("configureModels selects any provider model through the picker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-models-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await configureModels({
+      config: configWithOpenCodeGo(),
+      configRoot: root,
+      args: "",
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          assert.equal(options.title, "Models OpenCode Go");
+          assert.equal(options.choices.some((choice) => choice.value === "hy3-preview"), true);
+          return "hy3-preview";
+        },
+      },
+    });
+
+    assert.equal(nextConfig.model.single.defaultTier, "mid");
+    assert.equal(nextConfig.model.single.models.mid, "hy3-preview");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function configWithOpenCodeGo(): ReturnType<typeof defaultConfig> {
   const config = defaultConfig();
   return {

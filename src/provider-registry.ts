@@ -24,6 +24,7 @@ export type ProviderDefinition = {
   readonly regions: readonly ProviderRegion[];
   readonly defaultRegion: string;
   readonly defaultModels: ProviderTierModels;
+  readonly availableModels: readonly string[];
   readonly auth: readonly ProviderAuthMode[];
   readonly docsUrl: string;
 };
@@ -46,6 +47,29 @@ const providerAliases: Readonly<Record<string, string>> = {
   zai: "z-ai",
 };
 
+const openCodeGoModels = [
+  "minimax-m3",
+  "minimax-m2.7",
+  "minimax-m2.5",
+  "kimi-k2.7-code",
+  "kimi-k2.6",
+  "kimi-k2.5",
+  "glm-5.2",
+  "glm-5.1",
+  "glm-5",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  "qwen3.7-max",
+  "qwen3.7-plus",
+  "qwen3.6-plus",
+  "qwen3.5-plus",
+  "mimo-v2-pro",
+  "mimo-v2-omni",
+  "mimo-v2.5-pro",
+  "mimo-v2.5",
+  "hy3-preview",
+] as const;
+
 export const providerDefinitions = [
   define("openai", "OpenAI", "chat-completions", "authorization", ["OPENAI_API_KEY"], [
     region("global", "Global", "https://api.openai.com/v1"),
@@ -55,7 +79,7 @@ export const providerDefinitions = [
   ], "global", models("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-pro"), ["api-key"], "https://api-docs.deepseek.com/"),
   define("opencode-go", "OpenCode Go", "chat-completions", "authorization", ["OPENCODE_GO_API_KEY", "OPENCODE_API_KEY"], [
     region("global", "Global", "https://opencode.ai/zen/go/v1"),
-  ], "global", models("deepseek-v4-flash", "kimi-k2.7-code", "glm-5.2"), ["api-key"], "https://opencode.ai/docs/go/"),
+  ], "global", models("deepseek-v4-flash", "kimi-k2.7-code", "glm-5.2"), ["api-key"], "https://opencode.ai/docs/go/", openCodeGoModels),
   define("opencode-zen", "OpenCode Zen", "responses", "authorization", ["OPENCODE_ZEN_API_KEY", "OPENCODE_API_KEY"], [
     region("global", "Global", "https://opencode.ai/zen/v1"),
   ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key"], "https://opencode.ai/docs/zen/"),
@@ -162,12 +186,29 @@ function define(
   defaultModels: ProviderTierModels,
   auth: readonly ProviderAuthMode[],
   docsUrl: string,
+  availableModels?: readonly string[],
 ): ProviderDefinition {
-  return { id, displayName, protocol, apiKeyHeader, envKeys, regions, defaultRegion, defaultModels, auth, docsUrl };
+  return {
+    id,
+    displayName,
+    protocol,
+    apiKeyHeader,
+    envKeys,
+    regions,
+    defaultRegion,
+    defaultModels,
+    availableModels: availableModels ?? uniqueModels(defaultModels),
+    auth,
+    docsUrl,
+  };
 }
 
 function models(low: string, mid: string, high: string): ProviderTierModels {
   return { low, mid, high };
+}
+
+function uniqueModels(tierModels: ProviderTierModels): readonly string[] {
+  return [...new Set([tierModels.low, tierModels.mid, tierModels.high])];
 }
 
 function normalizeProviderId(provider: string): string {

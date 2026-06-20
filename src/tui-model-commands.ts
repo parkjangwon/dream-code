@@ -9,7 +9,7 @@ import {
   type ProviderDefinition,
   type ProviderTierModels,
 } from "./provider-registry.js";
-import type { ProviderQuestioner } from "./tui-provider-commands.js";
+import type { ProviderQuestioner } from "./tui-provider-picker.js";
 
 export type ConfigureModelsOptions = {
   readonly config: DreamConfig;
@@ -51,17 +51,29 @@ function resolveModelSelection(
       output.write(formatModelMenu(options.config, definition));
       return Promise.resolve({ kind: "unchanged" });
     }
-    return Promise.resolve(parseModelSelection(args, definition.id));
+    return Promise.resolve(parseModelSelection(args, definition.id, options.config.model.single.defaultTier));
   }
 
-  output.write(formatModelMenu(options.config, definition));
-  return promptModelSelection(options.questioner, definition.id);
+  return promptModelSelection(options.config, definition, options.questioner);
 }
 
 async function promptModelSelection(
+  config: DreamConfig,
+  definition: ProviderDefinition,
   questioner: ProviderQuestioner,
-  provider: string,
 ): Promise<ModelSelection> {
+  if (questioner.select !== undefined) {
+    const selected = await questioner.select({
+      title: `Models ${definition.displayName}`,
+      choices: modelChoices(definition, config.model.single.models),
+      initialValue: modelForTier(config.model.single.models, config.model.single.defaultTier),
+    });
+    return selected === undefined
+      ? { kind: "unchanged" }
+      : { kind: "set-model", tier: config.model.single.defaultTier, model: selected };
+  }
+
+  output.write(formatModelMenu(config, definition));
   const answer = await questioner.question("Model: ");
   if (answer.trim().length === 0) {
     output.write("model unchanged\n");
@@ -73,13 +85,17 @@ async function promptModelSelection(
       output.write("model unchanged\n");
       return { kind: "unchanged" };
     }
-    const model = providerModelIdForRequest(provider, await questioner.question("Model id: "));
+    const model = providerModelIdForRequest(definition.id, await questioner.question("Model id: "));
     return model.trim().length > 0 ? { kind: "set-model", tier, model } : { kind: "unchanged" };
   }
-  return parseModelSelection(answer, provider);
+  return parseModelSelection(answer, definition.id, config.model.single.defaultTier);
 }
 
-function parseModelSelection(text: string, provider: string): ModelSelection {
+function parseModelSelection(
+  text: string,
+  provider: string,
+  activeTier: ModelTier,
+): ModelSelection {
   const parts = text.trim().split(/\s+/u).filter((part) => part.length > 0);
   const [tierInput, ...modelParts] = parts;
   if (tierInput === undefined || tierInput === "list") {
@@ -88,8 +104,7 @@ function parseModelSelection(text: string, provider: string): ModelSelection {
 
   const tier = parseTier(tierInput);
   if (tier === undefined) {
-    output.write("usage: /models [low|mid|high] [model-id]\n");
-    return { kind: "unchanged" };
+    return { kind: "set-model", tier: activeTier, model: providerModelIdForRequest(provider, text) };
   }
 
   const rawModel = modelParts.join(" ").trim();
@@ -150,24 +165,45 @@ function modelSet(
 function formatModelMenu(config: DreamConfig, definition: ProviderDefinition): string {
   const currentTier = config.model.single.defaultTier;
   const models = config.model.single.models;
-  return [
-    `${paint("Models", ansi.accent)} ${definition.displayName}`,
-    formatTierLine("1", "low", models.low, currentTier),
-    formatTierLine("2", "mid", models.mid, currentTier),
-    formatTierLine("3", "high", models.high, currentTier),
-    "Type low, mid, high, or custom.",
-    "",
-  ].join("\n");
+  const lines = [`${paint("Models", ansi.accent)} ${definition.displayName}`];
+  for (const model of definition.availableModels) {
+    lines.push(formatModelLine(model, models, currentTier));
+  }
+  lines.push("Type a model id, low, mid, high, or custom.", "");
+  return lines.join("\n");
 }
 
-function formatTierLine(
-  index: string,
-  tier: ModelTier,
+function formatModelLine(
   model: string,
+  models: ProviderTierModels,
   currentTier: ModelTier,
 ): string {
-  const marker = tier === currentTier ? "*" : " ";
-  return `${marker} ${index}. ${tier.padEnd(4)} ${model}`;
+  const tier = tierForModel(models, model);
+  const selected = tier === currentTier ? ">" : " ";
+  const suffix = tier === undefined ? "" : ` ${paint(`(${tier})`, ansi.dim)}`;
+  return `${selected} ${model}${suffix}`;
+}
+
+function modelChoices(definition: ProviderDefinition, models: ProviderTierModels) {
+  return definition.availableModels.map((model) => ({
+    value: model,
+    label: model,
+    description: tierForModel(models, model) ?? "",
+    keywords: [definition.displayName, definition.id],
+  }));
+}
+
+function tierForModel(models: ProviderTierModels, model: string): ModelTier | undefined {
+  if (models.low === model) {
+    return "low";
+  }
+  if (models.mid === model) {
+    return "mid";
+  }
+  if (models.high === model) {
+    return "high";
+  }
+  return undefined;
 }
 
 function formatSelectedModel(config: DreamConfig): string {

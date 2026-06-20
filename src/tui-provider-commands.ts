@@ -18,18 +18,12 @@ import {
   type ProviderRegion,
 } from "./provider-registry.js";
 import {
-  formatLoginMenu,
   loginChoices,
   regionPrompt,
-  resolveLoginSelection,
   resolveRegionInput,
   shouldPromptRegion,
 } from "./tui-login-menu.js";
-
-export type ProviderQuestioner = {
-  readonly question: (prompt: string) => Promise<string>;
-  readonly secret?: (prompt: string) => Promise<string>;
-};
+import { promptProvider, type ProviderQuestioner } from "./tui-provider-picker.js";
 
 export type LoginProviderOptions = {
   readonly config: DreamConfig;
@@ -115,18 +109,6 @@ function connectOauth(definition: ProviderDefinition, config: DreamConfig): Drea
   output.write("OpenAI OAuth uses the official Codex login flow.\n");
   output.write("Run `codex login` or use `/login openai` with an API key.\n");
   return config;
-}
-
-async function promptProvider(
-  questioner: ProviderQuestioner,
-  choices: ReturnType<typeof loginChoices>,
-): Promise<ProviderDefinition | undefined> {
-  output.write(formatLoginMenu(choices));
-  const selection = await questioner.question("Provider: ");
-  if (selection.trim().length === 0) {
-    return undefined;
-  }
-  return resolveLoginSelection(selection, choices);
 }
 
 async function resolveLoginRegion(

@@ -10,6 +10,7 @@ import {
   type PermissionMode,
 } from "./config.js";
 import { configureModels } from "./tui-model-commands.js";
+import type { PickerOptions } from "./tui-picker.js";
 import { connectProvider, loginProvider, printProviders } from "./tui-provider-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
@@ -27,6 +28,7 @@ export type CommandResult = {
 export type Questioner = {
   readonly question: (prompt: string) => Promise<string>;
   readonly secret?: (prompt: string) => Promise<string>;
+  readonly select?: (options: PickerOptions) => Promise<string | undefined>;
 };
 
 export async function runWorkspaceCommand(

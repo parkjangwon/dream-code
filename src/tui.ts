@@ -12,6 +12,7 @@ import { describeModelMode } from "./model-routing.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
+import { readInteractivePicker } from "./tui-picker.js";
 import {
   formatPermissionMode,
   printHelp,
@@ -177,6 +178,12 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
       });
       return answer.kind === "submit" ? answer.text : "";
     },
+    select: async (pickerOptions) => readInteractivePicker({
+      ...pickerOptions,
+      redrawHeader: () => {
+        renderHeader(config, options.oneShotYolo);
+      },
+    }),
   };
 }
 

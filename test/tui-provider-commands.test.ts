@@ -34,6 +34,33 @@ test("loginProvider prompts for a provider when no argument is supplied", async 
   }
 });
 
+test("loginProvider can select a provider through the picker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "",
+      env: { OPENCODE_GO_API_KEY: "sk-test" },
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          assert.equal(options.title, "Login");
+          assert.equal(options.choices.some((choice) => choice.value === "opencode-go"), true);
+          return "opencode-go";
+        },
+      },
+    });
+
+    assert.equal(nextConfig.model.single.provider, "opencode-go");
+    assert.equal(nextConfig.model.single.models.mid, "kimi-k2.7-code");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("loginProvider prompts for region and stores a secret API key", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-login-"));
   const stdout = mock.method(process.stdout, "write", () => true);

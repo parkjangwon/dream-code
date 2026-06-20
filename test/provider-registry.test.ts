@@ -51,6 +51,9 @@ test("OpenCode Go defaults use direct API model IDs", () => {
     mid: "kimi-k2.7-code",
     high: "glm-5.2",
   });
+  assert.equal(go.availableModels.includes("hy3-preview"), true);
+  assert.equal(go.availableModels.includes("kimi-k2.7-code"), true);
+  assert.equal(go.availableModels.length >= 20, true);
 });
 
 test("provider defaults track official coding model tiers", () => {
