@@ -4,6 +4,7 @@ import type { AgentDefinition } from "./agent-library.js";
 import { defaultConfigRoot, type DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
 import { runHookEvent } from "./hooks.js";
+import { formatMcpServersForPrompt } from "./mcp-config.js";
 import {
   extractAgentToolRequests,
   formatToolProgress,
@@ -41,7 +42,8 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
   const workspaceDirs = await loadWorkspaceDirs(options.configRoot ?? defaultConfigRoot());
-  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs);
+  const mcpContext = await formatMcpServersForPrompt(options.configRoot ?? defaultConfigRoot());
+  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext);
 
   try {
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
@@ -112,6 +114,7 @@ export function createAgentMessages(
   agent?: AgentDefinition,
   contextDocs?: ContextDocs,
   workspaceDirs: readonly string[] = [],
+  mcpContext = "MCP servers: none configured.",
 ): readonly ChatMessage[] {
   return [
     {
@@ -121,6 +124,7 @@ export function createAgentMessages(
         "Answer concisely, prefer actionable engineering steps, and mention files or commands when useful.",
         `Workspace: ${cwd()}`,
         formatWorkspaceDirs(workspaceDirs),
+        mcpContext,
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatToolProtocol(),
         formatAgentProfile(agent),

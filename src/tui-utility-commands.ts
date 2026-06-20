@@ -7,6 +7,7 @@ import { runAgentPrompt } from "./agent-runner.js";
 import { formatHooksStatus } from "./hooks.js";
 import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
+import { formatMcpStatus } from "./mcp-config.js";
 import {
   compactCurrentSession,
   copyLastAssistantResponse,
@@ -75,7 +76,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(`${await runLspCheck(options.cwd)}\n`);
       return true;
     case "/mcp":
-      output.write(`${await formatSettingsFile(options.configRoot, "mcp")}\n`);
+      output.write(`${await formatMcpStatus(options.configRoot)}\n`);
       return true;
     case "/plan":
       await runWorkflowPrompt(options, "Plan mode", "plans.md", "Plan", "Create a concise implementation plan with ordered tasks, verification steps, and open risks.");
