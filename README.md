@@ -41,7 +41,8 @@ per-session metadata and append-only turns.
 Skills are loaded from `~/.dream/skills` and `~/.agents/skills`. A skill can be
 a directory with `SKILL.md` or a single Markdown file. Use `/skills` to list or
 enable/disable skills, and mention `@skill-name` in a prompt to activate that
-skill without injecting every skill into context.
+skill without injecting every skill into context. Type `@` in the TUI input to
+open skill autocomplete.
 
 Current built-in providers:
 
@@ -61,6 +62,7 @@ Left/Right  move cursor
 Ctrl+A/E    move to start/end
 Ctrl+U/K    clear before/after cursor
 /           open the slash command menu
+@           open skill autocomplete
 Enter       submit input or choose a slash command
 ```
 

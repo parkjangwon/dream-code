@@ -71,18 +71,48 @@ function renderPaletteLines(state: InputState): readonly string[] {
     return [];
   }
 
+  switch (state.palette.kind) {
+    case "command":
+      return renderCommandPaletteLines(state.palette);
+    case "skill":
+      return renderSkillPaletteLines(state.palette);
+    default:
+      return assertNever(state.palette);
+  }
+}
+
+function renderCommandPaletteLines(palette: NonNullable<InputState["palette"]> & { readonly kind: "command" }): readonly string[] {
   const start = Math.max(
     0,
-    Math.min(state.palette.selectedIndex, state.palette.matches.length - maxVisibleCommands),
+    Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
   );
-  const visibleCommands = state.palette.matches.slice(start, start + maxVisibleCommands);
+  const visible = palette.matches.slice(start, start + maxVisibleCommands);
   const lines = [paint("Commands", ansi.guide)];
 
-  for (let index = 0; index < visibleCommands.length; index += 1) {
-    const command = visibleCommands[index];
+  for (let index = 0; index < visible.length; index += 1) {
+    const command = visible[index];
     if (command !== undefined) {
-      const selected = start + index === state.palette.selectedIndex ? ">" : " ";
+      const selected = start + index === palette.selectedIndex ? ">" : " ";
       lines.push(`${selected} ${command.name.padEnd(12)} ${paint(command.summary, ansi.dim)}`);
+    }
+  }
+
+  return lines;
+}
+
+function renderSkillPaletteLines(palette: NonNullable<InputState["palette"]> & { readonly kind: "skill" }): readonly string[] {
+  const start = Math.max(
+    0,
+    Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
+  );
+  const visible = palette.matches.slice(start, start + maxVisibleCommands);
+  const lines = [paint("Skills", ansi.guide)];
+
+  for (let index = 0; index < visible.length; index += 1) {
+    const skill = visible[index];
+    if (skill !== undefined) {
+      const selected = start + index === palette.selectedIndex ? ">" : " ";
+      lines.push(`${selected} @${skill.name.padEnd(12)} ${paint(skill.description, ansi.dim)}`);
     }
   }
 
@@ -121,4 +151,8 @@ export function shouldShowInlineShortcutGuide(text: string): boolean {
 
 export function displayInputText(text: string, secret: boolean): string {
   return secret ? "*".repeat(text.length) : text;
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected input palette: ${String(value)}`);
 }

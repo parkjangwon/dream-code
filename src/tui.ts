@@ -10,6 +10,8 @@ import {
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { startSession, type DreamSession } from "./session-store.js";
+import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
+import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
@@ -74,10 +76,13 @@ async function runInteractiveLoop(
   };
   let shouldContinue = true;
   while (shouldContinue) {
+    const configRoot = options.configRoot ?? defaultConfigRoot();
+    const skills = await loadEnabledSkills(configRoot);
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
       commands: slashCommands,
+      skills,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },
@@ -226,4 +231,9 @@ function historyFromSession(session: DreamSession): readonly string[] {
     .filter((turn) => turn.role === "user")
     .map((turn) => turn.content)
     .slice(-100);
+}
+
+async function loadEnabledSkills(configRoot: string): Promise<readonly DreamSkill[]> {
+  const settings = await loadSkillSettings(configRoot);
+  return (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
 }

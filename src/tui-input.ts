@@ -6,11 +6,13 @@ import { ansi, paint } from "./ansi.js";
 import { clearRenderedLines, displayInputText, renderInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
+import type { DreamSkill } from "./skills.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
   readonly history: readonly string[];
   readonly commands: readonly SlashCommand[];
+  readonly skills?: readonly DreamSkill[];
   readonly redrawHeader: () => void;
   readonly secret?: boolean;
 };
@@ -32,7 +34,7 @@ export function readInteractiveInput(
   options: InteractiveInputOptions,
 ): Promise<InteractiveInputResult> {
   return new Promise((resolve) => {
-    let state = createInputState(options.history, options.commands);
+    let state = createInputState(options.history, options.commands, options.skills ?? []);
     let renderedLines = 0;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;

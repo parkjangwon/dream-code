@@ -1,9 +1,12 @@
 import type { SlashCommand } from "./tui-commands.js";
-
-export type PaletteState = {
-  readonly matches: readonly SlashCommand[];
-  readonly selectedIndex: number;
-};
+import type { DreamSkill } from "./skills.js";
+import {
+  movePalette as moveCompletionPalette,
+  paletteFor,
+  selectedPaletteCommand,
+  selectedPaletteSkill,
+  type PaletteState,
+} from "./tui-input-palettes.js";
 
 export type InputState = {
   readonly text: string;
@@ -12,6 +15,7 @@ export type InputState = {
   readonly history: readonly string[];
   readonly historyIndex: number | undefined;
   readonly commands: readonly SlashCommand[];
+  readonly skills: readonly DreamSkill[];
   readonly palette: PaletteState | undefined;
 };
 
@@ -46,6 +50,7 @@ export type InputUpdate = {
 export function createInputState(
   history: readonly string[],
   commands: readonly SlashCommand[],
+  skills: readonly DreamSkill[] = [],
 ): InputState {
   return {
     text: "",
@@ -54,6 +59,7 @@ export function createInputState(
     history,
     historyIndex: undefined,
     commands,
+    skills,
     palette: undefined,
   };
 }
@@ -140,7 +146,7 @@ function withTextAndCursor(state: InputState, text: string, cursor: number): Inp
       cursor,
       draft: text,
       historyIndex: undefined,
-      palette: paletteFor(text, state.commands),
+      palette: paletteFor(text, state.commands, state.skills, cursor),
     },
     effect: { kind: "none" },
   };
@@ -164,6 +170,23 @@ function acceptInput(state: InputState): InputUpdate {
     return { state, effect: { kind: "submit", text: selectedCommand.name } };
   }
 
+  const selectedSkill = selectedPaletteSkill(state.palette);
+  if (selectedSkill !== undefined && state.palette?.kind === "skill") {
+    const replacement = `@${selectedSkill.name} `;
+    const text = `${state.text.slice(0, state.palette.tokenStart)}${replacement}${state.text.slice(state.cursor)}`;
+    return {
+      state: {
+        ...state,
+        text,
+        cursor: state.palette.tokenStart + replacement.length,
+        draft: text,
+        historyIndex: undefined,
+        palette: undefined,
+      },
+      effect: { kind: "none" },
+    };
+  }
+
   return { state, effect: { kind: "submit", text: state.text } };
 }
 
@@ -172,14 +195,8 @@ function movePalette(state: InputState, direction: "up" | "down"): InputUpdate {
     return { state, effect: { kind: "none" } };
   }
 
-  const lastIndex = state.palette.matches.length - 1;
-  const selectedIndex =
-    direction === "up"
-      ? Math.max(0, state.palette.selectedIndex - 1)
-      : Math.min(lastIndex, state.palette.selectedIndex + 1);
-
   return {
-    state: { ...state, palette: { ...state.palette, selectedIndex } },
+    state: { ...state, palette: moveCompletionPalette(state.palette, direction) },
     effect: { kind: "none" },
   };
 }
@@ -210,7 +227,7 @@ function moveHistory(state: InputState, direction: "up" | "down"): InputUpdate {
       text: state.draft,
       cursor: state.draft.length,
       historyIndex: undefined,
-      palette: paletteFor(state.draft, state.commands),
+      palette: paletteFor(state.draft, state.commands, state.skills),
     },
     effect: { kind: "none" },
   };
@@ -228,26 +245,6 @@ function stateWithHistoryIndex(state: InputState, historyIndex: number): InputUp
     },
     effect: { kind: "none" },
   };
-}
-
-function paletteFor(
-  text: string,
-  commands: readonly SlashCommand[],
-): PaletteState | undefined {
-  if (!text.startsWith("/") || /\s/u.test(text)) {
-    return undefined;
-  }
-
-  const matches = commands.filter((command) => command.name.startsWith(text));
-  if (matches.length === 0) {
-    return undefined;
-  }
-
-  return { matches, selectedIndex: 0 };
-}
-
-function selectedPaletteCommand(palette: PaletteState | undefined): SlashCommand | undefined {
-  return palette?.matches[palette.selectedIndex];
 }
 
 function assertNever(value: never): never {
