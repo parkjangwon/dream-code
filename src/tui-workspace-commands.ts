@@ -55,15 +55,17 @@ export async function runWorkspaceCommand(
       await appendSessionTurn(configRoot, sessionRuntime.currentId(), "user", text);
     }
     let assistantTranscript = "";
-    await runAgentPrompt({
+    const sessionId = sessionRuntime?.currentId();
+    const agentPrompt = {
       config,
       configRoot,
       prompt: text,
-      write: (chunk) => {
+      write: (chunk: string) => {
         output.write(chunk);
         assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
       },
-    });
+    };
+    await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
     if (sessionRuntime !== undefined) {
       await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
       await maybeAutoCompactSession(configRoot, sessionRuntime.currentId());

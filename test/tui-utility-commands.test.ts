@@ -8,7 +8,7 @@ import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
 import { appendSessionTurn, startSession } from "../src/session-store.js";
-import { copyLastAssistantResponse } from "../src/session-actions.js";
+import { compactCurrentSession, copyLastAssistantResponse, formatCompactContext } from "../src/session-actions.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
 test("utility commands show rules, compact, export, and logout state", async () => {
@@ -124,6 +124,23 @@ test("copyLastAssistantResponse accepts nth latest assistant response", async ()
     const result = await copyLastAssistantResponse(root, session.id, 3);
 
     assert.equal(result, "copy skipped: no assistant response");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("formatCompactContext loads the saved session compact", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-compact-context-"));
+  try {
+    const session = await startSession(root, "/tmp/dream-compact");
+    await appendSessionTurn(root, session.id, "user", "Build everything");
+    await appendSessionTurn(root, session.id, "assistant", "A compact-worthy answer.");
+    await compactCurrentSession(root, session.id);
+
+    const context = await formatCompactContext(root, session.id);
+
+    assert.match(context, /Session compact/u);
+    assert.match(context, /Build everything/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

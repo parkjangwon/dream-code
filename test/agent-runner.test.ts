@@ -83,3 +83,19 @@ test("createAgentMessages includes additional workspace directories", () => {
   assert.match(system, /Additional workspace directories/u);
   assert.match(system, /\/repo\/shared/u);
 });
+
+test("createAgentMessages injects compact session context", () => {
+  const messages = createAgentMessages(
+    "continue work",
+    [],
+    undefined,
+    undefined,
+    [],
+    "MCP servers: none configured.",
+    "Session compact:\nPrevious decisions.",
+  );
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /Session compact/u);
+  assert.match(system, /Previous decisions/u);
+});

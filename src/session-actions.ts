@@ -1,10 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { spawn } from "node:child_process";
 
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot } from "./config.js";
 import { listSessions, type DreamSession } from "./session-store.js";
+
+const maxCompactChars = 8_000;
 
 export async function compactCurrentSession(root: string, sessionId: string): Promise<string> {
   const session = await currentSession(root, sessionId);
@@ -16,6 +18,19 @@ export async function compactCurrentSession(root: string, sessionId: string): Pr
   await mkdir(join(root, "compacts"), { recursive: true, mode: 0o700 });
   await writeFile(filePath, summary, "utf8");
   return `compact saved: ${filePath}`;
+}
+
+export async function formatCompactContext(root: string, sessionId: string | undefined): Promise<string> {
+  if (sessionId === undefined) {
+    return "Session compact: none.";
+  }
+
+  const compact = await readOptionalCompact(root, sessionId);
+  if (compact === undefined) {
+    return "Session compact: none.";
+  }
+
+  return ["Session compact:", truncateCompact(compact)].join("\n");
 }
 
 export async function maybeAutoCompactSession(root: string, sessionId: string): Promise<void> {
@@ -74,6 +89,17 @@ async function currentSession(root: string, sessionId: string): Promise<DreamSes
   return (await listSessions(root)).find((session) => session.id === sessionId);
 }
 
+async function readOptionalCompact(root: string, sessionId: string): Promise<string | undefined> {
+  try {
+    return await readFile(join(root, "compacts", `${sessionId}.md`), "utf8");
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 function renderSessionMarkdown(session: DreamSession): string {
   return [
     `# ${session.name}`,
@@ -124,6 +150,19 @@ function timestamp(): string {
 function firstLine(text: string): string {
   const line = text.replace(/\s+/gu, " ").trim();
   return line.length > 120 ? `${line.slice(0, 117)}...` : line;
+}
+
+function truncateCompact(content: string): string {
+  const trimmed = content.trim();
+  return trimmed.length > maxCompactChars ? `${trimmed.slice(0, maxCompactChars)}\n[Truncated compact context]` : trimmed;
+}
+
+type ErrnoException = Error & {
+  readonly code: string;
+};
+
+function isErrnoException(error: unknown): error is ErrnoException {
+  return error instanceof Error && "code" in error && typeof error.code === "string";
 }
 
 export function defaultSessionActionRoot(): string {

@@ -22,6 +22,7 @@ import {
 import { selectModelForPrompt } from "./model-routing.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
+import { formatCompactContext } from "./session-actions.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
 import { loadWorkspaceDirs } from "./workspace-state.js";
 
@@ -30,6 +31,7 @@ export type AgentPromptOptions = {
   readonly configRoot?: string;
   readonly prompt: string;
   readonly agent?: AgentDefinition;
+  readonly sessionId?: string;
   readonly signal?: AbortSignal;
   readonly write: (text: string) => void;
 };
@@ -43,7 +45,8 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
   const workspaceDirs = await loadWorkspaceDirs(options.configRoot ?? defaultConfigRoot());
   const mcpContext = await formatMcpServersForPrompt(options.configRoot ?? defaultConfigRoot());
-  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext);
+  const compactContext = await formatCompactContext(options.configRoot ?? defaultConfigRoot(), options.sessionId);
+  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext);
 
   try {
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
@@ -115,6 +118,7 @@ export function createAgentMessages(
   contextDocs?: ContextDocs,
   workspaceDirs: readonly string[] = [],
   mcpContext = "MCP servers: none configured.",
+  compactContext = "Session compact: none.",
 ): readonly ChatMessage[] {
   return [
     {
@@ -125,6 +129,7 @@ export function createAgentMessages(
         `Workspace: ${cwd()}`,
         formatWorkspaceDirs(workspaceDirs),
         mcpContext,
+        compactContext,
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatToolProtocol(),
         formatAgentProfile(agent),
