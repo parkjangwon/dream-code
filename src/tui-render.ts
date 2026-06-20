@@ -28,6 +28,8 @@ export function printHelp(): void {
     "  /model                  choose active model",
     "  /provider               switch connected provider",
     "  /login                  connect a provider account",
+    "  /session                open saved sessions",
+    "  /rename                 rename current session",
     "  !<cmd>                  run a shell command",
     "  /quit                   exit",
     "",

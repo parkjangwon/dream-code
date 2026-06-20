@@ -2,12 +2,14 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface, type Interface } from "node:readline/promises";
 
 import {
+  defaultConfigRoot,
   loadConfig,
   resolveEffectivePermissionMode,
   togglePersistedYolo,
   type DreamConfig,
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
+import { startSession } from "./session-store.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
@@ -19,6 +21,11 @@ import {
   renderHeader,
 } from "./tui-render.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
+import {
+  renameCurrentSession,
+  showSessionMenu,
+  type SessionRuntime,
+} from "./tui-session-commands.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -54,6 +61,13 @@ async function runInteractiveLoop(
 ): Promise<DreamConfig> {
   let config = initialConfig;
   let history: readonly string[] = [];
+  let currentSessionId = (await startSession(options.configRoot)).id;
+  const sessionRuntime: SessionRuntime = {
+    currentId: () => currentSessionId,
+    switchTo: (sessionId) => {
+      currentSessionId = sessionId;
+    },
+  };
   let shouldContinue = true;
   while (shouldContinue) {
     const answer = await readInteractiveInput({
@@ -69,7 +83,7 @@ async function runInteractiveLoop(
     }
     history = appendHistory(history, answer.text);
     const questioner = interactiveQuestioner(config, options);
-    const result = await handleInput(answer.text.trim(), config, options, questioner);
+    const result = await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
     config = result.config;
     shouldContinue = result.shouldContinue;
   }
@@ -107,6 +121,7 @@ export async function handleInput(
   config: DreamConfig,
   options: TuiOptions,
   questioner: Questioner,
+  sessionRuntime?: SessionRuntime,
 ): Promise<CommandResult> {
   if (text.length === 0) {
     return { config, shouldContinue: true };
@@ -144,7 +159,17 @@ export async function handleInput(
     return { config: nextConfig, shouldContinue: true };
   }
 
-  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot);
+  if (text === "/session") {
+    await showSessionMenu(options.configRoot ?? defaultConfigRoot(), sessionRuntime, questioner);
+    return { config, shouldContinue: true };
+  }
+
+  if (text === "/rename" || text.startsWith("/rename ")) {
+    await renameCurrentSession(options.configRoot ?? defaultConfigRoot(), sessionRuntime, text.slice("/rename".length), questioner);
+    return { config, shouldContinue: true };
+  }
+
+  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime);
 }
 
 function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questioner {

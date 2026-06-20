@@ -1,7 +1,7 @@
 import { stdout as output } from "node:process";
 
 import { runAgentPrompt } from "./agent-runner.js";
-import { ansi, paint } from "./ansi.js";
+import { ansi, paint, stripAnsi } from "./ansi.js";
 import { splitCommand } from "./command-parser.js";
 import {
   defaultConfigRoot,
@@ -9,10 +9,12 @@ import {
   type DreamConfig,
   type PermissionMode,
 } from "./config.js";
+import { appendSessionTurn } from "./session-store.js";
 import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
+import type { SessionRuntime } from "./tui-session-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
   readWorkspaceFile,
@@ -38,6 +40,7 @@ export async function runWorkspaceCommand(
   oneShotYolo: boolean,
   questioner: Questioner,
   configRoot = defaultConfigRoot(),
+  sessionRuntime?: SessionRuntime,
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
@@ -47,14 +50,22 @@ export async function runWorkspaceCommand(
   }
 
   if (!text.startsWith("/")) {
+    if (sessionRuntime !== undefined) {
+      await appendSessionTurn(configRoot, sessionRuntime.currentId(), "user", text);
+    }
+    let assistantTranscript = "";
     await runAgentPrompt({
       config,
       configRoot,
       prompt: text,
       write: (chunk) => {
         output.write(chunk);
+        assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
       },
     });
+    if (sessionRuntime !== undefined) {
+      await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
+    }
     return { config, shouldContinue: true };
   }
 
