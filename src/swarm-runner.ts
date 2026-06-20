@@ -51,6 +51,7 @@ export type SwarmRunOptions = {
   readonly goal: string;
   readonly maxAgents?: number;
   readonly write: (text: string) => void;
+  readonly replaceMonitor?: boolean;
   readonly runAgent?: SwarmAgentRunner;
 };
 
@@ -64,10 +65,15 @@ export async function runAgentSwarmWithAgents(
 ): Promise<SwarmRunSummary> {
   const plan = createSwarmPlan(options.goal, options.agents, options.maxAgents);
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
-  const monitor = createSwarmMonitor({
+  const monitor = createSwarmMonitor(options.replaceMonitor === undefined ? {
     goal: options.goal,
     lanes: plan.lanes,
     write: options.write,
+  } : {
+    goal: options.goal,
+    lanes: plan.lanes,
+    write: options.write,
+    replaceInPlace: options.replaceMonitor,
   });
   options.write(formatSwarmHeader(plan.lanes.length));
   monitor.start();

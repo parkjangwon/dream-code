@@ -36,6 +36,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     cwd: options.cwd ?? currentWorkingDirectory(),
     goal,
     write: (chunk: string) => output.write(chunk),
+    replaceMonitor: output.isTTY,
   };
   await runAgentSwarm(parsed.maxAgents === undefined
     ? baseOptions

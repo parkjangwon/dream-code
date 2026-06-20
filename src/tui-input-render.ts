@@ -3,6 +3,7 @@ import { stdout as output } from "node:process";
 import { ansi, paint } from "./ansi.js";
 import type { DreamSkill } from "./skills.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
+import { inputViewport } from "./tui-input-viewport.js";
 import type { InputState } from "./tui-input-state.js";
 import { shortcutGuideLines } from "./tui-shortcuts.js";
 
@@ -15,8 +16,9 @@ export function renderInputView(
 ): number {
   const width = Math.max(64, output.columns ?? 80);
   const contentWidth = width - 4;
-  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(state.text, secret, state.skills)}`;
-  const cursorText = renderInputText(state.text.slice(0, state.cursor), secret, state.skills);
+  const promptWidth = terminalVisibleWidth(prompt);
+  const viewport = inputViewport(state.text, state.cursor, Math.max(0, contentWidth - promptWidth));
+  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills)}`;
   const lines = [
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
@@ -24,7 +26,7 @@ export function renderInputView(
     ...renderAuxiliaryLines(state, secret, width),
   ];
   output.write(lines.join("\n"));
-  moveCursorToPrompt(lines.length, 2 + terminalVisibleWidth(prompt) + terminalVisibleWidth(cursorText));
+  moveCursorToPrompt(lines.length, 2 + promptWidth + viewport.cursorColumn);
   return lines.length;
 }
 
