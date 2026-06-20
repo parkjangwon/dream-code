@@ -49,7 +49,7 @@ export type SwarmRunOptions = {
   readonly configRoot: string;
   readonly cwd: string;
   readonly goal: string;
-  readonly maxAgents?: number;
+  readonly forceAgents?: number;
   readonly write: (text: string) => void;
   readonly replaceMonitor?: boolean;
   readonly runAgent?: SwarmAgentRunner;
@@ -63,7 +63,7 @@ export async function runAgentSwarm(options: SwarmRunOptions): Promise<SwarmRunS
 export async function runAgentSwarmWithAgents(
   options: SwarmRunOptions & { readonly agents: readonly AgentDefinition[] },
 ): Promise<SwarmRunSummary> {
-  const plan = createSwarmPlan(options.goal, options.agents, options.maxAgents);
+  const plan = createSwarmPlan(options.goal, options.agents, swarmPlanOptions(options));
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
   const monitor = createSwarmMonitor(options.replaceMonitor === undefined ? {
     goal: options.goal,
@@ -75,7 +75,7 @@ export async function runAgentSwarmWithAgents(
     write: options.write,
     replaceInPlace: options.replaceMonitor,
   });
-  options.write(formatSwarmHeader(plan.lanes.length));
+  options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
 
   const laneResults = await Promise.all(plan.lanes.map(async (lane) => {
@@ -157,10 +157,15 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
   };
 }
 
-function formatSwarmHeader(agentCount: number): string {
+function swarmPlanOptions(options: SwarmRunOptions): { readonly forceAgents?: number } {
+  return options.forceAgents === undefined ? {} : { forceAgents: options.forceAgents };
+}
+
+function formatSwarmHeader(agentCount: number, forced: boolean): string {
+  const mode = forced ? "forced overdrive" : "adaptive fan-out";
   return [
     `${paint("✹ Dream Swarm", ansi.accent)} ${paint(`${agentCount} parallel agents`, ansi.bold)}`,
-    paint("Kimi-style fan-out · token mixing on · synthesis pass enabled", ansi.guide),
+    paint(`Kimi-style ${mode} · token mixing on · synthesis pass enabled`, ansi.guide),
   ].join("\n").concat("\n");
 }
 

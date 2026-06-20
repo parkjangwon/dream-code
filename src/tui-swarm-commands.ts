@@ -17,7 +17,7 @@ export type RunSwarmCommandOptions = {
 
 type SwarmArgs = {
   readonly goal: string;
-  readonly maxAgents?: number;
+  readonly forceAgents?: number;
 };
 
 export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<void> {
@@ -26,31 +26,52 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     ? parsed.goal
     : (await options.questioner.question("Swarm goal: ")).trim();
   if (goal.length === 0) {
-    output.write("usage: /swarm [--max agents] <goal>\n");
+    output.write("usage: /swarm [--size count] <goal>\n");
     return;
   }
 
+  const replaceMonitor = output.isTTY === true;
   const baseOptions = {
     config: options.config,
     configRoot: options.configRoot,
     cwd: options.cwd ?? currentWorkingDirectory(),
     goal,
     write: (chunk: string) => output.write(chunk),
-    replaceMonitor: output.isTTY,
+    replaceMonitor,
   };
-  await runAgentSwarm(parsed.maxAgents === undefined
-    ? baseOptions
-    : { ...baseOptions, maxAgents: parsed.maxAgents });
+  await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
 }
 
 export function parseSwarmArgs(args: string): SwarmArgs {
-  const maxMatch = args.match(/(?:^|\s)--max\s+(\d+)(?=\s|$)/u);
-  const maxAgents = parseMaxAgents(maxMatch?.[1]);
-  const goal = args.replace(/(?:^|\s)--max\s+\d+(?=\s|$)/u, " ").trim();
-  return maxAgents === undefined ? { goal } : { goal, maxAgents };
+  const forceMatch = args.match(/(?:^|\s)--size\s+(\d+)(?=\s|$)/u);
+  const forceAgents = parseAgentCount(forceMatch?.[1]);
+  const goal = args
+    .replace(/(?:^|\s)--size\s+\d+(?=\s|$)/u, " ")
+    .trim();
+  return forceAgents === undefined ? { goal } : { goal, forceAgents };
 }
 
-function parseMaxAgents(value: string | undefined): number | undefined {
+function swarmRunOptions(
+  baseOptions: {
+    readonly config: DreamConfig;
+    readonly configRoot: string;
+    readonly cwd: string;
+    readonly goal: string;
+    readonly write: (chunk: string) => boolean;
+    readonly replaceMonitor: boolean;
+  },
+  parsed: SwarmArgs,
+): Parameters<typeof runAgentSwarm>[0] {
+  if (parsed.forceAgents !== undefined) {
+    return {
+      ...baseOptions,
+      forceAgents: parsed.forceAgents,
+    };
+  }
+  return baseOptions;
+}
+
+function parseAgentCount(value: string | undefined): number | undefined {
   if (value === undefined) {
     return undefined;
   }

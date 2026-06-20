@@ -27,6 +27,21 @@ test("createSwarmPlan fans a goal out to specialized parallel lanes", () => {
   assert.match(plan.lanes[0]?.prompt ?? "", /Build agent swarm/u);
 });
 
+test("createSwarmPlan can force more lanes than unique agents", () => {
+  const plan = createSwarmPlan("Ship faster", agents.slice(0, 2), { forceAgents: 5 });
+
+  assert.equal(plan.forced, true);
+  assert.equal(plan.lanes.length, 5);
+  assert.deepEqual(plan.lanes.map((lane) => lane.agent.id), [
+    "tech-lead",
+    "code-reviewer",
+    "tech-lead",
+    "code-reviewer",
+    "tech-lead",
+  ]);
+  assert.match(plan.lanes[4]?.prompt ?? "", /UX, developer ergonomics, and polish/u);
+});
+
 function agent(id: string, name: string, summary: string, model: string): AgentDefinition {
   return {
     id,

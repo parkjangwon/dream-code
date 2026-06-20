@@ -22,7 +22,7 @@ test("runAgentSwarmWithAgents starts fan-out lanes in parallel before synthesis"
       agent("code-reviewer", "Code Reviewer", "Review."),
       agent("security-reviewer", "Security Reviewer", "Audit."),
     ],
-    maxAgents: 3,
+    forceAgents: 3,
     write: () => undefined,
     runAgent: async (input) => {
       calls.push(`${input.kind}:${input.agent.id}`);
@@ -65,7 +65,7 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
       agent("tech-lead", "Tech Lead", "Plan."),
       agent("code-reviewer", "Code Reviewer", "Review."),
     ],
-    maxAgents: 2,
+    forceAgents: 2,
     write: (chunk) => {
       chunks.push(chunk);
     },

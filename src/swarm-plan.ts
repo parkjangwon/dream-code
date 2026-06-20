@@ -11,6 +11,12 @@ export type SwarmPlan = {
   readonly goal: string;
   readonly lanes: readonly SwarmLane[];
   readonly maxConcurrency: number;
+  readonly forced: boolean;
+};
+
+export type SwarmPlanOptions = {
+  readonly adaptiveLimit?: number;
+  readonly forceAgents?: number;
 };
 
 const preferredAgentOrder = [
@@ -24,9 +30,10 @@ const preferredAgentOrder = [
 export function createSwarmPlan(
   goal: string,
   agents: readonly AgentDefinition[],
-  maxAgents = 8,
+  options: number | SwarmPlanOptions = 8,
 ): SwarmPlan {
-  const selectedAgents = selectSwarmAgents(agents, maxAgents);
+  const planOptions = normalizePlanOptions(options);
+  const selectedAgents = selectSwarmAgents(agents, planOptions);
   return {
     goal,
     lanes: selectedAgents.map((agent, index) => ({
@@ -36,6 +43,7 @@ export function createSwarmPlan(
       prompt: lanePrompt(goal, agent, index + 1),
     })),
     maxConcurrency: Math.max(1, selectedAgents.length),
+    forced: planOptions.forceAgents !== undefined,
   };
 }
 
@@ -72,14 +80,33 @@ export function createSwarmSynthesisPrompt(
 
 function selectSwarmAgents(
   agents: readonly AgentDefinition[],
-  maxAgents: number,
+  options: Required<Pick<SwarmPlanOptions, "adaptiveLimit">> & Pick<SwarmPlanOptions, "forceAgents">,
 ): readonly AgentDefinition[] {
+  const ordered = orderedSwarmAgents(agents);
+  if (ordered.length === 0) {
+    return [];
+  }
+  if (options.forceAgents !== undefined) {
+    return Array.from({ length: Math.max(1, options.forceAgents) }, (_item, index) => cycledAgent(ordered, index));
+  }
+  return ordered.slice(0, Math.max(1, options.adaptiveLimit));
+}
+
+function cycledAgent(agents: readonly AgentDefinition[], index: number): AgentDefinition {
+  const agent = agents[index % agents.length];
+  if (agent === undefined) {
+    throw new Error("Cannot create swarm lanes without agents");
+  }
+  return agent;
+}
+
+function orderedSwarmAgents(agents: readonly AgentDefinition[]): readonly AgentDefinition[] {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   const preferred = preferredAgentOrder
     .map((id) => byId.get(id))
     .filter(isAgentDefinition);
   const remaining = agents.filter((agent) => !preferred.some((selected) => selected.id === agent.id));
-  return [...preferred, ...remaining].slice(0, Math.max(1, maxAgents));
+  return [...preferred, ...remaining];
 }
 
 function lanePrompt(goal: string, agent: AgentDefinition, laneNumber: number): string {
@@ -88,8 +115,32 @@ function lanePrompt(goal: string, agent: AgentDefinition, laneNumber: number): s
     "Work independently. Do not wait for other lanes. Spend tokens aggressively when it improves coverage.",
     `Original goal: ${goal}`,
     `Your lane mission: ${agent.summary}`,
+    `Forced-swarm angle: ${laneFocus(laneNumber)}`,
     "Return a compact artifact with: Summary, Findings, Proposed actions, Risks.",
   ].join("\n");
+}
+
+function laneFocus(laneNumber: number): string {
+  const focuses = [
+    "architecture and boundaries",
+    "implementation speed and execution order",
+    "bugs, edge cases, and failures",
+    "tests, verification, and regressions",
+    "UX, developer ergonomics, and polish",
+    "token efficiency and context control",
+    "security, permissions, and secrets",
+    "simplification and removal of unnecessary work",
+  ] as const;
+  return focuses[(laneNumber - 1) % focuses.length] ?? focuses[0];
+}
+
+function normalizePlanOptions(options: number | SwarmPlanOptions): Required<Pick<SwarmPlanOptions, "adaptiveLimit">> & Pick<SwarmPlanOptions, "forceAgents"> {
+  if (typeof options === "number") {
+    return { adaptiveLimit: options };
+  }
+  return options.forceAgents === undefined
+    ? { adaptiveLimit: options.adaptiveLimit ?? 8 }
+    : { adaptiveLimit: options.adaptiveLimit ?? options.forceAgents, forceAgents: options.forceAgents };
 }
 
 function isAgentDefinition(value: AgentDefinition | undefined): value is AgentDefinition {

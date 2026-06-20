@@ -229,7 +229,7 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
     };
 
     await runWorkspaceCommand(
-      "/swarm --max 3 Build the swarm runtime",
+      "/swarm --size 3 Build the swarm runtime",
       config,
       true,
       { question: async () => "" },
@@ -241,6 +241,7 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Dream Swarm/u);
     assert.match(outputText, /3 parallel agents/u);
+    assert.match(outputText, /forced overdrive/u);
     assert.match(outputText, /Swarm Synthesis/u);
   } finally {
     stdout.mock.restore();
