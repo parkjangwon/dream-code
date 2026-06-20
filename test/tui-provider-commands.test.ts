@@ -51,6 +51,7 @@ test("loginProvider can select a provider through the picker", async () => {
           assert.equal(options.title, "Login");
           const opencodeGo = options.choices.find((choice) => choice.value === "opencode-go");
           assert.notEqual(opencodeGo, undefined);
+          assert.equal(opencodeGo?.descriptionStyle, "raw");
           assert.equal(opencodeGo?.description.includes(`${ansi.blue}env${ansi.reset}`), true);
           return "opencode-go";
         },

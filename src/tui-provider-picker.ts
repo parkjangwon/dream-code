@@ -26,6 +26,7 @@ export async function promptProvider(
         value: choice.definition.id,
         label: choice.definition.displayName,
         description: `${choice.definition.id} ${formatLoginSource(choice.source)}`,
+        descriptionStyle: "raw",
         keywords: [choice.definition.id, choice.definition.displayName, ...choice.definition.envKeys],
       })),
     });

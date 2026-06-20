@@ -2,6 +2,7 @@ export type PickerChoice = {
   readonly value: string;
   readonly label: string;
   readonly description: string;
+  readonly descriptionStyle?: "dim" | "raw";
   readonly keywords: readonly string[];
 };
 

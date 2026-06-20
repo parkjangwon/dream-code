@@ -143,9 +143,15 @@ function visibleStart(selectedIndex: number, visibleCount: number): number {
 function formatChoiceLine(choice: PickerChoice, selected: boolean): string {
   const marker = selected ? paint(">", ansi.accent) : " ";
   const description = choice.description.length > 0
-    ? ` ${paint(choice.description, ansi.dim)}`
+    ? ` ${formatDescription(choice)}`
     : "";
   return `${marker} ${choice.label}${description}`;
+}
+
+function formatDescription(choice: PickerChoice): string {
+  return choice.descriptionStyle === "raw"
+    ? choice.description
+    : paint(choice.description, ansi.dim);
 }
 
 function moveCursorToSearchLine(lineCount: number, query: string): void {
