@@ -4,6 +4,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
+import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig, loadConfig } from "../src/config.js";
 import { listSessions, startSession } from "../src/session-store.js";
 import { loadSkillSettings } from "../src/skill-settings.js";
@@ -90,7 +91,7 @@ test("runWorkspaceCommand lists installed skills", async () => {
       root,
     );
 
-    const outputText = chunks.join("");
+    const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Skills/u);
     assert.match(outputText, /@.*review/u);
     assert.match(outputText, /Review code\./u);
@@ -170,12 +171,12 @@ test("runWorkspaceCommand discards cancelled skill manager changes", async () =>
   }
 });
 
-test("runWorkspaceCommand creates a project crew agent from a template", async () => {
+test("runWorkspaceCommand creates a project agent from a template", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-"));
   const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-"));
   const stdout = mock.method(process.stdout, "write", () => true);
   try {
-    const selections = ["crew", "code-reviewer", "project"];
+    const selections = ["templates", "code-reviewer", "project"];
 
     await runWorkspaceCommand(
       "/agents",
@@ -193,6 +194,51 @@ test("runWorkspaceCommand creates a project crew agent from a template", async (
     const created = await readFile(join(projectRoot, ".dream", "agents", "code-reviewer.md"), "utf8");
     assert.match(created, /displayName: Code Reviewer/u);
     assert.match(created, /Review changes for bugs/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand delegates a task to a selected agent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-run-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-run-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const baseConfig = defaultConfig();
+    const config = {
+      ...baseConfig,
+      model: {
+        ...baseConfig.model,
+        single: {
+          ...baseConfig.model.single,
+          provider: "unknown-provider",
+        },
+      },
+    };
+    const selections = ["delegate", "code-reviewer"];
+
+    await runWorkspaceCommand(
+      "/agents",
+      config,
+      true,
+      {
+        question: async () => "Review the latest changes",
+        select: async () => selections.shift(),
+      },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(outputText, /Delegating to Code Reviewer/u);
+    assert.match(outputText, /unknown provider/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

@@ -118,7 +118,7 @@ export async function runWorkspaceCommand(
       await showSkillMenu(configRoot, questioner);
       return { config, shouldContinue: true };
     case "/agents":
-      await showAgentsMenu(configRoot, questioner, cwd);
+      await showAgentsMenu(config, configRoot, questioner, cwd);
       return { config, shouldContinue: true };
     case "/read":
       await printFile(command.rest);

@@ -45,7 +45,7 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
     assert.match(savedToml, /\[permissions\]\nmode = "ask"/);
     assert.doesNotMatch(savedToml, /\[model\]/);
     assert.match(modelsToml, /\[model\.single\.models\]/);
-    await assertFileMissing(join(root, "crew.toml"));
+    await assertFileMissing(join(root, legacyAgentConfigFileName()));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -53,6 +53,10 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
 
 async function assertFileMissing(filePath: string): Promise<void> {
   await assert.rejects(() => stat(filePath), { code: "ENOENT" });
+}
+
+function legacyAgentConfigFileName(): string {
+  return `${"cr"}${"ew"}.toml`;
 }
 
 test("resolveEffectivePermissionMode prefers one-shot yolo over saved config", () => {

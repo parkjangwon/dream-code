@@ -57,3 +57,21 @@ test("createAgentMessages ignores unknown skill mentions", () => {
   assert.match(system, /none active/u);
   assert.doesNotMatch(system, /Always list findings first/u);
 });
+
+test("createAgentMessages injects a selected subagent profile", () => {
+  const messages = createAgentMessages("Review this branch", [], {
+    id: "code-reviewer",
+    name: "Code Reviewer",
+    summary: "Review changes for regressions.",
+    model: "inherit",
+    tools: ["read", "shell"],
+    prompt: "Report findings first.",
+    source: "built-in",
+  });
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /Active Dream Code subagent/u);
+  assert.match(system, /Code Reviewer/u);
+  assert.match(system, /Report findings first\./u);
+  assert.match(system, /read, shell/u);
+});

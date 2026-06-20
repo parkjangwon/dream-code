@@ -1,14 +1,18 @@
 import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
+import { loadAgentDefinitions } from "./agent-definition-loader.js";
 import {
   agentLocations,
   customAgentTemplate,
   defaultAgentTemplates,
   writeAgentTemplate,
+  type AgentDefinition,
   type AgentLocation,
   type AgentTemplate,
 } from "./agent-library.js";
+import { runAgentPrompt } from "./agent-runner.js";
 import { ansi, paint } from "./ansi.js";
+import type { DreamConfig } from "./config.js";
 import type { PickerOptions } from "./tui-picker.js";
 
 export type AgentQuestioner = {
@@ -17,13 +21,15 @@ export type AgentQuestioner = {
 };
 
 const agentTabs = {
+  delegate: "delegate",
   running: "running",
-  crew: "crew",
+  templates: "templates",
 } as const;
 
 const createAgentValue = "create-agent";
 
 export async function showAgentsMenu(
+  config: DreamConfig,
   configRoot: string,
   questioner: AgentQuestioner,
   cwd = currentWorkingDirectory(),
@@ -36,14 +42,19 @@ export async function showAgentsMenu(
   const tab = await questioner.select({
     title: "Agents",
     choices: [
+      { value: agentTabs.delegate, label: "Delegate task", description: "Run one specialized subagent", keywords: ["delegate", "task", "agent"] },
       { value: agentTabs.running, label: "Running", description: "Show active subagents", keywords: ["running", "subagents"] },
-      { value: agentTabs.crew, label: "Crew", description: "Create and manage reusable agents", keywords: ["crew", "team", "library", "templates"] },
+      { value: agentTabs.templates, label: "Templates", description: "Create and manage reusable agents", keywords: ["templates", "library", "custom"] },
     ],
-    initialValue: agentTabs.crew,
+    initialValue: agentTabs.delegate,
   });
 
-  if (tab === agentTabs.crew) {
-    await showCrewMenu(configRoot, questioner, cwd);
+  if (tab === agentTabs.delegate) {
+    await delegateToAgent(config, configRoot, questioner, cwd);
+    return;
+  }
+  if (tab === agentTabs.templates) {
+    await showTemplatesMenu(configRoot, questioner, cwd);
     return;
   }
   if (tab === agentTabs.running) {
@@ -53,23 +64,55 @@ export async function showAgentsMenu(
 
 export function formatAgentsOverview(): string {
   return [
-    `${paint("Agents", ansi.accent)}  ${paint("Running", ansi.dim)}  ${paint("Crew", ansi.dim)}`,
+    `${paint("Agents", ansi.accent)}  ${paint("Delegate", ansi.dim)}  ${paint("Running", ansi.dim)}  ${paint("Templates", ansi.dim)}`,
     "",
     formatRunningAgents().trimEnd(),
     "",
-    formatCrewSummary().trimEnd(),
+    formatTemplateSummary().trimEnd(),
     "",
   ].join("\n");
 }
 
-async function showCrewMenu(
+async function delegateToAgent(
+  config: DreamConfig,
+  configRoot: string,
+  questioner: AgentQuestioner,
+  cwd: string,
+): Promise<void> {
+  const agents = await loadAgentDefinitions(configRoot, cwd);
+  const selected = await questioner.select?.({
+    title: "Delegate",
+    choices: agentChoices(agents),
+  });
+  const agent = agents.find((candidate) => candidate.id === selected);
+  if (agent === undefined) {
+    return;
+  }
+
+  const task = (await questioner.question(`Task for ${agent.name}: `)).trim();
+  if (task.length === 0) {
+    output.write("agent delegation cancelled\n");
+    return;
+  }
+
+  output.write(`${paint("Delegating", ansi.accent)} to ${paint(agent.name, ansi.bold)} ${paint(`(${agent.source})`, ansi.dim)}\n`);
+  await runAgentPrompt({
+    config,
+    configRoot,
+    prompt: task,
+    agent,
+    write: (chunk) => output.write(chunk),
+  });
+}
+
+async function showTemplatesMenu(
   configRoot: string,
   questioner: AgentQuestioner,
   cwd: string,
 ): Promise<void> {
   const selected = await questioner.select?.({
-    title: "Crew",
-    choices: crewChoices(),
+    title: "Templates",
+    choices: templateChoices(),
   });
   if (selected === undefined) {
     return;
@@ -115,7 +158,7 @@ async function createManualAgent(
     return;
   }
   const summary = (await questioner.question("Description: ")).trim() || "Dream Code custom agent.";
-  const prompt = (await questioner.question("System prompt: ")).trim() || `You are ${name}, a Dream Code crew agent.`;
+  const prompt = (await questioner.question("System prompt: ")).trim() || `You are ${name}, a Dream Code subagent.`;
   const filePath = await writeAgentTemplate(configRoot, cwd, location, customAgentTemplate(name, summary, prompt));
   output.write(`created agent: ${filePath}\n`);
 }
@@ -136,7 +179,7 @@ async function promptAgentLocation(questioner: AgentQuestioner): Promise<AgentLo
   return parseAgentLocation(await questioner.question("Location [project/personal]: "));
 }
 
-function crewChoices(): PickerOptions["choices"] {
+function templateChoices(): PickerOptions["choices"] {
   return [
     { value: createAgentValue, label: "Create new agent", description: "Manual configuration", keywords: ["create", "new", "custom"] },
     ...defaultAgentTemplates().map((template) => ({
@@ -148,6 +191,15 @@ function crewChoices(): PickerOptions["choices"] {
   ];
 }
 
+function agentChoices(agents: readonly AgentDefinition[]): PickerOptions["choices"] {
+  return agents.map((agent) => ({
+    value: agent.id,
+    label: agent.name,
+    description: `${agent.summary} · ${agent.source} · ${agent.model}`,
+    keywords: [agent.id, agent.name, agent.summary, agent.source, agent.model, ...agent.tools],
+  }));
+}
+
 function formatRunningAgents(): string {
   return [
     `${paint("Running", ansi.accent)}`,
@@ -156,8 +208,8 @@ function formatRunningAgents(): string {
   ].join("\n");
 }
 
-function formatCrewSummary(): string {
-  const lines = [`${paint("Crew", ansi.accent)}`, "Create new agent", "", paint("Built-in templates:", ansi.dim)];
+function formatTemplateSummary(): string {
+  const lines = [`${paint("Templates", ansi.accent)}`, "Create new agent", "", paint("Built-in templates:", ansi.dim)];
   for (const template of defaultAgentTemplates()) {
     lines.push(`  ${template.id} ${paint("·", ansi.dim)} ${paint(template.model, ansi.dim)} ${paint("·", ansi.dim)} ${template.summary}`);
   }

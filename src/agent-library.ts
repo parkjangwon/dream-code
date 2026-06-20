@@ -17,6 +17,13 @@ export type AgentTemplate = {
   readonly prompt: string;
 };
 
+export type AgentSource = "built-in" | "project" | "personal";
+
+export type AgentDefinition = AgentTemplate & {
+  readonly source: AgentSource;
+  readonly path?: string;
+};
+
 const builtInAgentTemplates = [
   {
     id: "code-reviewer",

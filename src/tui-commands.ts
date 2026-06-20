@@ -5,7 +5,7 @@ export type SlashCommand = {
 };
 
 export const slashCommands = [
-  { name: "/agents", summary: "Manage running agents and crew", acceptsArgs: false },
+  { name: "/agents", summary: "Delegate tasks and manage agents", acceptsArgs: false },
   { name: "/doctor", summary: "Check local tools", acceptsArgs: false },
   { name: "/help", summary: "Show commands", acceptsArgs: false },
   { name: "/login", summary: "Login to a provider", acceptsArgs: true },
