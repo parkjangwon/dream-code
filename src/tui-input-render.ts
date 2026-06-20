@@ -15,8 +15,8 @@ export function renderInputView(
 ): number {
   const width = Math.max(64, output.columns ?? 80);
   const contentWidth = width - 4;
-  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(state.text, secret)}`;
-  const cursorText = renderInputText(state.text.slice(0, state.cursor), secret);
+  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(state.text, secret, state.skills)}`;
+  const cursorText = renderInputText(state.text.slice(0, state.cursor), secret, state.skills);
   const lines = [
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
@@ -174,13 +174,19 @@ export function displayInputText(text: string, secret: boolean): string {
   return secret ? "*".repeat(text.length) : text;
 }
 
-export function renderInputText(text: string, secret: boolean): string {
-  return secret ? displayInputText(text, true) : highlightSkillMentions(text);
+export function renderInputText(
+  text: string,
+  secret: boolean,
+  skills: readonly DreamSkill[] = [],
+): string {
+  return secret ? displayInputText(text, true) : highlightSkillMentions(text, skills);
 }
 
-function highlightSkillMentions(text: string): string {
+function highlightSkillMentions(text: string, skills: readonly DreamSkill[]): string {
+  const skillNames = new Set(skills.map((skill) => skill.name.toLowerCase()));
   return text.replace(/(^|\s)(@[a-zA-Z0-9._-]+)/gu, (_, prefix: string, mention: string) => {
-    return `${prefix}${paint(mention, ansi.blue)}`;
+    const skillName = mention.slice(1).toLowerCase();
+    return skillNames.has(skillName) ? `${prefix}${paint(mention, ansi.blue)}` : `${prefix}${mention}`;
   });
 }
 

@@ -39,3 +39,21 @@ test("createAgentMessages injects only explicitly requested skill bodies", () =>
   assert.match(system, /Always list findings first/u);
   assert.doesNotMatch(system, /Unused body/u);
 });
+
+test("createAgentMessages ignores unknown skill mentions", () => {
+  const skills: readonly DreamSkill[] = [
+    {
+      name: "review",
+      description: "Review code for regressions.",
+      body: "Always list findings first.",
+      path: "/tmp/review/SKILL.md",
+      source: "dream",
+    },
+  ];
+
+  const messages = createAgentMessages("Use @missing on this diff", skills);
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /none active/u);
+  assert.doesNotMatch(system, /Always list findings first/u);
+});

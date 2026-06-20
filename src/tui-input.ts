@@ -48,7 +48,7 @@ export function readInteractiveInput(
       clearRenderedLines(renderedLines);
       cleanup();
       if (result.kind === "submit") {
-        output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true)}\n`);
+        output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [])}\n`);
       } else {
         output.write("^C\n");
       }

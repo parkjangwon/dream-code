@@ -29,11 +29,20 @@ test("displayInputText masks secret input without changing cursor width", () => 
 });
 
 test("renderInputText highlights skill mentions inside the prompt input", () => {
-  const rendered = renderInputText("@cso review email@example.com", false);
+  const rendered = renderInputText("@cso review email@example.com @missing", false, [
+    {
+      name: "cso",
+      description: "Chief Security Officer security audit.",
+      body: "",
+      path: "/tmp/cso/SKILL.md",
+      source: "agents",
+    },
+  ]);
 
   assert.equal(rendered.includes(`${ansi.blue}@cso`), true);
   assert.equal(rendered.includes(`${ansi.blue}@example`), false);
-  assert.equal(terminalVisibleWidth(rendered), terminalVisibleWidth("@cso review email@example.com"));
+  assert.equal(rendered.includes(`${ansi.blue}@missing`), false);
+  assert.equal(terminalVisibleWidth(rendered), terminalVisibleWidth("@cso review email@example.com @missing"));
 });
 
 test("renderInputText keeps secret input masked without mention highlighting", () => {
