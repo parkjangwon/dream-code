@@ -4,6 +4,13 @@ import type { AgentDefinition } from "./agent-library.js";
 import type { DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
 import {
+  extractAgentToolRequests,
+  formatToolProgress,
+  formatToolResults,
+  runAgentToolRequest,
+  type AgentToolResult,
+} from "./agent-tools.js";
+import {
   MissingProviderConfigError,
   ProviderProtocolError,
   ProviderRequestError,
@@ -24,43 +31,74 @@ export type AgentPromptOptions = {
   readonly write: (text: string) => void;
 };
 
+const maxToolCycles = 3;
+
 export async function runAgentPrompt(options: AgentPromptOptions): Promise<void> {
   const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent));
   const settings = await loadSkillSettings(options.configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot: options.configRoot, cwd: cwd(), prompt: options.prompt });
-  const response = createAgentResponseSession({
-    selectedModel,
-    write: options.write,
-  });
-  response.start();
+  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs);
 
   try {
-    const baseStreamInput = options.configRoot === undefined
-      ? optionalSignal({
-        selectedModel,
-        messages: createAgentMessages(options.prompt, skills, options.agent, contextDocs),
-        onToken: response.token,
-      }, options.signal)
-      : optionalSignal({
-        selectedModel,
-        messages: createAgentMessages(options.prompt, skills, options.agent, contextDocs),
-        configRoot: options.configRoot,
-        onToken: response.token,
-      }, options.signal);
-    await streamChatCompletion(baseStreamInput);
-    response.finish();
+    for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
+      const assistantText = await streamAgentOnce(options, selectedModel, messages);
+      const requests = extractAgentToolRequests(assistantText);
+      if (requests.length === 0) {
+        return;
+      }
+      const results: AgentToolResult[] = [];
+      for (const request of requests) {
+        const result = await runAgentToolRequest(request, options.config.permissions.mode);
+        options.write(formatToolProgress(result));
+        results.push(result);
+      }
+      messages = [
+        ...messages,
+        { role: "assistant", content: assistantText },
+        { role: "user", content: formatToolResults(results) },
+      ];
+    }
   } catch (error) {
     if (error instanceof MissingProviderConfigError) {
-      response.fail(error.message, "warn");
+      writeAgentFailure(options, selectedModel, error.message, "warn");
       return;
     }
     if (error instanceof ProviderRequestError || error instanceof ProviderProtocolError) {
-      response.fail(error.message, "error");
+      writeAgentFailure(options, selectedModel, error.message, "error");
       return;
     }
     throw error;
   }
+}
+
+function writeAgentFailure(
+  options: AgentPromptOptions,
+  selectedModel: ReturnType<typeof selectModelForPrompt>,
+  message: string,
+  tone: "warn" | "error",
+): void {
+  createAgentResponseSession({ selectedModel, write: options.write }).fail(message, tone);
+}
+
+async function streamAgentOnce(
+  options: AgentPromptOptions,
+  selectedModel: ReturnType<typeof selectModelForPrompt>,
+  messages: readonly ChatMessage[],
+): Promise<string> {
+  const response = createAgentResponseSession({ selectedModel, write: options.write });
+  let assistantText = "";
+  response.start();
+  const onToken = (token: string): void => {
+    assistantText = `${assistantText}${token}`;
+    response.token(token);
+  };
+  const baseStreamInput = options.configRoot === undefined
+    ? optionalSignal({ selectedModel, messages, onToken }, options.signal)
+    : optionalSignal({ selectedModel, messages, configRoot: options.configRoot, onToken }, options.signal);
+  await streamChatCompletion(baseStreamInput);
+  response.finish();
+  return assistantText;
 }
 
 export function createAgentMessages(
@@ -77,12 +115,26 @@ export function createAgentMessages(
         "Answer concisely, prefer actionable engineering steps, and mention files or commands when useful.",
         `Workspace: ${cwd()}`,
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
+        formatToolProtocol(),
         formatAgentProfile(agent),
         formatSelectedSkills(prompt, skills),
       ].join("\n"),
     },
     { role: "user", content: prompt },
   ];
+}
+
+function formatToolProtocol(): string {
+  return [
+    "Local tool protocol:",
+    "When local project data is required, request tools in a fenced block named dream-tool.",
+    "Each line must be one JSON object:",
+    "{\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"shell\",\"command\":\"pnpm test\"}",
+    "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
+    "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",
+    "Use shell/write/edit only when permission mode allows it; otherwise explain the needed command.",
+  ].join("\n");
 }
 
 function formatAgentProfile(agent: AgentDefinition | undefined): string {
