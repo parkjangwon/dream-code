@@ -3,37 +3,37 @@ import assert from "node:assert/strict";
 
 import {
   parseConfigToml,
+  serializeCrewConfigToml,
   serializeMainConfigToml,
   serializeModelConfigToml,
-  serializeTeamConfigToml,
 } from "../src/config-toml.js";
 import { defaultConfig, dreamConfigSchema } from "../src/config.js";
 
-test("TOML serializers split main, model, and team config sections", () => {
+test("TOML serializers split main, model, and crew config sections", () => {
   const config = defaultConfig();
   const mainToml = serializeMainConfigToml(config);
   const modelToml = serializeModelConfigToml(config.model);
-  const teamToml = serializeTeamConfigToml(config.team);
+  const crewToml = serializeCrewConfigToml(config.team);
 
   assert.match(mainToml, /\[permissions\]/);
   assert.doesNotMatch(mainToml, /\[model\]/);
   assert.match(modelToml, /\[model\.single\.models\]/);
   assert.match(modelToml, /\[\[model\.auto\.routes\]\]/);
-  assert.match(teamToml, /\[\[team\]\]/);
+  assert.match(crewToml, /\[\[crew\]\]/);
 });
 
 test("parseConfigToml reads serialized Dream config", () => {
   const config = defaultConfig();
   const main = parseConfigToml(serializeMainConfigToml(config));
   const model = parseConfigToml(serializeModelConfigToml(config.model));
-  const team = parseConfigToml(serializeTeamConfigToml(config.team));
+  const crew = parseConfigToml(serializeCrewConfigToml(config.team));
   assertRecord(main);
   assertRecord(model);
-  assertRecord(team);
+  assertRecord(crew);
   const parsed = dreamConfigSchema.parse({
     ...main,
     ...model,
-    ...team,
+    team: crew["crew"],
   });
 
   assert.equal(parsed.version, 1);

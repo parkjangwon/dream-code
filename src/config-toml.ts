@@ -70,12 +70,12 @@ export function serializeModelConfigToml(model: ModelConfig): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-export function serializeTeamConfigToml(team: DreamConfig["team"]): string {
+export function serializeCrewConfigToml(team: DreamConfig["team"]): string {
   const lines = ["version = 1", ""];
 
   for (const member of team) {
     lines.push(
-      "[[team]]",
+      "[[crew]]",
       `id = ${quote(member.id)}`,
       `name = ${quote(member.name)}`,
       `role = ${quote(member.role)}`,

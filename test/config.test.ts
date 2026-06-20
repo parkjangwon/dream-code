@@ -6,12 +6,12 @@ import assert from "node:assert/strict";
 
 import {
   configFilePath,
+  crewConfigFilePath,
   defaultConfig,
   loadConfig,
   modelConfigFilePath,
   resolveEffectivePermissionMode,
   saveConfig,
-  teamConfigFilePath,
   togglePersistedYolo,
   type DreamConfig,
 } from "../src/config.js";
@@ -40,14 +40,14 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
     const disabled = await togglePersistedYolo(root);
     const savedToml = await readFile(configFilePath(root), "utf8");
     const modelsToml = await readFile(modelConfigFilePath(root), "utf8");
-    const teamToml = await readFile(teamConfigFilePath(root), "utf8");
+    const crewToml = await readFile(crewConfigFilePath(root), "utf8");
 
     assert.equal(enabled.permissions.mode, "yolo");
     assert.equal(disabled.permissions.mode, "ask");
     assert.match(savedToml, /\[permissions\]\nmode = "ask"/);
     assert.doesNotMatch(savedToml, /\[model\]/);
     assert.match(modelsToml, /\[model\.single\.models\]/);
-    assert.match(teamToml, /\[\[team\]\]/);
+    assert.match(crewToml, /\[\[crew\]\]/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
