@@ -59,6 +59,14 @@ test("parseOpenAiStreamLine extracts streamed content deltas", () => {
   assert.deepEqual(event, { kind: "content", content: "hello" });
 });
 
+test("parseOpenAiStreamLine skips null content deltas", () => {
+  const event = parseOpenAiStreamLine(
+    'data: {"choices":[{"delta":{"content":null}}]}',
+  );
+
+  assert.deepEqual(event, { kind: "skip" });
+});
+
 test("parseOpenAiResponsesLine extracts streamed output text deltas", () => {
   const event = parseOpenAiResponsesLine(
     'data: {"type":"response.output_text.delta","delta":"hello"}',

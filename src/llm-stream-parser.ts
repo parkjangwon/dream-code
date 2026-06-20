@@ -10,7 +10,7 @@ export type StreamDataEvent =
 const chatChunkSchema = z.object({
   choices: z.array(z.object({
     delta: z.object({
-      content: z.string().optional(),
+      content: z.string().nullable().optional(),
     }).passthrough(),
   }).passthrough()),
 }).passthrough();
@@ -70,7 +70,7 @@ export function parseOpenAiStreamLine(line: string): StreamDataEvent {
   }
 
   const content = parsedChunk.data.choices[0]?.delta.content;
-  return content === undefined || content.length === 0
+  return content === undefined || content === null || content.length === 0
     ? { kind: "skip" }
     : { kind: "content", content };
 }
