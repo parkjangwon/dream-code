@@ -12,6 +12,8 @@ type CredentialSource =
   | { readonly kind: "saved" }
   | { readonly kind: "missing" };
 
+export type ProviderConnectionSource = CredentialSource["kind"];
+
 export function savedProviderIds(
   providers: Readonly<Record<string, ProviderCredential>>,
 ): ReadonlySet<string> {
@@ -29,13 +31,29 @@ export function formatProviderLine(
   credential: ProviderCredential | undefined,
   env: ProviderEnv,
 ): string {
-  const source = credentialSource(definition, credential, env);
+  const source = providerConnection(definition, credential, env);
   const status = formatCredentialSource(source);
   const regions = definition.regions.map((region) => region.id).join("/");
   return `${definition.id.padEnd(16)} ${definition.displayName.padEnd(18)} ${status.padEnd(12)} ${regions}\n`;
 }
 
-function credentialSource(
+export function isProviderConnected(
+  definition: ProviderDefinition,
+  credential: ProviderCredential | undefined,
+  env: ProviderEnv,
+): boolean {
+  return providerConnection(definition, credential, env).kind !== "missing";
+}
+
+export function providerConnectionSource(
+  definition: ProviderDefinition,
+  credential: ProviderCredential | undefined,
+  env: ProviderEnv,
+): ProviderConnectionSource {
+  return providerConnection(definition, credential, env).kind;
+}
+
+function providerConnection(
   definition: ProviderDefinition,
   credential: ProviderCredential | undefined,
   env: ProviderEnv,
