@@ -37,6 +37,7 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/models"), false);
   assert.equal(names.includes("/provider"), true);
   assert.equal(names.includes("/providers"), false);
+  assert.equal(names.includes("/agents"), true);
   assert.equal(names.includes("/session"), true);
   assert.equal(names.includes("/rename"), true);
   assert.equal(names.includes("/read"), false);

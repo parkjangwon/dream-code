@@ -13,6 +13,7 @@ export const slashCommands = [
   { name: "/provider", summary: "Switch provider or list connections", acceptsArgs: true },
   { name: "/login", summary: "Login to a provider", acceptsArgs: true },
   { name: "/skills", summary: "Show installed skills", acceptsArgs: false },
+  { name: "/agents", summary: "Manage running agents and crew", acceptsArgs: false },
   { name: "/session", summary: "Open saved sessions", acceptsArgs: false },
   { name: "/rename", summary: "Rename current session", acceptsArgs: true },
   { name: "/quit", summary: "Exit Dream Code", acceptsArgs: false },

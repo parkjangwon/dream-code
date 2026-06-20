@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -167,5 +167,35 @@ test("runWorkspaceCommand discards cancelled skill manager changes", async () =>
       process.env["HOME"] = originalHome;
     }
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand creates a project crew agent from a template", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const selections = ["crew", "code-reviewer", "project"];
+
+    await runWorkspaceCommand(
+      "/agents",
+      defaultConfig(),
+      true,
+      {
+        question: async () => "",
+        select: async () => selections.shift(),
+      },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const created = await readFile(join(projectRoot, ".dream", "agents", "code-reviewer.md"), "utf8");
+    assert.match(created, /displayName: Code Reviewer/u);
+    assert.match(created, /Review changes for bugs/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
   }
 });

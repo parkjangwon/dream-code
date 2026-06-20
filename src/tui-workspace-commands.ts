@@ -1,4 +1,4 @@
-import { stdout as output } from "node:process";
+import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
 import { runAgentPrompt } from "./agent-runner.js";
 import { ansi, paint, stripAnsi } from "./ansi.js";
@@ -10,6 +10,7 @@ import {
   type PermissionMode,
 } from "./config.js";
 import { appendSessionTurn } from "./session-store.js";
+import { showAgentsMenu } from "./tui-agent-commands.js";
 import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
@@ -44,6 +45,7 @@ export async function runWorkspaceCommand(
   questioner: Questioner,
   configRoot = defaultConfigRoot(),
   sessionRuntime?: SessionRuntime,
+  cwd = currentWorkingDirectory(),
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
@@ -114,6 +116,9 @@ export async function runWorkspaceCommand(
       };
     case "/skills":
       await showSkillMenu(configRoot, questioner);
+      return { config, shouldContinue: true };
+    case "/agents":
+      await showAgentsMenu(configRoot, questioner, cwd);
       return { config, shouldContinue: true };
     case "/read":
       await printFile(command.rest);
