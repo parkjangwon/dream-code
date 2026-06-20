@@ -47,7 +47,7 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/shell"), false);
   assert.equal(names.includes("/goal"), false);
   assert.equal(names.includes("/plan"), false);
-  assert.equal(names.includes("/swarm"), false);
+  assert.equal(names.includes("/swarm"), true);
   assert.equal(names.includes("/team"), false);
   assert.equal(names.includes("/research"), false);
   assert.equal(names.includes("/lsp"), false);

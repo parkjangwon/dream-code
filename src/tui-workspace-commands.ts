@@ -18,6 +18,7 @@ import { switchProvider } from "./tui-provider-switch.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
+import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { printScaffold } from "./tui-render.js";
 import {
   readWorkspaceFile,
@@ -120,6 +121,15 @@ export async function runWorkspaceCommand(
     case "/agents":
       await showAgentsMenu(config, configRoot, questioner, cwd);
       return { config, shouldContinue: true };
+    case "/swarm":
+      await runSwarmCommand({
+        config,
+        configRoot,
+        args: command.rest,
+        questioner,
+        cwd,
+      });
+      return { config, shouldContinue: true };
     case "/read":
       await printFile(command.rest);
       return { config, shouldContinue: true };
@@ -135,7 +145,6 @@ export async function runWorkspaceCommand(
     case "/goal":
     case "/plan":
     case "/interview":
-    case "/swarm":
     case "/team":
     case "/research":
     case "/lsp":

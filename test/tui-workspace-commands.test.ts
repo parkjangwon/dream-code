@@ -245,3 +245,45 @@ test("runWorkspaceCommand delegates a task to a selected agent", async () => {
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
+
+test("runWorkspaceCommand runs swarm fan-out separately from single agent delegation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-swarm-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-swarm-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const baseConfig = defaultConfig();
+    const config = {
+      ...baseConfig,
+      model: {
+        ...baseConfig.model,
+        single: {
+          ...baseConfig.model.single,
+          provider: "unknown-provider",
+        },
+      },
+    };
+
+    await runWorkspaceCommand(
+      "/swarm --max 3 Build the swarm runtime",
+      config,
+      true,
+      { question: async () => "" },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(outputText, /Dream Swarm/u);
+    assert.match(outputText, /3 parallel agents/u);
+    assert.match(outputText, /Swarm Synthesis/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
