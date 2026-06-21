@@ -47,6 +47,11 @@ export type PluginMarketplaceEntry = z.infer<typeof marketplacePluginSchema> & {
   readonly marketplace: string;
 };
 
+export type RemovePluginMarketplaceResult =
+  | { readonly kind: "removed"; readonly name: string }
+  | { readonly kind: "builtin"; readonly name: string }
+  | { readonly kind: "missing"; readonly name: string };
+
 const officialMarketplace: PluginMarketplaceRecord = {
   name: "claude-plugins-official",
   url: "https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json",
@@ -72,14 +77,27 @@ export async function savePluginMarketplace(root: string, name: string, url: str
   };
   const existing = (await loadSavedMarketplaces(root)).filter((item) => item.name !== record.name);
   const next = [...existing, record].sort((left, right) => left.name.localeCompare(right.name));
-  await mkdir(join(root, "plugins"), { recursive: true, mode: 0o700 });
-  await writeFile(pluginMarketplaceRegistryPath(root), `${JSON.stringify({ version: 1, marketplaces: next }, null, 2)}\n`, "utf8");
+  await writeSavedMarketplaces(root, next);
   return record;
 }
 
 export async function savePluginMarketplaceSource(root: string, source: string, cwd: string): Promise<PluginMarketplaceRecord> {
   const record = await resolveMarketplaceSource(source, cwd);
   return savePluginMarketplace(root, record.name, record.url, record.ref);
+}
+
+export async function removePluginMarketplace(root: string, name: string): Promise<RemovePluginMarketplaceResult> {
+  const normalizedName = normalizeName(name);
+  if (isOfficialMarketplaceName(normalizedName)) {
+    return { kind: "builtin", name: officialMarketplace.name };
+  }
+  const saved = await loadSavedMarketplaces(root);
+  const remaining = saved.filter((record) => record.name !== normalizedName);
+  if (remaining.length === saved.length) {
+    return { kind: "missing", name: normalizedName };
+  }
+  await writeSavedMarketplaces(root, remaining);
+  return { kind: "removed", name: normalizedName };
 }
 
 export async function searchMarketplacePlugins(root: string, query: string, cwd: string): Promise<readonly PluginMarketplaceEntry[]> {
@@ -123,6 +141,11 @@ async function loadSavedMarketplaces(root: string): Promise<readonly PluginMarke
     }
     throw error;
   }
+}
+
+async function writeSavedMarketplaces(root: string, records: readonly PluginMarketplaceRecord[]): Promise<void> {
+  await mkdir(join(root, "plugins"), { recursive: true, mode: 0o700 });
+  await writeFile(pluginMarketplaceRegistryPath(root), `${JSON.stringify({ version: 1, marketplaces: records }, null, 2)}\n`, "utf8");
 }
 
 async function loadMarketplaceEntries(marketplace: PluginMarketplaceRecord, cwd: string): Promise<readonly PluginMarketplaceEntry[]> {

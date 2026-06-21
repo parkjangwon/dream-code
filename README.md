@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.5)
+Dream Code (v0.1.6)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -90,8 +90,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.5
-git push origin v0.1.5
+git tag v0.1.6
+git push origin v0.1.6
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -100,7 +100,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.5 sh install.sh
+DREAM_CODE_VERSION=v0.1.6 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -128,8 +128,9 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Plugin import:** import Claude Code plugin packages into Dream Code skills,
   agents, command skills, and MCP settings with `/plugin install`.
 - **Plugin marketplaces:** install from the built-in
-  `claude-plugins-official` marketplace, add Claude-style marketplaces with
-  `/plugin marketplace add <source>`, and search plugins before installing.
+  `claude-plugins-official` marketplace, add/remove Claude-style marketplaces
+  with `/plugin marketplace add <source>` and the remove command, and search
+  plugins before installing.
 - **Context memory:** compact long sessions, keep checkpoints, inspect loaded
   context with `/context`, and preserve task progress without flooding every
   request.
@@ -184,17 +185,23 @@ Dream Code can import Claude Code plugins and marketplaces.
 
 ```text
 /plugin marketplace
+/plugin marketplace list
 /plugin search commit
 /plugin install superpowers@claude-plugins-official
+/plugin list
+/plugin uninstall superpowers
 /plugin marketplace add anthropics/claude-code
 /plugin marketplace add ~/plugins/my-marketplace
 /plugin marketplace add internal https://example.com/marketplace.json
+/plugin marketplace remove internal
 ```
 
 The built-in official marketplace is named `claude-plugins-official`; `official`
 is kept as a short alias. Marketplace sources can be local files/directories,
 HTTP JSON URLs, GitHub shorthands like `owner/repo@ref`, or git URLs with
-`#ref`.
+`#ref`. `/plugin list` shows installed plugins; `/plugin uninstall <plugin>`
+removes the plugin source, imported skills, imported agents, imported command
+skills, and imported MCP server blocks.
 
 ## Cron
 
@@ -282,7 +289,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /notifications Toggle native completion and permission alerts
 /permission  Set ask, auto, plan, or yolo permission mode
 /plan         Create an implementation plan
-/plugin       Import Claude plugin packages
+/plugin       Manage Claude plugins and marketplaces
 /provider     Switch, list, enable, or disable providers
 /rename       Rename current session
 /research     Research with source discipline
@@ -342,7 +349,9 @@ Enter       Submit input or choose a menu item
 - `@skill` autocomplete and explicit skill activation
 - Claude plugin import for skills, agents, commands, and `.mcp.json`
 - Claude plugin marketplace install from `claude-plugins-official` plus
-  `/plugin marketplace add <source>`
+  `/plugin marketplace add <source>` and `/plugin marketplace remove <name>`
+- Installed plugin listing and uninstall cleanup through `/plugin list` and
+  `/plugin uninstall <plugin>`
 - Custom agents and running-agent inboxes
 - Dream Swarm fan-out with live monitor
 - Swarm synthesis artifacts and memory absorption

@@ -2,21 +2,29 @@ import { installClaudePlugin, installResolvedClaudePlugin } from "./plugin-insta
 import {
   loadPluginMarketplaces,
   type PluginMarketplaceEntry,
+  removePluginMarketplace,
+  type RemovePluginMarketplaceResult,
   resolveMarketplacePlugin,
   savePluginMarketplace,
   savePluginMarketplaceSource,
   searchMarketplacePlugins,
 } from "./plugin-marketplace.js";
 import { loadPluginRecords, type PluginRecord } from "./plugin-registry.js";
+import { uninstallPlugin, type PluginUninstallResult } from "./plugin-uninstaller.js";
 
 export async function runPluginCommand(configRoot: string, args: string, cwd: string): Promise<string> {
   const trimmed = args.trim();
-  if (trimmed === "" || trimmed === "list") {
+  if (trimmed === "" || trimmed === "list" || trimmed === "installed") {
     return formatPluginList(await loadPluginRecords(configRoot));
   }
 
-  if (trimmed === "marketplace") {
+  if (trimmed === "marketplace" || trimmed === "marketplace list") {
     return formatMarketplaces(await loadPluginMarketplaces(configRoot));
+  }
+
+  const marketplaceRemove = parseMarketplaceRemove(trimmed);
+  if (marketplaceRemove !== undefined) {
+    return formatMarketplaceRemove(await removePluginMarketplace(configRoot, marketplaceRemove));
   }
 
   const marketplaceAdd = parseMarketplaceAdd(trimmed);
@@ -32,6 +40,11 @@ export async function runPluginCommand(configRoot: string, args: string, cwd: st
     return formatMarketplaceSearch(await searchMarketplacePlugins(configRoot, searchQuery, cwd));
   }
 
+  const uninstallSpec = parseUninstallSpec(trimmed);
+  if (uninstallSpec !== undefined) {
+    return formatPluginUninstall(await uninstallPlugin(configRoot, uninstallSpec));
+  }
+
   const installSource = parseInstallSource(trimmed);
   if (installSource === undefined) {
     return [
@@ -40,7 +53,9 @@ export async function runPluginCommand(configRoot: string, args: string, cwd: st
       "       /plugin marketplace",
       "       /plugin marketplace add <source>",
       "       /plugin marketplace add <name> <marketplace-json-url-or-path>",
+      "       /plugin marketplace remove <name>",
       "       /plugin search <query>",
+      "       /plugin uninstall <plugin>",
       "",
     ].join("\n");
   }
@@ -55,6 +70,17 @@ export async function runPluginCommand(configRoot: string, args: string, cwd: st
     `path ${result.pluginRoot}`,
     `imported ${record.skills} skill(s), ${record.agents} agent(s), ${record.commands} command(s), ${record.mcpServers} MCP server(s)`,
     "Use /skills, /agents, and /mcp to review imported capabilities.",
+    "",
+  ].join("\n");
+}
+
+function formatPluginUninstall(result: PluginUninstallResult): string {
+  if (result.kind === "missing") {
+    return `plugin uninstall skipped: ${result.spec} is not installed\n`;
+  }
+  return [
+    `plugin uninstalled: ${result.record.name}`,
+    `removed ${result.removedSkills} skill(s), ${result.removedAgents} agent(s), ${result.removedMcpServers} MCP server(s)`,
     "",
   ].join("\n");
 }
@@ -78,6 +104,19 @@ function formatMarketplaces(records: readonly { readonly name: string; readonly 
   ].join("\n");
 }
 
+function formatMarketplaceRemove(result: RemovePluginMarketplaceResult): string {
+  switch (result.kind) {
+    case "removed":
+      return `marketplace removed: ${result.name}\n`;
+    case "builtin":
+      return `marketplace remove skipped: ${result.name} is built in\n`;
+    case "missing":
+      return `marketplace remove skipped: ${result.name} was not saved\n`;
+    default:
+      return assertNever(result);
+  }
+}
+
 function formatMarketplaceSearch(entries: readonly PluginMarketplaceEntry[]): string {
   if (entries.length === 0) {
     return "Plugin search\nNo marketplace plugins found.\n";
@@ -99,6 +138,12 @@ function parseInstallSource(args: string): string | undefined {
   return source === "" ? undefined : source;
 }
 
+function parseUninstallSpec(args: string): string | undefined {
+  const match = /^(?:uninstall|remove|delete)\s+(.+)$/u.exec(args);
+  const spec = match?.[1]?.trim();
+  return spec === undefined || spec === "" ? undefined : spec;
+}
+
 type MarketplaceAdd =
   | { readonly kind: "legacy"; readonly name: string; readonly url: string }
   | { readonly kind: "source"; readonly source: string };
@@ -116,6 +161,12 @@ function parseMarketplaceAdd(args: string): MarketplaceAdd | undefined {
   return { kind: "source", source: rest };
 }
 
+function parseMarketplaceRemove(args: string): string | undefined {
+  const match = /^market(?:place)?\s+(?:remove|delete)\s+(.+)$/u.exec(args);
+  const name = match?.[1]?.trim();
+  return name === undefined || name === "" ? undefined : name;
+}
+
 function parseSearchQuery(args: string): string | undefined {
   const match = /^search(?:\s+(.+))?$/u.exec(args);
   return match === null ? undefined : (match[1] ?? "");
@@ -123,4 +174,8 @@ function parseSearchQuery(args: string): string | undefined {
 
 function looksLikeMarketplaceName(value: string): boolean {
   return /^[a-zA-Z0-9._-]+$/u.test(value);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected plugin command result: ${String(value)}`);
 }
