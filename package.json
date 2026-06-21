@@ -2,12 +2,16 @@
   "name": "dream-code",
   "version": "0.1.0",
   "description": "Termux-first coding harness CLI. Even while you sleep, your dreams keep building.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "dream": "./dist/src/cli.js"
   },
   "files": [
     "dist",
+    "install.sh",
+    "uninstall.sh",
+    "LICENSE",
     "ROADMAP.md",
     "README.md"
   ],
@@ -16,7 +20,8 @@
     "build": "npm run clean && tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/test/*.test.js",
     "start": "node dist/src/cli.js",
-    "check": "npm run test"
+    "check": "npm run test",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "undici": "^8.5.0",
@@ -28,6 +33,5 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  },
-  "packageManager": "pnpm@11.5.0"
+  }
 }
