@@ -3,6 +3,7 @@ import type { SelectedModel } from "./model-routing.js";
 import { createThinkingAnimation } from "./thinking-animation.js";
 import type { IntervalClearer, IntervalScheduler } from "./thinking-animation.js";
 import { highlightCodeLine } from "./tui-code-highlight.js";
+import { createDreamToolBlockCollapser } from "./tui-dream-tool-collapse.js";
 import {
   isMarkdownTableDivider,
   isMarkdownTableRow,
@@ -43,6 +44,7 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
   let lineBuffer = "";
   let markdownState: MarkdownState = { kind: "text" };
   let tableBuffer: readonly string[] = [];
+  const toolBlockCollapser = createDreamToolBlockCollapser();
 
   const model = modelLabel(options.selectedModel);
   const thinkingAnimation = createThinkingAnimation({
@@ -85,20 +87,28 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
     flushTable();
   };
 
+  const renderToken = (token: string): void => {
+    if (token.length === 0) {
+      return;
+    }
+    if (!receivedToken) {
+      receivedToken = true;
+      thinkingAnimation.stop();
+      options.write(`${paint("⣿", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
+    }
+    characterCount += token.length;
+    lineBuffer = writeBufferedLines(token, lineBuffer, writeLine);
+  };
+
   return {
     start: () => {
       thinkingAnimation.start();
     },
     token: (token) => {
-      if (!receivedToken) {
-        receivedToken = true;
-        thinkingAnimation.stop();
-        options.write(`${paint("⣿", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
-      }
-      characterCount += token.length;
-      lineBuffer = writeBufferedLines(token, lineBuffer, writeLine);
+      renderToken(toolBlockCollapser.chunk(token));
     },
     finish: () => {
+      renderToken(toolBlockCollapser.flush());
       thinkingAnimation.stop();
       if (!receivedToken) {
         options.write(`${paint("●", ansi.green)} ${paint("Dream", ansi.bold)}\n`);

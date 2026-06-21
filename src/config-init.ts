@@ -11,6 +11,7 @@ export type DreamHomeInitResult = {
 const initialDirectories = [
   "artifacts",
   "compacts",
+  join("cron", "runs"),
   "exports",
   "plugins",
   "sessions",

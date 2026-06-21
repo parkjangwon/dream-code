@@ -51,6 +51,21 @@ export async function notifySwarmComplete(
   });
 }
 
+export async function notifyCronComplete(
+  config: DreamConfig,
+  jobName: string,
+  status: "completed" | "failed",
+): Promise<boolean> {
+  if (!config.notifications.enabled || !config.notifications.completion) {
+    return false;
+  }
+  return sendNativeNotification({
+    kind: "completion",
+    title: status === "completed" ? "Dream Cron complete" : "Dream Cron failed",
+    body: `${jobName} ${status}.`,
+  });
+}
+
 export async function notifyPermissionRequired(
   configRoot: string,
   toolLabel: string,

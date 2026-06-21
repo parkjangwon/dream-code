@@ -154,6 +154,54 @@ test("agent response session renders fenced code blocks", () => {
   assert.equal(rawOutput.includes(paint("ls -la /tmp", ansi.yellow)), true);
 });
 
+test("agent response session collapses dream-tool blocks by default", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token([
+    "Checking files.\n",
+    "```dream-tool\n",
+    "{\"tool\":\"write\",\"path\":\"package.json\",\"content\":\"large hidden content\"}\n",
+    "{\"tool\":\"shell\",\"command\":\"find . -maxdepth 2 -type f\"}\n",
+    "```\n",
+    "Continuing.",
+  ].join(""));
+  session.finish();
+
+  const output = stripAnsi(chunks.join(""));
+  assert.match(output, /│ Checking files\./u);
+  assert.match(output, /│ ◇ Tools queued · 2 calls/u);
+  assert.match(output, /│ Continuing\./u);
+  assert.doesNotMatch(output, /package\.json/u);
+  assert.doesNotMatch(output, /large hidden content/u);
+  assert.doesNotMatch(output, /find \./u);
+});
+
+test("agent response session collapses dream-tool blocks across token boundaries", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("```dream");
+  session.token("-tool\n{\"tool\":\"read\",\"path\":\"README.md\"}\n");
+  session.token("```\nDone");
+  session.finish();
+
+  const output = stripAnsi(chunks.join(""));
+  assert.match(output, /│ ◇ Tools queued · 1 call/u);
+  assert.match(output, /│ Done/u);
+  assert.doesNotMatch(output, /README\.md/u);
+});
+
 test("agent response session highlights fenced code by language", () => {
   const chunks: string[] = [];
   const session = createAgentResponseSession({

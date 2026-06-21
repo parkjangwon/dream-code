@@ -12,6 +12,7 @@ export const slashCommands = [
   { name: "/btw", summary: "Ask a side question", acceptsArgs: true },
   { name: "/compact", summary: "Compact current session context", acceptsArgs: false },
   { name: "/copy", summary: "Copy last response", acceptsArgs: true },
+  { name: "/cron", summary: "Manage scheduled agent work", acceptsArgs: true },
   { name: "/doctor", summary: "Check local tools", acceptsArgs: false },
   { name: "/exit", summary: "Exit Dream Code", acceptsArgs: false },
   { name: "/export", summary: "Export current conversation", acceptsArgs: false },

@@ -6,8 +6,8 @@
 
 Dream Code is a fast, Termux-first coding harness CLI. It keeps the base small
 and the TUI smooth, while giving you the power tools expected from modern coding
-agents: durable sessions, model routing, skills, agents, swarm fan-out, compact
-context, workflow recipes, and YOLO mode.
+agents: durable sessions, model routing, skills, agents, swarm fan-out, cron
+automation, compact context, workflow recipes, and YOLO mode.
 
 ```text
 Dream Code (v0.1.0)
@@ -96,6 +96,8 @@ DREAM_CODE_SOURCE=1 sh install.sh
   progress without flooding every request.
 - **Native notifications:** completion and permission-required alerts through
   standard OS notification tools, with hook-friendly command overrides.
+- **Cron automation:** schedule recurring agent work from the TUI, run it from a
+  background daemon, and let jobs call normal prompts, `/workflow`, or `/swarm`.
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
   `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
   templates.
@@ -135,6 +137,38 @@ Without `--size`, Dream Code uses adaptive fan-out. With `--size N`, Dream Code
 forces exactly `N` swarm lanes, useful when you want to push a large job hard and
 spend more tokens for faster parallel coverage.
 
+## Cron
+
+Cron schedules recurring Dream Code work. Jobs are grouped by one project level,
+stored in `~/.dream/dream.db`, and each run writes a Markdown artifact under
+`~/.dream/cron/runs/`.
+
+Inside the TUI:
+
+```text
+/cron
+/cron every day at 09:00 run tests and summarize failures
+/cron every day at 02:00 /swarm --size 8 audit this project
+/cron 0 8 * * * /workflow .dream/workflows/morning.js
+```
+
+From the shell:
+
+```sh
+dream cron list
+dream cron add "every day at 09:00 run tests"
+dream cron pause nightly
+dream cron resume nightly
+dream cron run nightly
+dream cron project list
+dream daemon run-once
+dream daemon run --interval 60
+```
+
+Use your OS service manager to keep the daemon alive, such as systemd on Linux,
+launchd on macOS, a Termux boot/service setup on Android, or Task Scheduler on
+Windows.
+
 ## Commands
 
 ```text
@@ -145,6 +179,7 @@ spend more tokens for faster parallel coverage.
 /btw          Ask a side question
 /compact      Compact current session context
 /copy         Copy the latest assistant response
+/cron         Manage scheduled agent work
 /doctor       Check local tools
 /exit         Exit Dream Code
 /export       Export the current conversation
@@ -218,6 +253,7 @@ Enter       Submit input or choose a menu item
 - Memory layers: project memory, checkpoint, task progress
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
+- Daemon-backed cron jobs for recurring prompts, workflows, and swarms
 - Agent file tools for list, search, read, mkdir, write, edit, and delete
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
@@ -247,6 +283,8 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/sessions/               session state and wire logs
 ~/.dream/tasks.jsonl             task ledger
 ~/.dream/model_telemetry.jsonl   model routing health log
+~/.dream/dream.db                SQLite store for cron projects, jobs, and runs
+~/.dream/cron/runs/              cron run Markdown artifacts
 ~/.dream/artifacts/              generated artifacts
 ~/.dream/plugins/                imported Claude plugin sources and registry
 ~/.dream/workflows/runs/         workflow run traces

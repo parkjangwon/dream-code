@@ -2,13 +2,15 @@
 import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
 import { initializeDreamHome } from "./config-init.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
+import { runCliCronCommand, runCliDaemonCommand } from "./cron-cli.js";
 import { runTui } from "./tui.js";
 
-type CliCommand = "tui" | "doctor" | "help" | "init" | "version";
+type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "version";
 
 type ParsedArgs = {
   readonly command: CliCommand;
   readonly oneShotYolo: boolean;
+  readonly rest: readonly string[];
 };
 
 async function main(): Promise<void> {
@@ -17,6 +19,12 @@ async function main(): Promise<void> {
   switch (parsedArgs.command) {
     case "tui":
       await runTui({ oneShotYolo: parsedArgs.oneShotYolo });
+      return;
+    case "cron":
+      await runCliCronCommand(parsedArgs.rest);
+      return;
+    case "daemon":
+      await runCliDaemonCommand(parsedArgs.rest);
       return;
     case "doctor":
       console.log(summarizeDoctor(await runDoctor()));
@@ -40,8 +48,9 @@ async function main(): Promise<void> {
 function parseArgs(args: readonly string[]): ParsedArgs {
   let command: CliCommand = "tui";
   let oneShotYolo = false;
+  const rest: string[] = [];
 
-  for (const arg of args) {
+  for (const [index, arg] of args.entries()) {
     switch (arg) {
       case "--yolo":
         oneShotYolo = true;
@@ -49,6 +58,14 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       case "doctor":
         command = "doctor";
         break;
+      case "cron":
+        command = "cron";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest };
+      case "daemon":
+        command = "daemon";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest };
       case "init":
         command = "init";
         break;
@@ -66,7 +83,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     }
   }
 
-  return { command, oneShotYolo };
+  return { command, oneShotYolo, rest };
 }
 
 function printHelp(): void {
@@ -77,6 +94,8 @@ function printHelp(): void {
     "Usage:",
     "  dream             open the TUI",
     "  dream --yolo      open the TUI with one-shot unconditional bypass",
+    "  dream cron list   list scheduled agent jobs",
+    "  dream daemon run-once  execute due cron jobs once",
     "  dream doctor      check local tool availability",
     "  dream init        initialize ~/.dream files",
     "  dream --version   print the version",
