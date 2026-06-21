@@ -7,7 +7,7 @@ export function brailleSpinner(frame: number): string {
 }
 
 export function brailleActivity(frame: number): string {
-  return ".".repeat(positiveModulo(frame, 4));
+  return ".".repeat(positiveModulo(frame, 6)).padEnd(5, " ");
 }
 
 export function brailleProgressBar(status: BrailleProgressStatus, frame = 0): string {
