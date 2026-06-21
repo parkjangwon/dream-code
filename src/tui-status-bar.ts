@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { basename } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
 import { ansi, paint } from "./ansi.js";
@@ -53,8 +54,31 @@ export function renderBottomStatusLines(input: BottomStatusInput): readonly stri
 }
 
 async function estimateSessionContextTokens(root: string, sessionId: string): Promise<number> {
+  const compact = await readOptionalCompact(root, sessionId);
+  if (compact !== undefined) {
+    return estimateTokens(compact);
+  }
   const session = (await listSessions(root)).find((item) => item.id === sessionId);
   const chars = session?.turns.reduce((total, turn) => total + turn.content.length, 0) ?? 0;
+  return estimateTokensByChars(chars);
+}
+
+async function readOptionalCompact(root: string, sessionId: string): Promise<string | undefined> {
+  try {
+    return await readFile(join(root, "compacts", `${sessionId}.md`), "utf8");
+  } catch (error: unknown) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function estimateTokens(text: string): number {
+  return estimateTokensByChars(text.length);
+}
+
+function estimateTokensByChars(chars: number): number {
   return Math.ceil(chars / 4);
 }
 
@@ -86,4 +110,12 @@ function permissionLabel(mode: PermissionMode): string {
 
 function permissionColor(permission: string): string {
   return permission === "YOLO" ? paint("YOLO bypass permissions on", ansi.red) : paint(permission, ansi.guide);
+}
+
+type ErrnoException = Error & {
+  readonly code: string;
+};
+
+function isErrnoException(error: unknown): error is ErrnoException {
+  return error instanceof Error && "code" in error && typeof error.code === "string";
 }

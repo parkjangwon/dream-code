@@ -36,6 +36,7 @@ test("utility commands show rules, compact, export, and logout state", async () 
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Rules/u);
     assert.match(outputText, /Project rules/u);
+    assert.match(outputText, /compacting session context/u);
     assert.match(outputText, /compact failed:/u);
     assert.match(outputText, /exported:/u);
     assert.match(outputText, /logged out: deepseek/u);

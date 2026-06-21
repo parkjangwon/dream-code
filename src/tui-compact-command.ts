@@ -1,6 +1,7 @@
 import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
+import { brailleSpinner } from "./braille-ui.js";
 import { createLlmCompactSummarizer } from "./compact-summarizer.js";
 import type { DreamConfig } from "./config.js";
 import { ProviderProtocolError, ProviderRequestError, MissingProviderConfigError } from "./llm-provider.js";
@@ -12,6 +13,7 @@ export async function runCompactCommand(options: {
   readonly sessionId: string;
 }): Promise<void> {
   try {
+    output.write(`${paint(brailleSpinner(0), ansi.accent)} ${paint("compacting session context...", ansi.dim)}\n`);
     const result = await compactCurrentSession(options.configRoot, options.sessionId, {
       summarizer: createLlmCompactSummarizer(options.config, options.configRoot),
     });
