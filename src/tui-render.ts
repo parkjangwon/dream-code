@@ -4,7 +4,7 @@ import { cwd, stdout as output } from "node:process";
 import { ansi, clearScreen, paint } from "./ansi.js";
 import { resolveEffectivePermissionMode, type DreamConfig, type PermissionMode } from "./config.js";
 import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
-import { describeModelMode, selectSingleProviderModel } from "./model-routing.js";
+import { describeModelMode } from "./model-routing.js";
 import { renderDreamLogo } from "./tui-logo.js";
 
 export function renderHeader(config: DreamConfig, oneShotYolo: boolean): void {
@@ -72,26 +72,18 @@ export function formatPermissionMode(mode: PermissionMode, oneShotYolo: boolean)
 }
 
 export function renderHeaderPanel(
-  config: DreamConfig,
-  oneShotYolo: boolean,
+  _config: DreamConfig,
+  _oneShotYolo: boolean,
   terminalWidth: number,
 ): readonly string[] {
   const width = Math.max(64, terminalWidth);
   const contentWidth = width - 2;
   const infoWidth = Math.max(20, contentWidth - 13);
   const logoRows = renderDreamLogo();
-  const permissionMode = resolveEffectivePermissionMode(config, oneShotYolo);
   const infoRows = [
     paint(`Welcome to Dream Code ${DREAM_VERSION}!`, ansi.accent + ansi.bold),
     paint(truncateText(DREAM_SIGNATURE, infoWidth), ansi.dim),
     infoLine("Directory:", formatWorkspacePath(), infoWidth),
-    infoLine("Model:", formatModelSummary(config), infoWidth),
-    infoLine(
-      "Permission:",
-      permissionModeText(permissionMode, oneShotYolo),
-      infoWidth,
-      permissionMode === "yolo" ? ansi.red : ansi.blue,
-    ),
   ] as const;
 
   return logoRows.map((logoRow, index) => {
@@ -99,23 +91,10 @@ export function renderHeaderPanel(
   });
 }
 
-function formatModelSummary(config: DreamConfig): string {
-  if (config.model.mode === "single") {
-    const selected = selectSingleProviderModel(config.model.single);
-    return `${selected.provider} ${selected.model} (${titleCase(selected.tier)})`;
-  }
-
-  return describeModelMode(config.model);
-}
-
 function formatWorkspacePath(): string {
   const home = homedir();
   const current = cwd();
   return current.startsWith(home) ? `~${current.slice(home.length)}` : current;
-}
-
-function titleCase(value: string): string {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
 function permissionModeText(mode: PermissionMode, oneShotYolo: boolean): string {

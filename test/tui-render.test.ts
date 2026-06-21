@@ -11,9 +11,12 @@ test("header panel keeps upper guide lines transparent while primary color is un
   assert.match(panel[0] ?? "", /Welcome to Dream Code/);
 });
 
-test("header panel highlights yolo permission as a warning", () => {
+test("header panel omits model and permission details", () => {
   const panel = renderHeaderPanel(defaultConfig(), true, 80);
+  const text = panel.join("\n");
 
-  assert.equal(panel.some((line) => line.includes("YOLO ON")), true);
-  assert.equal(panel.some((line) => line.includes("\u001B[38;5;203m")), true);
+  assert.match(text, /Directory:/u);
+  assert.doesNotMatch(text, /Model:/u);
+  assert.doesNotMatch(text, /Permission:/u);
+  assert.doesNotMatch(text, /YOLO ON/u);
 });
