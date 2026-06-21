@@ -43,7 +43,8 @@ test("renderBottomStatusLines marks auto routing mode", () => {
     permission: "ASK",
   }).map(stripAnsi);
 
-  assert.match(lines.join("\n"), /\[AUTO deepseek\/deepseek-v4-flash · low\]/u);
+  assert.match(lines.join("\n"), /\[AUTO routing\]/u);
+  assert.doesNotMatch(lines.join("\n"), /deepseek\/deepseek-v4-flash/u);
 });
 
 test("buildBottomStatusLines estimates context from compact summary when present", async () => {

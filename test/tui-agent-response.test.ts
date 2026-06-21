@@ -43,6 +43,29 @@ test("agent response session renders provider errors as a response block", () =>
   assert.match(output, /│ Missing API key/);
 });
 
+test("agent response session hides concrete model names for auto routes", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: {
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      tier: "low",
+      reason: "auto category: Quick",
+      category: "quick",
+    },
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("Hi");
+  session.finish();
+
+  const output = stripAnsi(chunks.join(""));
+  assert.match(output, /AUTO quick · low/u);
+  assert.doesNotMatch(output, /deepseek-v4-flash/u);
+});
+
 test("agent response session animates thinking in place until the first token", () => {
   const chunks: string[] = [];
   const ticks: Array<() => void> = [];

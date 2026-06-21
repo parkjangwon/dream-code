@@ -144,6 +144,10 @@ function writeBufferedLines(
 }
 
 function modelLabel(selectedModel: SelectedModel): string {
+  if (selectedModel.reason.startsWith("auto ")) {
+    const lane = selectedModel.agent ?? selectedModel.category ?? "routing";
+    return `AUTO ${lane} · ${selectedModel.tier}`;
+  }
   return `${selectedModel.provider}/${selectedModel.model} · ${selectedModel.tier}`;
 }
 

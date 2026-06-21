@@ -99,7 +99,7 @@ test("selectModelForPrompt skips disconnected category candidates", () => {
 });
 
 test("selectModelForPrompt skips unhealthy auto category candidates", () => {
-  const selected = selectModelForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "Summarize this note", undefined, {
     connectedProviders: new Set(["gemini", "deepseek", "openai"]),
     unhealthyModels: new Set(["gemini/gemini-3.5-flash", "deepseek/deepseek-v4-flash"]),
   });
@@ -136,6 +136,17 @@ test("selectModelCandidatesForPrompt routes swarm synthesis through the agent pr
   assert.equal(selected[0]?.provider, "openai");
   assert.equal(selected[0]?.model, "gpt-5.5");
   assert.equal(selected[1]?.provider, "deepseek");
+});
+
+test("selectModelForPrompt routes Korean project analysis to a deep model", () => {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "프로젝트 분석", undefined, {
+    connectedProviders: new Set(["deepseek", "openai"]),
+  });
+
+  assert.equal(selected.category, "deep");
+  assert.equal(selected.tier, "high");
+  assert.equal(selected.provider, "deepseek");
+  assert.equal(selected.model, "deepseek-v4-pro");
 });
 
 test("bootstrapAutoModelConfig uses live catalog models for connected providers", () => {
@@ -193,7 +204,7 @@ test("bootstrapAutoModelConfig builds route chains from every connected provider
 });
 
 test("selectModelCandidatesForPrompt excludes failed models for same-turn failover", () => {
-  const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
+  const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Summarize this note", undefined, {
     connectedProviders: new Set(["gemini", "deepseek", "openai"]),
     excludedModels: new Set(["gemini/gemini-3.5-flash"]),
   });
@@ -205,7 +216,7 @@ test("selectModelCandidatesForPrompt excludes failed models for same-turn failov
 
 test("classifyPromptCategory and route preview expose routing decisions", () => {
   assert.equal(classifyPromptCategory("Write release notes"), "writing");
-  assert.match(formatRoutePreview(defaultAutoConfig(), "Explain this repository", {
+  assert.match(formatRoutePreview(defaultAutoConfig(), "Summarize this document", {
     connectedProviders: new Set(["gemini"]),
   }), /reader -> gemini\/gemini-3\.5-flash/u);
 });

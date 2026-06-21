@@ -28,6 +28,25 @@ test("extractAgentToolRequests parses JSONL dream-tool blocks", () => {
   assert.equal(requests[3]?.tool, "mcp");
 });
 
+test("extractAgentToolRequests recovers bare tool JSON objects", () => {
+  const requests = extractAgentToolRequests([
+    "{\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"shell\",\"command\":\"ls -la\"}",
+  ].join("\n"));
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0]?.tool, "read");
+  assert.equal(requests[1]?.tool, "shell");
+});
+
+test("extractAgentToolRequests recovers simple single-quoted tool objects", () => {
+  const requests = extractAgentToolRequests("{'tool':'read','path':'package.json'}{'tool':'shell','command':'pwd'}");
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0]?.tool, "read");
+  assert.equal(requests[1]?.tool, "shell");
+});
+
 test("runAgentToolRequest gates shell tools behind yolo permission", async () => {
   const result = await runAgentToolRequest({ tool: "shell", command: "echo no" }, "ask");
 

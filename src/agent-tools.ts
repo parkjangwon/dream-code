@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { z } from "zod";
 
+import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
+import { toolRequestSchema } from "./agent-tool-schema.js";
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
@@ -12,35 +13,8 @@ import {
 import { runResearch } from "./research-tool.js";
 import { riskyShellReason } from "./shell-safety.js";
 
-const toolNameSchema = z.enum(["read", "research", "shell", "write", "edit", "mcp"]);
-const toolRequestBaseSchema = z.object({ id: z.string().min(1).optional() });
-const readRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("read"), path: z.string().min(1) });
-const researchRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("research"), query: z.string().min(1) });
-const shellRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("shell"), command: z.string().min(1) });
-const writeRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("write"), path: z.string().min(1), content: z.string() });
-const mcpRequestSchema = toolRequestBaseSchema.extend({
-  tool: z.literal("mcp"),
-  server: z.string().min(1),
-  name: z.string().min(1),
-  arguments: z.record(z.string(), z.unknown()).optional(),
-});
-const editRequestSchema = toolRequestBaseSchema.extend({
-  tool: z.literal("edit"),
-  path: z.string().min(1),
-  search: z.string().min(1),
-  replace: z.string(),
-});
-const toolRequestSchema = z.discriminatedUnion("tool", [
-  readRequestSchema,
-  researchRequestSchema,
-  shellRequestSchema,
-  writeRequestSchema,
-  editRequestSchema,
-  mcpRequestSchema,
-]);
+export type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
 
-export type AgentToolName = z.infer<typeof toolNameSchema>;
-export type AgentToolRequest = z.infer<typeof toolRequestSchema>;
 export type AgentToolResult = {
   readonly request: AgentToolRequest;
   readonly ok: boolean;
@@ -59,9 +33,10 @@ const maxShellOutput = 12_000;
 const defaultShellTimeoutMs = 120_000;
 
 export function extractAgentToolRequests(text: string): readonly AgentToolRequest[] {
-  return [...text.matchAll(/```dream-tool\s*\n([\s\S]*?)```/gu)]
+  const fenced = [...text.matchAll(/```dream-tool\s*\n([\s\S]*?)```/gu)]
     .flatMap((match) => parseToolLines(match[1] ?? ""))
     .slice(0, 8);
+  return fenced.length > 0 ? fenced : parseBareToolObjects(text).slice(0, 8);
 }
 
 export async function runAgentToolRequest(
@@ -135,15 +110,47 @@ function parseToolLines(raw: string): readonly AgentToolRequest[] {
 
 function parseToolLine(line: string): readonly AgentToolRequest[] {
   try {
-    const parsedJson: unknown = JSON.parse(line);
-    const parsed = toolRequestSchema.safeParse(parsedJson);
-    return parsed.success ? [parsed.data] : [];
+    return parseToolJson(line);
   } catch (error) {
     if (error instanceof SyntaxError) {
       return [];
     }
     throw error;
   }
+}
+
+function parseBareToolObjects(text: string): readonly AgentToolRequest[] {
+  if (!/["']tool["']\s*:/u.test(text)) {
+    return [];
+  }
+  return [...text.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/gu)]
+    .flatMap((match) => parseToolJson(match[0] ?? ""));
+}
+
+function parseToolJson(raw: string): readonly AgentToolRequest[] {
+  const parsedJson = parseJsonObject(raw) ?? parseJsonObject(normalizeLooseJson(raw));
+  const parsed = toolRequestSchema.safeParse(parsedJson);
+  return parsed.success ? [parsed.data] : [];
+}
+
+function parseJsonObject(raw: string | undefined): unknown {
+  if (raw === undefined) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function normalizeLooseJson(raw: string): string {
+  return raw.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/gu, (_match, value: string) => {
+    return JSON.stringify(value.replace(/\\'/gu, "'"));
+  });
 }
 
 function runShellCapture(

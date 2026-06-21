@@ -8,7 +8,7 @@ export function defaultAutoCategories(): readonly AutoModelCategoryRoute[] {
       "gemini/gemini-3.5-flash",
       "groq/llama-3.3-70b-versatile",
     ]),
-    categoryRoute("reader", "Reader", "low", ["analyze", "explain", "summarize", "what is", "how does", "\uBD84\uC11D", "\uC124\uBA85", "\uC694\uC57D"], [
+    categoryRoute("reader", "Reader", "low", ["explain", "summarize", "what is", "how does", "\uC124\uBA85", "\uC694\uC57D"], [
       "gemini/gemini-3.5-flash",
       "deepseek/deepseek-v4-flash",
       "openai/gpt-5.4-mini",
@@ -18,7 +18,7 @@ export function defaultAutoCategories(): readonly AutoModelCategoryRoute[] {
       "openai/gpt-5.5",
       "deepseek/deepseek-v4-pro",
     ]),
-    categoryRoute("deep", "Deep", "high", ["implement", "debug", "refactor", "fix", "test", "backend", "typescript", "\uAD6C\uD604", "\uC218\uC815", "\uB9AC\uD329\uD130", "\uB514\uBC84\uADF8"], [
+    categoryRoute("deep", "Deep", "high", ["implement", "debug", "refactor", "fix", "test", "backend", "typescript", "analyze", "repository", "codebase", "repo", "project analysis", "\uAD6C\uD604", "\uC218\uC815", "\uB9AC\uD329\uD130", "\uB514\uBC84\uADF8", "\uBD84\uC11D", "\uD504\uB85C\uC81D\uD2B8 \uBD84\uC11D", "\uCF54\uB4DC \uBD84\uC11D", "\uAD6C\uC870 \uBD84\uC11D", "\uB808\uD3EC \uBD84\uC11D", "\uC800\uC7A5\uC18C \uBD84\uC11D"], [
       "deepseek/deepseek-v4-pro",
       "openai/gpt-5.3-codex",
       "opencode-go/kimi-k2.7-code",

@@ -48,6 +48,7 @@ function formatToolProtocol(): string {
   return [
     "Local tool protocol:",
     "When local project data is required, request tools in a fenced block named dream-tool.",
+    "Never print bare tool JSON outside that fence.",
     "Each line must be one JSON object:",
     "{\"tool\":\"read\",\"path\":\"README.md\"}",
     "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
