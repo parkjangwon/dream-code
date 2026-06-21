@@ -1,6 +1,8 @@
 import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
 import type { DreamConfig } from "./config.js";
+import { ansi, paint } from "./ansi.js";
+import { saveSwarmArtifact } from "./swarm-artifacts.js";
 import { runAgentSwarm } from "./swarm-runner.js";
 
 export type SwarmQuestioner = {
@@ -40,7 +42,9 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     replaceMonitor,
     monitorRows: output.rows,
   };
-  await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
+  const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
+  const artifactPath = await saveSwarmArtifact(options.configRoot, summary);
+  output.write(`${paint("swarm artifact:", ansi.green)} ${paint(artifactPath, ansi.blue)}\n`);
 }
 
 export function parseSwarmArgs(args: string): SwarmArgs {

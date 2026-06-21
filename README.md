@@ -31,6 +31,7 @@ Inside the TUI:
 /goal <goal>
 /plan <request>
 /tasks <task>
+/tasks done T001
 /compact
 /research <query>
 /rules
@@ -51,10 +52,21 @@ and `/model route <prompt>` to preview which provider/model Dream Code would
 choose before sending a real request. Auto routing prefers providers that are
 already connected through env keys, saved credentials, or OAuth.
 
+`/status` shows the active permission mode, model strategy, goal, task ledger,
+and recent model health. Dream Code records lightweight model telemetry in
+`~/.dream/model_telemetry.jsonl`: provider/model, success, elapsed time, and
+rough token estimates from character counts. This keeps auto routing visible
+without adding a database dependency.
+
 Session history uses a Termux-friendly file layout inspired by Kimi Code:
 `~/.dream/session_index.jsonl` for the lightweight picker index and
 `~/.dream/sessions/<workspace>/<session>/state.json` plus `wire.jsonl` for
 per-session metadata and append-only turns.
+
+Tasks are stored in `~/.dream/tasks.jsonl` with ids like `T001` and statuses
+`todo`, `doing`, `done`, or `blocked`. A legacy `tasks.md` trail is still written
+for easy reading. Swarm runs save a Markdown report under `~/.dream/artifacts/`
+so long fan-outs leave an inspectable synthesis artifact behind.
 
 Compact context is automatic as sessions grow and can be forced with
 `/compact`. Saved compacts are injected back into the next agent prompt so long
@@ -81,6 +93,8 @@ Optional settings live beside the main config:
 ~/.dream/models.toml       model routing and tier choices
 ~/.dream/mcp.toml          MCP server definitions
 ~/.dream/hooks.toml        preTool/postTool/postCommand hooks
+~/.dream/tasks.jsonl       task ledger
+~/.dream/model_telemetry.jsonl model routing health log
 ~/.dream/credentials.json  provider credentials
 ```
 

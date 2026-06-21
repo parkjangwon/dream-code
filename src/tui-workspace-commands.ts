@@ -8,6 +8,7 @@ import {
   resolveEffectivePermissionMode,
   type DreamConfig,
 } from "./config.js";
+import { recordGoalEvidence } from "./goal-state.js";
 import { runHookEvent } from "./hooks.js";
 import { appendSessionTurn } from "./session-store.js";
 import { maybeAutoCompactSession } from "./session-actions.js";
@@ -85,6 +86,7 @@ async function runWorkspaceCommandBody(
       await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
       await maybeAutoCompactSession(configRoot, sessionRuntime.currentId());
     }
+    await recordGoalEvidence(configRoot, `Answered: ${truncateEvidence(text)}`);
     return { config, shouldContinue: true };
   }
 
@@ -170,4 +172,9 @@ async function runWorkspaceCommandBody(
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };
   }
+}
+
+function truncateEvidence(text: string): string {
+  const normalized = text.trim().replace(/\s+/gu, " ");
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
 }

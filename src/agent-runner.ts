@@ -21,6 +21,7 @@ import {
   streamChatCompletion,
   type ChatMessage,
 } from "./llm-provider.js";
+import { recordModelTelemetry } from "./model-telemetry.js";
 import { selectModelForPrompt } from "./model-routing.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
@@ -112,17 +113,43 @@ async function streamAgentOnce(
 ): Promise<string> {
   const response = createAgentResponseSession({ selectedModel, write: options.write });
   let assistantText = "";
+  const startedAt = Date.now();
+  const configRoot = options.configRoot ?? defaultConfigRoot();
   response.start();
   const onToken = (token: string): void => {
     assistantText = `${assistantText}${token}`;
     response.token(token);
   };
-  const baseStreamInput = options.configRoot === undefined
-    ? optionalSignal({ selectedModel, messages, onToken }, options.signal)
-    : optionalSignal({ selectedModel, messages, configRoot: options.configRoot, onToken }, options.signal);
-  await streamChatCompletion(baseStreamInput);
-  response.finish();
-  return assistantText;
+  try {
+    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
+    response.finish();
+    await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
+    return assistantText;
+  } catch (error) {
+    await recordModelTelemetry(configRoot, {
+      ...modelTelemetryInput(selectedModel, false, startedAt, messages, assistantText),
+      error: error instanceof Error ? error.message : "Unknown provider failure",
+    });
+    throw error;
+  }
+}
+
+function modelTelemetryInput(
+  selectedModel: ReturnType<typeof selectModelForPrompt>,
+  ok: boolean,
+  startedAt: number,
+  messages: readonly ChatMessage[],
+  assistantText: string,
+): Parameters<typeof recordModelTelemetry>[1] {
+  return {
+    provider: selectedModel.provider,
+    model: selectedModel.model,
+    ...(selectedModel.category === undefined ? {} : { category: selectedModel.category }),
+    ok,
+    elapsedMs: Date.now() - startedAt,
+    inputChars: messageChars(messages),
+    outputChars: assistantText.length,
+  };
 }
 
 export function createAgentMessages(
@@ -229,6 +256,10 @@ function selectedSkillsForPrompt(prompt: string, skills: readonly DreamSkill[]):
 
 function isString(value: string | undefined): value is string {
   return value !== undefined;
+}
+
+function messageChars(messages: readonly ChatMessage[]): number {
+  return messages.reduce((total, message) => total + message.content.length, 0);
 }
 
 function optionalSignal<T extends object>(input: T, signal: AbortSignal | undefined): T | T & { readonly signal: AbortSignal } {

@@ -22,7 +22,7 @@ export function printHelp(): void {
   output.write([
     "Commands:",
     "  /                       open command menu",
-    "  /status                 show current config",
+    "  /status                 show goal, tasks, and model health",
     "  /doctor                 check local tools",
     "  /yolo                   toggle persisted unconditional bypass",
     "  /model                  choose active model",

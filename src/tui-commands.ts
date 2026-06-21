@@ -32,7 +32,7 @@ export const slashCommands = [
   { name: "/rules", summary: "Show loaded AGENTS and DESIGN docs", acceptsArgs: false },
   { name: "/session", summary: "Open saved sessions", acceptsArgs: false },
   { name: "/skills", summary: "Show installed skills", acceptsArgs: false },
-  { name: "/status", summary: "Show current session state", acceptsArgs: false },
+  { name: "/status", summary: "Show goal, tasks, and model health", acceptsArgs: false },
   { name: "/swarm", summary: "Explode a goal across parallel agents", acceptsArgs: true },
   { name: "/tasks", summary: "Show or add tasks", acceptsArgs: true },
   { name: "/verify", summary: "Plan verification checks", acceptsArgs: true },

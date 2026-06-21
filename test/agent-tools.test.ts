@@ -32,6 +32,13 @@ test("runAgentToolRequest gates shell tools behind yolo permission", async () =>
   assert.match(result.output, /Permission required/u);
 });
 
+test("runAgentToolRequest annotates risky shell commands in yolo mode", async () => {
+  const result = await runAgentToolRequest({ tool: "shell", command: "echo git reset --hard" }, "yolo");
+
+  assert.equal(result.ok, true);
+  assert.match(result.output, /risk: destructive shell pattern detected/u);
+});
+
 test("runAgentToolRequest reads project files and formats results", async () => {
   const project = await mkdtemp(join(tmpdir(), "dream-agent-tools-"));
   const previous = process.cwd();

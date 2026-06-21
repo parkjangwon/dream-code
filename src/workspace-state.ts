@@ -3,6 +3,7 @@ import { isAbsolute, join, resolve } from "node:path";
 
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot } from "./config.js";
+import { appendTaskRecord, formatTaskLedger } from "./task-ledger.js";
 
 export function workspaceFilePath(root = defaultConfigRoot()): string {
   return join(root, "workspace.toml");
@@ -40,6 +41,10 @@ export async function formatArtifacts(root: string, cwd: string): Promise<string
 }
 
 export async function formatTasks(root: string): Promise<string> {
+  const ledger = await formatTaskLedger(root);
+  if (!ledger.includes("No tasks yet.")) {
+    return ledger;
+  }
   const tasks = await readLines(join(root, "tasks.md"));
   return [
     paint("Tasks", `${ansi.bold}${ansi.accent}`),
@@ -49,6 +54,7 @@ export async function formatTasks(root: string): Promise<string> {
 
 export async function appendTask(root: string, label: string, detail: string): Promise<void> {
   await mkdir(root, { recursive: true, mode: 0o700 });
+  await appendTaskRecord(root, label, detail);
   const line = `- [ ] ${label}: ${detail.trim()}\n`;
   const previous = await readOptional(join(root, "tasks.md"));
   await writeFile(join(root, "tasks.md"), `${previous ?? ""}${line}`, "utf8");

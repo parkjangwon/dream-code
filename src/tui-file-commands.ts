@@ -3,6 +3,7 @@ import { stdout as output } from "node:process";
 import { ansi, paint } from "./ansi.js";
 import { splitCommand } from "./command-parser.js";
 import type { PermissionMode } from "./config.js";
+import { riskyShellReason } from "./shell-safety.js";
 import type { Questioner } from "./tui-workspace-commands.js";
 import {
   readWorkspaceFile,
@@ -78,6 +79,10 @@ export async function maybeRunShell(
   }
   if (!(await confirmWrite(`run shell: ${command}`, mode, questioner))) {
     return;
+  }
+  const risk = riskyShellReason(command);
+  if (risk !== undefined) {
+    output.write(`${paint("risk:", ansi.yellow)} ${risk}\n`);
   }
   const code = await runShellCommand(command);
   output.write(`exit ${code}\n`);

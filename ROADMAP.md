@@ -50,6 +50,8 @@ rests.
    - Implemented commands for interview, plan, goal, tasks, sessions, research,
      LSP, rules, compact context, artifacts, add-dir, copy/export, hooks, MCP,
      agents, and swarm.
+   - `/status` now surfaces goal state, task ledger summary, and model health
+     telemetry.
    - Agent profiles live as Markdown under `~/.dream/agents/` and
      `.dream/agents/`; no separate crew/team TOML is required.
 
@@ -85,6 +87,8 @@ rests.
 - Interview brief.
 - Plan artifact and task ledger.
 - Durable goal state.
+- Goal evidence is updated after agent turns so long-running objectives keep an
+  activity trail.
 - Automatic and manual compact context.
 - Rules and design-doc loading from global and project `AGENTS.md` and
   `DESIGN.md`.
@@ -93,6 +97,7 @@ rests.
 
 - Kimi-inspired Dream Swarm fan-out with forced lane count, live monitor,
   lane inspection, cancellation, and synthesis.
+- Swarm reports are saved as Markdown artifacts after fan-out.
 - Claude-style agent library and project/personal agent Markdown profiles.
 - Remaining depth: rate-limit aware scheduling and resumable long-running
   swarm jobs.

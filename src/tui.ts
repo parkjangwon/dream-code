@@ -12,6 +12,7 @@ import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { startSession, type DreamSession } from "./session-store.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
+import { formatStatusDashboard } from "./status-dashboard.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
@@ -19,7 +20,6 @@ import { readInteractivePicker } from "./tui-picker.js";
 import {
   formatPermissionMode,
   printHelp,
-  printStatus,
   renderHeader,
 } from "./tui-render.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
@@ -153,7 +153,7 @@ export async function handleInput(
   }
 
   if (text === "/status") {
-    printStatus(config, options.oneShotYolo);
+    output.write(`${await formatStatusDashboard(options.configRoot ?? defaultConfigRoot(), config, options.oneShotYolo)}\n`);
     return { config, shouldContinue: true };
   }
 

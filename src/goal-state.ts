@@ -84,6 +84,25 @@ export async function completeGoalState(root: string, note: string): Promise<Goa
   return next;
 }
 
+export async function recordGoalEvidence(root: string, note: string): Promise<GoalState | undefined> {
+  const state = await loadGoalState(root);
+  if (state === undefined || state.status !== "active") {
+    return undefined;
+  }
+  const trimmed = note.trim();
+  if (trimmed.length === 0) {
+    return state;
+  }
+  const now = new Date().toISOString();
+  const next: GoalState = {
+    ...state,
+    updatedAt: now,
+    evidence: [...state.evidence, { at: now, note: trimmed }].slice(-40),
+  };
+  await saveGoalState(root, next);
+  return next;
+}
+
 export async function clearGoalState(root: string): Promise<boolean> {
   try {
     await rm(goalStatePath(root), { force: false });

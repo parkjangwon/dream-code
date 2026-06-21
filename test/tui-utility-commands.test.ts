@@ -81,6 +81,23 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
   }
 });
 
+test("tasks command updates task status through the ledger", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tasks-command-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await runWorkspaceCommand("/tasks Polish the dashboard", defaultConfig(), true, { question: async () => "" }, root);
+    await runWorkspaceCommand("/tasks done T001", defaultConfig(), true, { question: async () => "" }, root);
+
+    const ledger = await readFile(join(root, "tasks.jsonl"), "utf8");
+
+    assert.match(ledger, /"id":"T001"/u);
+    assert.match(ledger, /"status":"done"/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("plan and goal commands save workflow notes before model execution", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workflow-root-"));
   const project = await mkdtemp(join(tmpdir(), "dream-workflow-project-"));

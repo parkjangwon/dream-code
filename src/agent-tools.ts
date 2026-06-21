@@ -9,6 +9,7 @@ import {
   writeWorkspaceFile,
 } from "./workspace-tools.js";
 import { runResearch } from "./research-tool.js";
+import { riskyShellReason } from "./shell-safety.js";
 
 const readRequestSchema = z.object({ tool: z.literal("read"), path: z.string().min(1) });
 const researchRequestSchema = z.object({ tool: z.literal("research"), query: z.string().min(1) });
@@ -114,6 +115,7 @@ function parseToolLine(line: string): readonly AgentToolRequest[] {
 
 function runShellCapture(command: string): Promise<Pick<AgentToolResult, "ok" | "output">> {
   return new Promise((resolve) => {
+    const risk = riskyShellReason(command);
     const child = spawn(command, { shell: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -122,9 +124,13 @@ function runShellCapture(command: string): Promise<Pick<AgentToolResult, "ok" | 
     child.stderr.on("data", (chunk: Buffer) => {
       output = appendLimited(output, chunk.toString("utf8"));
     });
-    child.on("error", (error) => resolve({ ok: false, output: error.message }));
-    child.on("close", (code) => resolve({ ok: code === 0, output: `exit ${code ?? 1}\n${output}`.trim() }));
+    child.on("error", (error) => resolve({ ok: false, output: shellOutput(risk, error.message) }));
+    child.on("close", (code) => resolve({ ok: code === 0, output: shellOutput(risk, `exit ${code ?? 1}\n${output}`.trim()) }));
   });
+}
+
+function shellOutput(risk: string | undefined, output: string): string {
+  return risk === undefined ? output : `risk: ${risk}\n${output}`;
 }
 
 function appendLimited(base: string, chunk: string): string {

@@ -18,13 +18,12 @@ import {
 import type { SessionRuntime } from "./tui-session-commands.js";
 import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
+import { runTasksCommand } from "./tui-task-command.js";
 import {
   addWorkspaceDir,
   appendTask,
   appendWorkflowNote,
   formatArtifacts,
-  formatSettingsFile,
-  formatTasks,
 } from "./workspace-state.js";
 
 export type UtilityCommandOptions = {
@@ -92,11 +91,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       await runFramedAgentPrompt(options, "Review", "Review the current work for bugs, regressions, missing tests, and UX risks. Findings first.");
       return true;
     case "/tasks":
-      if (options.rest.trim().length > 0) {
-        await appendTask(options.configRoot, "Task", options.rest);
-        output.write(`${paint("task added", ansi.green)}\n`);
-      }
-      output.write(`${await formatTasks(options.configRoot)}\n`);
+      output.write(await runTasksCommand(options.configRoot, options.rest));
       return true;
     case "/verify":
       await runFramedAgentPrompt(options, "Verify mode", "Check the likely verification path, tests to run, and failure risks for the current work.");
