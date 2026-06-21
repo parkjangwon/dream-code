@@ -9,7 +9,7 @@ export async function modelsForProviderMenu(
   config: DreamConfig,
   definition: ProviderDefinition,
 ): Promise<readonly string[]> {
-  const connectedProviders = await connectedProviderIds(root, process.env);
+  const connectedProviders = await connectedProviderIds(root, config, process.env);
   const catalog = connectedProviders.has(definition.id)
     ? (await refreshModelCatalogForProviders(root, new Set([definition.id]), process.env)).catalog
     : await loadModelCatalog(root);

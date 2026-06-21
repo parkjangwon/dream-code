@@ -4,16 +4,22 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
 import { ansi, paint } from "./ansi.js";
+import { loadCredentials } from "./credentials.js";
 import type { DreamConfig, PermissionMode } from "./config.js";
 import { resolveEffectivePermissionMode } from "./config.js";
 import { selectModelForPrompt } from "./model-routing.js";
+import type { ProviderEnv } from "./llm-provider.js";
+import { providerIsEnabled } from "./provider-settings.js";
+import { listProviderDefinitions } from "./provider-registry.js";
 import { listSessions } from "./session-store.js";
+import { providerConnectionSource } from "./tui-provider-status.js";
 
 const execFileAsync = promisify(execFile);
 const defaultContextWindowTokens = 262_100;
 
 export type BottomStatusInput = {
   readonly model: string;
+  readonly mode: "single" | "auto";
   readonly tier: string;
   readonly projectName: string;
   readonly gitBranch: string | undefined;
@@ -30,10 +36,13 @@ export async function buildBottomStatusLines(options: {
   readonly cwd: string;
   readonly oneShotYolo: boolean;
 }): Promise<readonly string[]> {
-  const selected = selectModelForPrompt(options.config.model, "status bar");
+  const selected = selectModelForPrompt(options.config.model, "status bar", undefined, {
+    connectedProviders: await connectedProviderIds(options.configRoot, options.config, process.env),
+  });
   const git = await gitStatus(options.cwd);
   return renderBottomStatusLines({
     model: `${selected.provider}/${selected.model}`,
+    mode: options.config.model.mode,
     tier: selected.tier,
     projectName: basename(options.cwd) || "workspace",
     gitBranch: git.branch,
@@ -48,9 +57,26 @@ export function renderBottomStatusLines(input: BottomStatusInput): readonly stri
   const contextPercent = Math.min(100, Math.round((input.contextTokens / input.contextWindowTokens) * 100));
   const git = input.gitBranch === undefined ? "" : ` ${paint(`git:(${input.gitBranch}${input.gitDirty ? "*" : ""})`, ansi.green)}`;
   return [
-    `${paint(`[${input.model} · ${input.tier}]`, ansi.blue)} ${paint("|", ansi.guide)} ${paint(input.projectName, ansi.yellow)}${git}`,
+    `${paint(`[${modelBadge(input)}]`, ansi.blue)} ${paint("|", ansi.guide)} ${paint(input.projectName, ansi.yellow)}${git}`,
     `${paint("Context", ansi.dim)} ${contextMeter(contextPercent)} ${paint(`${contextPercent}%`, ansi.green)} ${paint(`(${formatTokenCount(input.contextTokens)}/${formatTokenCount(input.contextWindowTokens)})`, ansi.guide)} ${paint("|", ansi.guide)} ${permissionColor(input.permission)}`,
   ];
+}
+
+async function connectedProviderIds(
+  root: string,
+  config: DreamConfig,
+  env: ProviderEnv,
+): Promise<ReadonlySet<string>> {
+  const credentials = await loadCredentials(root);
+  return new Set(listProviderDefinitions()
+    .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
+    .filter((definition) => providerIsEnabled(config, definition.id))
+    .map((definition) => definition.id));
+}
+
+function modelBadge(input: BottomStatusInput): string {
+  const prefix = input.mode === "auto" ? "AUTO " : "";
+  return `${prefix}${input.model} · ${input.tier}`;
 }
 
 async function estimateSessionContextTokens(root: string, sessionId: string): Promise<number> {

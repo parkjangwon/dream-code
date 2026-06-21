@@ -151,7 +151,7 @@ async function runWorkspaceCommandBody(
       return { config, shouldContinue: true };
     case "/provider":
       if (command.rest.trim() === "list") {
-        await printProviders(configRoot);
+        await printProviders(config, configRoot);
         return { config, shouldContinue: true };
       }
       return {

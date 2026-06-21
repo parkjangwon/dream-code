@@ -9,10 +9,8 @@ import {
   serializeModelConfigToml,
   TomlConfigParseError,
 } from "./config-toml.js";
-import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
+import { defaultModelConfig, normalizeLoadedConfig } from "./config-model.js";
 import { modelConfigSchema } from "./model-routing.js";
-import type { ModelConfig } from "./model-routing.js";
-import { providerModelIdForRequest } from "./provider-registry.js";
 
 export const permissionModeSchema = z.enum(["ask", "auto", "yolo"]);
 export type PermissionMode = z.infer<typeof permissionModeSchema>;
@@ -32,11 +30,16 @@ const tokenSavingSchema = z.object({
   useRipgrepFirst: z.boolean(),
 });
 
+const providerSettingSchema = z.object({
+  enabled: z.boolean(),
+});
+
 export const dreamConfigSchema = z.object({
   version: z.literal(1),
   permissions: z.object({
     mode: permissionModeSchema,
   }),
+  providers: z.record(z.string(), providerSettingSchema).default({}),
   model: modelConfigSchema,
   tokenSaving: tokenSavingSchema,
   tools: z.object({
@@ -68,6 +71,7 @@ export function defaultConfig(): DreamConfig {
   return {
     version: 1,
     permissions: { mode: "ask" },
+    providers: {},
     model: defaultModelConfig(),
     tokenSaving: {
       enabled: true,
@@ -130,6 +134,7 @@ async function loadMainConfig(root: string, defaults: DreamConfig): Promise<Omit
     return {
       version: defaults.version,
       permissions: defaults.permissions,
+      providers: defaults.providers,
       tokenSaving: defaults.tokenSaving,
       tools: defaults.tools,
     };
@@ -190,84 +195,6 @@ export function resolveEffectivePermissionMode(
   oneShotYolo: boolean,
 ): PermissionMode {
   return oneShotYolo ? "yolo" : config.permissions.mode;
-}
-
-function defaultModelConfig(): ModelConfig {
-  return {
-    mode: "single",
-    single: {
-      provider: "openai",
-      models: {
-        low: "gpt-4.1-mini",
-        mid: "gpt-4.1",
-        high: "o3",
-      },
-      defaultTier: "mid",
-    },
-    auto: {
-      preferConnectedProviders: true,
-      routes: [
-        {
-          id: "fast-classifier",
-          provider: "openai",
-          model: "gpt-4.1-mini",
-          tier: "low",
-          match: ["classify", "summarize", "rename", "grep"],
-        },
-        {
-          id: "deep-builder",
-          provider: "openai",
-          model: "o3",
-          tier: "high",
-          match: ["architecture", "debug", "refactor", "review"],
-        },
-      ],
-      categories: [...defaultAutoCategories()],
-      agentRoutes: [...defaultAutoAgentRoutes()],
-    },
-  };
-}
-
-function normalizeLoadedConfig(config: DreamConfig): DreamConfig {
-  return {
-    ...config,
-    model: {
-      ...config.model,
-      single: {
-        ...config.model.single,
-        models: {
-          low: providerModelIdForRequest(config.model.single.provider, config.model.single.models.low),
-          mid: providerModelIdForRequest(config.model.single.provider, config.model.single.models.mid),
-          high: providerModelIdForRequest(config.model.single.provider, config.model.single.models.high),
-        },
-      },
-      auto: {
-        preferConnectedProviders: config.model.auto.preferConnectedProviders ?? true,
-        routes: config.model.auto.routes.map((route) => ({
-          ...route,
-          model: providerModelIdForRequest(route.provider, route.model),
-        })),
-        categories: (config.model.auto.categories ?? defaultAutoCategories()).map((category) => ({
-          ...category,
-          candidates: category.candidates.map(normalizeCandidateSpec),
-        })),
-        agentRoutes: (config.model.auto.agentRoutes ?? defaultAutoAgentRoutes()).map((route) => ({
-          ...route,
-          candidates: route.candidates.map(normalizeCandidateSpec),
-        })),
-      },
-    },
-  };
-}
-
-function normalizeCandidateSpec(spec: string): string {
-  const separator = spec.indexOf("/");
-  if (separator <= 0 || separator >= spec.length - 1) {
-    return spec;
-  }
-  const provider = spec.slice(0, separator);
-  const model = spec.slice(separator + 1);
-  return `${provider}/${providerModelIdForRequest(provider, model)}`;
 }
 
 type ErrnoException = Error & {

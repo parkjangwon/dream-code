@@ -69,6 +69,69 @@ test("switchProvider picker lists only connected providers", async () => {
   }
 });
 
+test("switchProvider hides disabled providers even when env credentials exist", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-provider-switch-disabled-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await writeProviderCredential(root, "deepseek", {
+      apiKey: "sk-deepseek",
+      region: "global",
+      baseUrl: "https://api.deepseek.com",
+    });
+
+    const nextConfig = await switchProvider({
+      config: {
+        ...configWithOpenAi(),
+        providers: {
+          gemini: { enabled: false },
+        },
+      },
+      configRoot: root,
+      args: "",
+      env: { GEMINI_API_KEY: "sk-gemini" },
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          assert.equal(options.choices.some((choice) => choice.value === "deepseek"), true);
+          assert.equal(options.choices.some((choice) => choice.value === "gemini"), false);
+          return "deepseek";
+        },
+      },
+    });
+
+    assert.equal(nextConfig.model.single.provider, "deepseek");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("switchProvider toggles provider availability", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-provider-toggle-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const disabled = await switchProvider({
+      config: configWithOpenAi(),
+      configRoot: root,
+      args: "disable gemini",
+      questioner: { question: async () => "" },
+    });
+    const enabled = await switchProvider({
+      config: disabled,
+      configRoot: root,
+      args: "enable gemini",
+      questioner: { question: async () => "" },
+    });
+
+    assert.equal(disabled.providers["gemini"]?.enabled, false);
+    assert.equal(enabled.providers["gemini"]?.enabled, true);
+    assert.equal((await loadConfig(root)).providers["gemini"]?.enabled, true);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("switchProvider keeps config unchanged for missing provider credentials", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-provider-switch-"));
   const stdout = mock.method(process.stdout, "write", () => true);

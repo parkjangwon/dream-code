@@ -16,7 +16,17 @@ export type EnableAutoRoutingOptions = {
 };
 
 export async function enableAutoRouting(options: EnableAutoRoutingOptions): Promise<DreamConfig> {
-  const connectedProviders = await connectedProviderIds(options.configRoot, process.env);
+  if (options.config.model.mode === "auto") {
+    const nextConfig: DreamConfig = {
+      ...options.config,
+      model: { ...options.config.model, mode: "single" },
+    };
+    await saveConfig(options.configRoot, nextConfig);
+    output.write(formatAutoDisabled(nextConfig));
+    return nextConfig;
+  }
+
+  const connectedProviders = await connectedProviderIds(options.configRoot, options.config, process.env);
   if (connectedProviders.size === 0) {
     output.write(formatAutoNeedsLogin());
     return options.config;
@@ -43,10 +53,15 @@ export function formatAutoRoutes(config: DreamConfig): string {
   ].join("\n");
 }
 
-export async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {
+export async function connectedProviderIds(
+  root: string,
+  config: DreamConfig,
+  env: ProviderEnv,
+): Promise<ReadonlySet<string>> {
   const credentials = await loadCredentials(root);
   return new Set(listProviderDefinitions()
     .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
+    .filter((definition) => config.providers[definition.id]?.enabled !== false)
     .map((definition) => definition.id));
 }
 
@@ -60,7 +75,11 @@ function formatAutoEnabled(
     `${paint("providers", ansi.dim)} ${connectedProviderCount} connected · ${paint("strategy", ansi.dim)} models.toml`,
     `${paint("catalog", ansi.dim)} ${refresh.liveProviders} live · ${refresh.fallbackProviders} cached/registry`,
     "",
-  ].filter((line) => line.length > 0).join("\n");
+  ].join("\n");
+}
+
+function formatAutoDisabled(config: DreamConfig): string {
+  return `${paint("auto mode:", ansi.yellow)} off · ${describeModelMode(config.model)}\n`;
 }
 
 function formatAutoNeedsLogin(): string {

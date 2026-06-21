@@ -57,6 +57,8 @@ npm uninstall -g dream-code
   route each prompt, agent, and swarm lane across connected providers with
   fallback chains. Connect at least one provider with `/login` before enabling
   it.
+- **Provider cost control:** disable expensive env-detected providers with
+  `/provider disable <provider>` and re-enable them when needed.
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
   for high-parallel fan-out when speed matters.
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
@@ -89,7 +91,7 @@ OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 /add-dir      Add a workspace directory
 /agents       Delegate tasks and manage subagents
 /artifact     View saved artifacts
-/auto         Enable automatic model routing
+/auto         Toggle automatic model routing
 /btw          Ask a side question
 /compact      Compact current session context
 /copy         Copy the latest assistant response
@@ -106,7 +108,7 @@ OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 /mcp          Show MCP settings and live tools
 /model        Choose model or model routing mode
 /plan         Create an implementation plan
-/provider     Switch provider or list connections
+/provider     Switch, list, enable, or disable providers
 /rename       Rename current session
 /research     Research with source discipline
 /review       Review current work

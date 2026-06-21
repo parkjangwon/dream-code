@@ -1,12 +1,15 @@
 import { ansi, paint } from "./ansi.js";
+import type { DreamConfig } from "./config.js";
 import type { ProviderCredential } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
+import { providerIsEnabled } from "./provider-settings.js";
 import {
   apiKeyEnvKeys,
   type ProviderDefinition,
 } from "./provider-registry.js";
 
 type CredentialSource =
+  | { readonly kind: "disabled" }
   | { readonly kind: "env"; readonly key: string }
   | { readonly kind: "oauth" }
   | { readonly kind: "saved" }
@@ -30,8 +33,11 @@ export function formatProviderLine(
   definition: ProviderDefinition,
   credential: ProviderCredential | undefined,
   env: ProviderEnv,
+  config?: DreamConfig,
 ): string {
-  const source = providerConnection(definition, credential, env);
+  const source = config !== undefined && !providerIsEnabled(config, definition.id)
+    ? { kind: "disabled" as const }
+    : providerConnection(definition, credential, env);
   const status = formatCredentialSource(source);
   const regions = definition.regions.map((region) => region.id).join("/");
   return `${definition.id.padEnd(16)} ${definition.displayName.padEnd(18)} ${status.padEnd(12)} ${regions}\n`;
@@ -41,7 +47,11 @@ export function isProviderConnected(
   definition: ProviderDefinition,
   credential: ProviderCredential | undefined,
   env: ProviderEnv,
+  config?: DreamConfig,
 ): boolean {
+  if (config !== undefined && !providerIsEnabled(config, definition.id)) {
+    return false;
+  }
   return providerConnection(definition, credential, env).kind !== "missing";
 }
 
@@ -73,6 +83,8 @@ function providerConnection(
 
 function formatCredentialSource(source: CredentialSource): string {
   switch (source.kind) {
+    case "disabled":
+      return paint("disabled", ansi.red);
     case "env":
       return paint(`env:${source.key}`, ansi.green);
     case "oauth":

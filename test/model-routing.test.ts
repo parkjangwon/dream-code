@@ -232,6 +232,7 @@ function defaultDreamConfigForRouting(): Parameters<typeof bootstrapAutoModelCon
   return {
     version: 1,
     permissions: { mode: "ask" },
+    providers: {},
     model: defaultAutoConfig(),
     tokenSaving: {
       enabled: true,

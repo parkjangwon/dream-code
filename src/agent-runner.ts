@@ -33,6 +33,7 @@ import {
 import { loadUnhealthyModelKeys } from "./model-telemetry.js";
 import { selectModelCandidatesForPrompt, selectModelForPrompt, type SelectedModel } from "./model-routing.js";
 import { formatMemoryContext } from "./memory-store.js";
+import { providerIsEnabled } from "./provider-settings.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills } from "./skills.js";
@@ -87,7 +88,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   let finalError: string | undefined;
 
   const selectedModels = selectModelCandidatesForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
-    connectedProviders: await connectedProviderIds(configRoot, process.env),
+    connectedProviders: await connectedProviderIds(configRoot, options.config, process.env),
     unhealthyModels: await loadUnhealthyModelKeys(configRoot),
     ...(options.agent === undefined ? {} : { agentId: options.agent.id }),
   });
@@ -163,10 +164,11 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   }
 }
 
-async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {
+async function connectedProviderIds(root: string, config: DreamConfig, env: ProviderEnv): Promise<ReadonlySet<string>> {
   const credentials = await loadCredentials(root);
   return new Set(listProviderDefinitions()
     .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
+    .filter((definition) => providerIsEnabled(config, definition.id))
     .map((definition) => definition.id));
 }
 

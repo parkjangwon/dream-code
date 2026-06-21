@@ -12,6 +12,7 @@ import { buildBottomStatusLines, renderBottomStatusLines } from "../src/tui-stat
 test("renderBottomStatusLines shows model, project git state, and context percentage", () => {
   const lines = renderBottomStatusLines({
     model: "deepseek/deepseek-v4-flash",
+    mode: "single",
     tier: "mid",
     projectName: "dream-code",
     gitBranch: "main",
@@ -27,6 +28,22 @@ test("renderBottomStatusLines shows model, project git state, and context percen
   assert.match(lines.join("\n"), /5%/u);
   assert.match(lines.join("\n"), /13\.1k\/262\.1k/u);
   assert.match(lines.join("\n"), /YOLO/u);
+});
+
+test("renderBottomStatusLines marks auto routing mode", () => {
+  const lines = renderBottomStatusLines({
+    model: "deepseek/deepseek-v4-flash",
+    mode: "auto",
+    tier: "low",
+    projectName: "dream-code",
+    gitBranch: "main",
+    gitDirty: false,
+    contextTokens: 0,
+    contextWindowTokens: 262_100,
+    permission: "ASK",
+  }).map(stripAnsi);
+
+  assert.match(lines.join("\n"), /\[AUTO deepseek\/deepseek-v4-flash · low\]/u);
 });
 
 test("buildBottomStatusLines estimates context from compact summary when present", async () => {

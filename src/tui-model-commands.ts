@@ -72,7 +72,7 @@ async function maybeHandleModelModeCommand(options: ConfigureModelsOptions): Pro
   }
   if (args.startsWith("route ")) {
     output.write(`${formatRoutePreview(options.config.model, args.slice("route ".length).trim(), {
-      connectedProviders: await connectedProviderIds(options.configRoot, process.env),
+      connectedProviders: await connectedProviderIds(options.configRoot, options.config, process.env),
     })}\n`);
     return options.config;
   }

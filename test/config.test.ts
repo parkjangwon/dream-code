@@ -51,6 +51,27 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
   }
 });
 
+test("loadConfig persists provider enabled overrides", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-provider-config-"));
+  try {
+    const config = {
+      ...defaultConfig(),
+      providers: {
+        gemini: { enabled: false },
+      },
+    };
+    await saveConfig(root, config);
+
+    const savedToml = await readFile(configFilePath(root), "utf8");
+    const loaded = await loadConfig(root);
+
+    assert.match(savedToml, /\[providers\.gemini\]\nenabled = false/u);
+    assert.equal(loaded.providers["gemini"]?.enabled, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function assertFileMissing(filePath: string): Promise<void> {
   await assert.rejects(() => stat(filePath), { code: "ENOENT" });
 }

@@ -36,13 +36,14 @@ export type LoginProviderOptions = {
 };
 
 export async function printProviders(
+  config: DreamConfig,
   configRoot: string,
   env: ProviderEnv = process.env,
 ): Promise<void> {
   const credentials = await loadCredentials(configRoot);
   output.write(`${paint("Providers", ansi.accent)}\n`);
   for (const definition of listProviderDefinitions()) {
-    output.write(formatProviderLine(definition, credentials.providers[definition.id], env));
+    output.write(formatProviderLine(definition, credentials.providers[definition.id], env, config));
   }
 }
 
@@ -178,6 +179,10 @@ async function credentialForConnection(
 function configWithProvider(config: DreamConfig, definition: ProviderDefinition): DreamConfig {
   return {
     ...config,
+    providers: {
+      ...config.providers,
+      [definition.id]: { enabled: true },
+    },
     model: {
       ...config.model,
       mode: "single",

@@ -32,7 +32,16 @@ export function serializeMainConfigToml(config: DreamConfig): string {
     `ripgrep = ${config.tools.ripgrep}`,
     `lsp = ${config.tools.lsp}`,
     `webResearch = ${config.tools.webResearch}`,
+    "",
   ];
+
+  for (const [provider, setting] of Object.entries(config.providers).sort(([left], [right]) => left.localeCompare(right))) {
+    lines.push(
+      `[providers.${provider}]`,
+      `enabled = ${setting.enabled}`,
+      "",
+    );
+  }
 
   return `${lines.join("\n").trimEnd()}\n`;
 }
