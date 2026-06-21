@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { defaultConfig } from "../src/config.js";
+import { DREAM_VERSION } from "../src/constants.js";
 import { renderHeaderPanel } from "../src/tui-render.js";
 
 test("header panel renders a clean text-only Dream Code header", () => {
@@ -9,7 +10,7 @@ test("header panel renders a clean text-only Dream Code header", () => {
   const text = panel.join("\n");
 
   assert.doesNotMatch(text, /[╭╮╰╯│─]/u);
-  assert.match(text, /Dream Code \(v0\.1\.0\)/u);
+  assert.match(text, new RegExp(`Dream Code \\(v${DREAM_VERSION.replaceAll(".", "\\.")}\\)`, "u"));
   assert.match(text, /Even while you sleep, your dreams keep building\. ☾/u);
 });
 

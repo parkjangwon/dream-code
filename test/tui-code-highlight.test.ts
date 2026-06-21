@@ -25,6 +25,6 @@ test("highlightCodeLine highlights config literals and shell comments", () => {
   assert.equal(highlightCodeLine("\"ok\": true", "json").includes(paint("true", ansi.accent)), true);
   assert.equal(highlightCodeLine("enabled = false", "toml").includes(paint("false", ansi.accent)), true);
   assert.equal(highlightCodeLine("enabled: yes", "yaml").includes(paint("yes", ansi.accent)), true);
-  assert.equal(highlightCodeLine("pnpm test # run suite", "sh").includes(paint("# run suite", ansi.guide)), true);
+  assert.equal(highlightCodeLine("npm test # run suite", "sh").includes(paint("# run suite", ansi.guide)), true);
   assert.equal(highlightCodeLine("return true; // done", "java").includes(paint("// done", ansi.guide)), true);
 });

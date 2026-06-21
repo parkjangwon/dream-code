@@ -55,7 +55,7 @@ function formatToolProtocol(): string {
     "{\"tool\":\"search\",\"query\":\"TODO\",\"path\":\"src\"}",
     "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
     "{\"tool\":\"mcp\",\"server\":\"server-name\",\"name\":\"tool-name\",\"arguments\":{}}",
-    "{\"tool\":\"shell\",\"command\":\"pnpm test\"}",
+    "{\"tool\":\"shell\",\"command\":\"npm test\"}",
     "{\"tool\":\"mkdir\",\"path\":\"src\"}",
     "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
     "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { Buffer } from "node:buffer";
 
+import { DREAM_VERSION } from "./constants.js";
 import { loadMcpServers, type McpServer } from "./mcp-config.js";
 
 export type McpToolCall = {
@@ -85,7 +86,7 @@ class McpStdioSession {
     await this.request("initialize", {
       protocolVersion,
       capabilities: {},
-      clientInfo: { name: "dream-code", version: "0.1.0" },
+      clientInfo: { name: "dream-code", version: DREAM_VERSION },
     });
     this.notify("notifications/initialized", {});
   }

@@ -10,7 +10,7 @@ agents: durable sessions, model routing, skills, agents, swarm fan-out, cron
 automation, compact context, workflow recipes, and YOLO mode.
 
 ```text
-Dream Code (v0.1.0)
+Dream Code (v0.1.1)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -61,8 +61,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -71,7 +71,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.0 sh install.sh
+DREAM_CODE_VERSION=v0.1.1 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -143,6 +143,11 @@ Cron schedules recurring Dream Code work. Jobs are grouped by one project level,
 stored in `~/.dream/dream.db`, and each run writes a Markdown artifact under
 `~/.dream/cron/runs/`.
 
+Jobs can run the same primitives you use interactively: a normal agent prompt,
+a saved `/workflow`, or a high-parallel `/swarm` job. That means scheduled work
+can use your providers, model routing, skills, MCP tools, hooks, notifications,
+workspace file tools, and project rules.
+
 Inside the TUI:
 
 ```text
@@ -150,24 +155,45 @@ Inside the TUI:
 /cron every day at 09:00 run tests and summarize failures
 /cron every day at 02:00 /swarm --size 8 audit this project
 /cron 0 8 * * * /workflow .dream/workflows/morning.js
+/cron run nightly
+/cron pause nightly
+/cron resume nightly
+/cron rename nightly morning-check
+/cron delete morning-check
 ```
 
 From the shell:
 
 ```sh
 dream cron list
-dream cron add "every day at 09:00 run tests"
+dream cron add --name nightly "every day at 09:00 run tests"
+dream cron add --name swarm-audit --mode swarm "0 2 * * * /swarm --size 8 audit this project"
+dream cron add --output .dream/cron-results/test-summary.md "every day at 09:00 run tests"
 dream cron pause nightly
 dream cron resume nightly
 dream cron run nightly
+dream cron rename nightly morning-check
+dream cron delete morning-check
 dream cron project list
+dream cron project rename dream-code dream-code-cli
+dream cron project delete dream-code-cli
 dream daemon run-once
 dream daemon run --interval 60
 ```
 
+Supported schedule forms:
+
+```text
+every day at 09:00 <prompt>
+daily at 09:00 <prompt>
+hourly <prompt>
+0 8 * * * <prompt>
+```
+
 Use your OS service manager to keep the daemon alive, such as systemd on Linux,
 launchd on macOS, a Termux boot/service setup on Android, or Task Scheduler on
-Windows.
+Windows. `dream daemon run --interval 60` is intentionally a portable foreground
+loop, so you can wrap it with the supervisor you already use on each platform.
 
 ## Commands
 
