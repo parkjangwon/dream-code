@@ -12,7 +12,7 @@ export async function runLspCheck(cwd: string): Promise<string> {
     return [
       paint("LSP", `${ansi.bold}${ansi.accent}`),
       paint("No supported project diagnostics detected.", ansi.dim),
-      paint("Supported: TypeScript, Rust, Go, Python.", ansi.dim),
+      paint("Supported: TypeScript, Rust, Go, Python, Java.", ansi.dim),
     ].join("\n");
   }
   const results = await Promise.all(commands.map(async (command) => ({
@@ -49,7 +49,30 @@ export async function detectDiagnosticCommands(cwd: string): Promise<readonly Di
   if (await exists(join(cwd, "pyproject.toml"))) {
     commands.push({ label: "Python", command: "python3", args: ["-m", "compileall", "-q", "."], display: "python3 -m compileall -q ." });
   }
+  if (await exists(join(cwd, "pom.xml"))) {
+    commands.push({ label: "Java (Maven)", command: "mvn", args: ["-q", "-DskipTests", "compile"], display: "mvn -q -DskipTests compile" });
+  }
+  if (await hasGradleProject(cwd)) {
+    commands.push(await gradleDiagnosticCommand(cwd));
+  }
   return commands;
+}
+
+async function hasGradleProject(cwd: string): Promise<boolean> {
+  return await exists(join(cwd, "build.gradle"))
+    || await exists(join(cwd, "build.gradle.kts"))
+    || await exists(join(cwd, "settings.gradle"))
+    || await exists(join(cwd, "settings.gradle.kts"));
+}
+
+async function gradleDiagnosticCommand(cwd: string): Promise<DiagnosticCommand> {
+  if (process.platform === "win32" && await exists(join(cwd, "gradlew.bat"))) {
+    return { label: "Java (Gradle)", command: "gradlew.bat", args: ["testClasses"], display: "gradlew.bat testClasses" };
+  }
+  if (await exists(join(cwd, "gradlew"))) {
+    return { label: "Java (Gradle)", command: "./gradlew", args: ["testClasses"], display: "./gradlew testClasses" };
+  }
+  return { label: "Java (Gradle)", command: "gradle", args: ["testClasses"], display: "gradle testClasses" };
 }
 
 async function exists(filePath: string): Promise<boolean> {

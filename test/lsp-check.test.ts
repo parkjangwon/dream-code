@@ -26,10 +26,27 @@ test("detectDiagnosticCommands finds common project diagnostics", async () => {
     await writeFile(join(project, "Cargo.toml"), "[package]\nname=\"x\"\nversion=\"0.1.0\"\nedition=\"2021\"\n", "utf8");
     await writeFile(join(project, "go.mod"), "module example.com/x\n", "utf8");
     await writeFile(join(project, "pyproject.toml"), "[project]\nname=\"x\"\nversion=\"0.1.0\"\n", "utf8");
+    await writeFile(join(project, "pom.xml"), "<project />\n", "utf8");
+    await writeFile(join(project, "build.gradle.kts"), "plugins { java }\n", "utf8");
 
     const labels = (await detectDiagnosticCommands(project)).map((command) => command.label);
 
-    assert.deepEqual(labels, ["TypeScript", "Rust", "Go", "Python"]);
+    assert.deepEqual(labels, ["TypeScript", "Rust", "Go", "Python", "Java (Maven)", "Java (Gradle)"]);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("detectDiagnosticCommands prefers Gradle wrapper when available", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-lsp-gradle-"));
+  try {
+    await writeFile(join(project, "build.gradle"), "plugins { id 'java' }\n", "utf8");
+    await writeFile(join(project, "gradlew"), "#!/bin/sh\n", "utf8");
+
+    const command = (await detectDiagnosticCommands(project)).find((entry) => entry.label === "Java (Gradle)");
+
+    assert.equal(command?.command, "./gradlew");
+    assert.deepEqual(command?.args, ["testClasses"]);
   } finally {
     await rm(project, { recursive: true, force: true });
   }

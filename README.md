@@ -157,7 +157,7 @@ Enter       Submit input or choose a menu item
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in search fallback
-- TypeScript, Rust, Go, and Python diagnostics through `/lsp`
+- TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge
 - Hook execution with recent run logs
 - Local file read/write/edit helpers
