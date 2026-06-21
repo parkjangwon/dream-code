@@ -1,6 +1,6 @@
 # Dream Code Roadmap
 
-**Signature:** 잠든 사이에도, 당신의 꿈은 빌드됩니다.
+**Signature:** Even while you sleep, your dreams keep building.
 
 Dream Code is a Termux-first coding harness CLI: small core, fast feel, portable
 runtime, and durable execution for goals that should keep moving while the user
