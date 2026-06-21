@@ -243,8 +243,8 @@ DESIGN.md
 ## Termux
 
 ```sh
-pkg update
-pkg install nodejs-lts git ripgrep fd jq
+pkg -y update
+pkg -y install nodejs-lts git ripgrep fd jq
 curl -fsSL https://raw.githubusercontent.com/parkjangwon/dream-code/main/install.sh | sh
 dream
 ```
