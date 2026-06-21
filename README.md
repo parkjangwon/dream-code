@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.7)
+Dream Code (v0.1.8)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -59,6 +59,14 @@ Run Dream Code with:
 
 ```sh
 dream
+```
+
+Run one prompt non-interactively from scripts, hooks, or another shell:
+
+```sh
+dream -p "summarize this repository"
+dream --yolo -p "fix the failing tests"
+dream -p "inspect the current git state" --json --quiet
 ```
 
 Check workday readiness before editing, testing, or releasing:
@@ -90,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.7
-git push origin v0.1.7
+git tag v0.1.8
+git push origin v0.1.8
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -100,7 +108,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.7 sh install.sh
+DREAM_CODE_VERSION=v0.1.8 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 

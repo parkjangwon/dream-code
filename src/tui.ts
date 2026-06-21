@@ -22,7 +22,7 @@ import {
 import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
-import { buildBottomStatusLines } from "./tui-status-bar.js";
+import { createBottomStatusCache } from "./tui-status-cache.js";
 import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
 import {
   runWorkspaceCommand,
@@ -62,6 +62,7 @@ async function runInteractiveLoop(
   let config = initialConfig;
   let history: readonly string[] = [];
   let currentSessionId = (await startSession(options.configRoot)).id;
+  const statusCache = createBottomStatusCache();
   const sessionRuntime: SessionRuntime = {
     currentId: () => currentSessionId,
     switchTo: (sessionId) => {
@@ -75,14 +76,14 @@ async function runInteractiveLoop(
   let shouldContinue = true;
   while (shouldContinue) {
     const configRoot = options.configRoot ?? defaultConfigRoot();
+    statusCache.refresh({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const skills = await loadEnabledSkills(configRoot);
-    const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
       commands: slashCommands,
       skills,
-      statusLines,
+      statusLines: statusCache.current(),
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },
