@@ -1,4 +1,5 @@
 import { ansi, paint } from "./ansi.js";
+import { brailleSpinner } from "./braille-ui.js";
 import type { SelectedModel } from "./model-routing.js";
 import {
   isMarkdownTableDivider,
@@ -73,12 +74,12 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
 
   return {
     start: () => {
-      options.write(`${paint("○", ansi.guide)} ${paint("Thinking", ansi.dim)} ${paint(model, ansi.guide)}\n`);
+      options.write(`${paint(brailleSpinner(0), ansi.accent)} ${paint("Thinking", ansi.dim)} ${paint(model, ansi.guide)}\n`);
     },
     token: (token) => {
       if (!receivedToken) {
         receivedToken = true;
-        options.write(`${paint("●", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
+        options.write(`${paint("⣿", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
       }
       characterCount += token.length;
       lineBuffer = writeBufferedLines(token, lineBuffer, writeLine);

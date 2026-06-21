@@ -20,8 +20,8 @@ test("agent response session renders thinking, streamed rail, and done summary",
   session.finish();
 
   const output = stripAnsi(chunks.join(""));
-  assert.match(output, /○ Thinking openai\/gpt-test · mid/);
-  assert.match(output, /● Dream openai\/gpt-test · mid/);
+  assert.match(output, /⠋ Thinking openai\/gpt-test · mid/);
+  assert.match(output, /⣿ Dream openai\/gpt-test · mid/);
   assert.match(output, /│ Hello\n│ world\n/);
   assert.match(output, /✓ Done 1\.3s · ~3 tokens/);
 });
@@ -38,7 +38,7 @@ test("agent response session renders provider errors as a response block", () =>
   session.fail("Missing API key", "warn");
 
   const output = stripAnsi(chunks.join(""));
-  assert.match(output, /○ Thinking openai\/gpt-test · mid/);
+  assert.match(output, /⠋ Thinking openai\/gpt-test · mid/);
   assert.match(output, /✕ Error/);
   assert.match(output, /│ Missing API key/);
 });

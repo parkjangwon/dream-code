@@ -1,4 +1,5 @@
 import { ansi, paint } from "./ansi.js";
+import { brailleActivity, brailleProgressBar } from "./braille-ui.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 
 export type SwarmLaneStatus = "queued" | "running" | "done" | "failed" | "cancelled";
@@ -164,27 +165,25 @@ function statusLabel(status: SwarmLaneStatus): string {
 }
 
 function statusBar(status: SwarmLaneStatus): string {
+  const bar = brailleProgressBar(status);
   switch (status) {
     case "queued":
-      return paint("░░░░░░░░", ansi.guide);
+      return paint(bar, ansi.guide);
     case "running":
-      return paint("▓▓▓▒▒░░░", ansi.accent);
+      return paint(bar, ansi.accent);
     case "done":
-      return paint("████████", ansi.green);
+      return paint(bar, ansi.green);
     case "failed":
-      return paint("██░░░░░░", ansi.red);
+      return paint(bar, ansi.red);
     case "cancelled":
-      return paint("▒▒▒▒░░░░", ansi.yellow);
+      return paint(bar, ansi.yellow);
     default:
       return assertNever(status);
   }
 }
 
 function activityStrip(frame: number): string {
-  const cells = ["▱", "▰", "▰", "▱", "▱", "▱"] as const;
-  const offset = frame % cells.length;
-  const shifted = cells.map((_, index) => cells[(index + offset) % cells.length] ?? "▱").join("");
-  return paint(shifted, ansi.accent);
+  return paint(brailleActivity(frame, 8), ansi.accent);
 }
 
 function formatSynthesis(snapshot: SwarmMonitorSnapshot): string {
