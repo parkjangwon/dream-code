@@ -127,6 +127,45 @@ test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time",
   assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Done 56\.0s/u);
 });
 
+test("runAgentSwarmWithAgents uses local fast synthesis for large swarms", async () => {
+  const chunks: string[] = [];
+  const calls: string[] = [];
+  const summary = await runAgentSwarmWithAgents({
+    config: defaultConfig(),
+    configRoot: "/tmp/dream",
+    cwd: "/repo",
+    goal: "Compress the merge",
+    agents: [
+      agent("tech-lead", "Tech Lead", "Plan."),
+      agent("code-reviewer", "Code Reviewer", "Review."),
+      agent("security-reviewer", "Security Reviewer", "Audit."),
+      agent("code-simplifier", "Code Simplifier", "Simplify."),
+      agent("ux-reviewer", "UX Reviewer", "Polish."),
+    ],
+    forceAgents: 8,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+    runAgent: async (input) => {
+      calls.push(input.kind);
+      if (input.kind === "synthesis") {
+        throw new Error("large swarms should skip the synthesis model");
+      }
+      return [
+        `Summary from ${input.agent.name}`,
+        "Findings: useful signal.",
+        "Proposed actions: move quickly.",
+      ].join("\n");
+    },
+  });
+
+  assert.equal(summary.laneResults.length, 8);
+  assert.equal(calls.every((kind) => kind === "lane"), true);
+  assert.match(summary.synthesis, /Fast synthesis complete/u);
+  assert.match(summary.synthesis, /Lanes: 8\/8 completed/u);
+  assert.match(stripAnsi(chunks.join("")), /local fast merge/u);
+});
+
 test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", async () => {
   const chunks: string[] = [];
   const laneStarted = deferred<void>();

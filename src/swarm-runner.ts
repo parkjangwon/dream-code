@@ -7,6 +7,11 @@ import { writeSwarmMemory } from "./memory-writer.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
+import {
+  createFastSwarmSynthesis,
+  shouldUseFastSwarmSynthesis,
+  type SwarmSynthesisMode,
+} from "./swarm-fast-synthesis.js";
 import { runWithConcurrency } from "./swarm-scheduler.js";
 import {
   createSwarmPlan,
@@ -62,6 +67,7 @@ export type SwarmRunOptions = {
   readonly monitorRows?: number;
   readonly signal?: AbortSignal;
   readonly sessionId?: string;
+  readonly synthesisMode?: SwarmSynthesisMode;
   readonly now?: () => number;
   readonly runAgent?: SwarmAgentRunner;
 };
@@ -132,9 +138,15 @@ export async function runAgentSwarmWithAgents(
     return summary;
   }
 
-  const synthesisAgent = createSwarmSynthesisAgent();
   monitor.synthesisStarted();
-  const synthesis = await runSynthesis(runAgent, synthesisAgent, createSwarmSynthesisPrompt(options.goal, laneResults), abortController.signal);
+  const synthesis = shouldUseFastSwarmSynthesis(options.synthesisMode ?? "auto", laneResults.length)
+    ? createFastSwarmSynthesis(options.goal, laneResults)
+    : await runSynthesis(
+      runAgent,
+      createSwarmSynthesisAgent(),
+      createSwarmSynthesisPrompt(options.goal, laneResults),
+      abortController.signal,
+    );
   if (synthesis === synthesisCancelledOutput) {
     monitor.synthesisCancelled();
   } else if (synthesis.startsWith("Synthesis failed:")) {
