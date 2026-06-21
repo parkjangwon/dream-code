@@ -126,13 +126,12 @@ test("plan and goal commands save workflow notes before model execution", async 
 
     const tasks = await readFile(join(root, "tasks.md"), "utf8");
     const goals = await readFile(join(root, "goals.md"), "utf8");
-    const plans = await readFile(join(root, "plans.md"), "utf8");
     const projectPlans = await readFile(join(project, ".dream", "plans.md"), "utf8");
     assert.match(tasks, /Goal: Ship the harness/u);
     assert.match(tasks, /Plan: Implement tool loop/u);
     assert.match(goals, /Ship the harness/u);
-    assert.match(plans, /Implement tool loop/u);
     assert.match(projectPlans, /Implement tool loop/u);
+    await assert.rejects(readFile(join(root, "plans.md"), "utf8"), { code: "ENOENT" });
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

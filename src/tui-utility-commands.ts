@@ -20,6 +20,7 @@ import { runTasksCommand } from "./tui-task-command.js";
 import { runWorkflowScript, type WorkflowAgentOptions } from "./workflow-engine.js";
 import {
   addWorkspaceDir,
+  appendProjectWorkflowNote,
   appendTask,
   appendWorkflowNote,
   formatArtifacts,
@@ -223,7 +224,9 @@ async function runWorkflowPrompt(
     output.write(`${title.toLowerCase()} skipped: no prompt\n`);
     return;
   }
-  const filePath = await appendWorkflowNote(options.configRoot, fileName, taskLabel, prompt, options.cwd);
+  const filePath = fileName === "plans.md"
+    ? await appendProjectWorkflowNote(options.cwd, fileName, taskLabel, prompt)
+    : await appendWorkflowNote(options.configRoot, fileName, taskLabel, prompt);
   await appendTask(options.configRoot, taskLabel, prompt);
   output.write(`${paint(`${taskLabel.toLowerCase()} saved:`, ansi.green)} ${paint(filePath, ansi.blue)}\n`);
   await runFramedAgentPrompt({ ...options, rest: prompt }, title, instruction);

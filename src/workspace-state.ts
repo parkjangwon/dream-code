@@ -66,17 +66,27 @@ export async function appendWorkflowNote(
   fileName: "goals.md" | "plans.md",
   title: string,
   detail: string,
-  projectRoot?: string,
 ): Promise<string> {
   await mkdir(root, { recursive: true, mode: 0o700 });
-  const entry = [`## ${new Date().toISOString()} ${title}`, "", detail.trim(), ""].join("\n");
+  const entry = workflowEntry(title, detail);
   await appendFile(join(root, fileName), entry);
-  if (projectRoot === undefined) {
-    return join(root, fileName);
-  }
+  return join(root, fileName);
+}
+
+export async function appendProjectWorkflowNote(
+  projectRoot: string,
+  fileName: "goals.md" | "plans.md",
+  title: string,
+  detail: string,
+): Promise<string> {
+  const entry = workflowEntry(title, detail);
   const projectFilePath = join(projectRoot, ".dream", fileName);
   await appendFile(projectFilePath, entry);
   return projectFilePath;
+}
+
+function workflowEntry(title: string, detail: string): string {
+  return [`## ${new Date().toISOString()} ${title}`, "", detail.trim(), ""].join("\n");
 }
 
 async function appendFile(filePath: string, entry: string): Promise<void> {
