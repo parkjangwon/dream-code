@@ -3,8 +3,6 @@ import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
 import { initializeDreamHome } from "./config-init.js";
 import { defaultConfigRoot, loadConfig } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
-import { runCliCronCommand, runCliDaemonCommand } from "./cron-cli.js";
-import { runTui } from "./tui.js";
 import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
 
 type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "version" | "workday";
@@ -20,13 +18,13 @@ async function main(): Promise<void> {
 
   switch (parsedArgs.command) {
     case "tui":
-      await runTui({ oneShotYolo: parsedArgs.oneShotYolo });
+      await runTuiCommand(parsedArgs.oneShotYolo);
       return;
     case "cron":
-      await runCliCronCommand(parsedArgs.rest);
+      await runCronCommand(parsedArgs.rest);
       return;
     case "daemon":
-      await runCliDaemonCommand(parsedArgs.rest);
+      await runDaemonCommand(parsedArgs.rest);
       return;
     case "doctor":
       console.log(summarizeDoctor(await runDoctor()));
@@ -56,6 +54,21 @@ async function main(): Promise<void> {
     default:
       return assertNever(parsedArgs.command);
   }
+}
+
+async function runTuiCommand(oneShotYolo: boolean): Promise<void> {
+  const { runTui } = await import("./tui.js");
+  await runTui({ oneShotYolo });
+}
+
+async function runCronCommand(rest: readonly string[]): Promise<void> {
+  const { runCliCronCommand } = await import("./cron-cli.js");
+  await runCliCronCommand(rest);
+}
+
+async function runDaemonCommand(rest: readonly string[]): Promise<void> {
+  const { runCliDaemonCommand } = await import("./cron-cli.js");
+  await runCliDaemonCommand(rest);
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
