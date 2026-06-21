@@ -17,6 +17,9 @@ test("createAgentMessages keeps prompts minimal for token-saving startup", () =>
   assert.equal(messages[1]?.role, "user");
   assert.equal(messages[1]?.content, "fix tests");
   assert.match(messages[0]?.content ?? "", /fast coding harness/i);
+  assert.match(messages[0]?.content ?? "", /prefer completion over clarification/u);
+  assert.match(messages[0]?.content ?? "", /use research before asking the user/u);
+  assert.match(messages[0]?.content ?? "", /verify before claiming success/u);
 });
 
 test("createAgentMessages injects only explicitly requested skill bodies", () => {

@@ -9,8 +9,30 @@ and the TUI smooth, while giving you the power tools expected from modern coding
 agents: durable sessions, model routing, skills, agents, swarm fan-out, cron
 automation, compact context, workflow recipes, and YOLO mode.
 
+## Direction
+
+Dream Code is built around trust, autonomy, and mobility. It is not meant to be
+only a chat box for code: it should behave like a coding companion you can leave
+with a goal while you sleep, then return to a clear checkpoint, artifact, or
+finished change.
+
+That direction shapes the runtime loop:
+
+- **Goal-first execution:** keep moving toward the user’s goal instead of asking
+  for routine confirmation.
+- **Autonomous judgment:** inspect the repository, research unclear concepts,
+  choose safe next steps, and verify before claiming success.
+- **Mobile-first operations:** stay fast and readable on Termux and small
+  terminals, with collapsed tool output and concise status surfaces.
+- **Smart resource use:** route work across providers and models so simple work
+  stays cheap and hard work gets stronger models.
+- **Overdrive when needed:** use Dream Swarm for high-parallel work when the user
+  wants speed more than token thrift.
+- **Memory as trust:** preserve decisions, checkpoints, task progress, and
+  artifacts so long-running work remains understandable.
+
 ```text
-Dream Code (v0.1.1)
+Dream Code (v0.1.2)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -61,8 +83,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -71,7 +93,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.1 sh install.sh
+DREAM_CODE_VERSION=v0.1.2 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -79,6 +101,9 @@ DREAM_CODE_SOURCE=1 sh install.sh
 
 - **Fast TUI:** slash commands, history, menus, skill autocomplete, smooth
   streaming, and Esc double-tap interrupt.
+- **Autonomous by default:** Dream Code favors completion over clarification,
+  uses research when a concept is unclear, and verifies before reporting
+  success.
 - **Termux-first:** built for Android Termux, with macOS, Linux, and Windows CLI
   support.
 - **Auto model routing:** use one provider by default, or switch on `/auto` to
@@ -105,7 +130,8 @@ DREAM_CODE_SOURCE=1 sh install.sh
   LSP diagnostics, live MCP tools, hooks, and local tool health.
 - **Workspace control:** let the agent list, search, read, create directories,
   write files, edit files, delete files, run shell commands, and research the
-  web with permission-aware prompts.
+  web. Fresh installs start in YOLO bypass mode; use `/yolo` to toggle back to
+  ask mode when you want approval prompts.
 
 ## Providers
 
@@ -288,7 +314,7 @@ Enter       Submit input or choose a menu item
 - Local file read/write/edit helpers
 - Shell command support with permission mode awareness
 - Native OS notifications for long completions and permission-required states
-- YOLO bypass mode through `dream --yolo` or `/yolo`
+- YOLO bypass mode by default, with `dream --yolo` or `/yolo` for explicit control
 - Copy/export conversation helpers
 - Ripgrep/fd/jq-friendly local tool checks
 

@@ -92,6 +92,7 @@ async function createCronFromArgs(root: string, rawArgs: readonly string[], cwd:
     return;
   }
   const draft = parseCronDraft(text, cwd);
+  const config = await loadConfig(root);
   const project = await findOrCreateProject(root, draft.projectName, cwd);
   const job = await createCronJob(root, {
     projectId: project.id,
@@ -101,7 +102,7 @@ async function createCronFromArgs(root: string, rawArgs: readonly string[], cwd:
     prompt: parsed.flags.get("prompt") ?? draft.prompt,
     mode: parseMode(parsed.flags.get("mode") ?? draft.prompt),
     modelMode: parsed.flags.get("model") === "single" ? "single" : "auto",
-    permissionMode: parsePermissionMode(parsed.flags.get("permission")),
+    permissionMode: parsePermissionMode(parsed.flags.get("permission"), config.permissions.mode),
     notify: parsed.flags.get("notify") !== "false",
     outputPath: parsed.flags.get("output"),
   });

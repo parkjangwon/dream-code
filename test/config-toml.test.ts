@@ -36,7 +36,7 @@ test("parseConfigToml reads serialized Dream config", () => {
   });
 
   assert.equal(parsed.version, 1);
-  assert.equal(parsed.permissions.mode, "ask");
+  assert.equal(parsed.permissions.mode, "yolo");
   assert.equal(parsed.notifications.completion, true);
   assert.equal(parsed.model.single.models.mid, "gpt-5.5");
   assert.equal(parsed.model.auto.routes[0]?.match.includes("grep"), true);
