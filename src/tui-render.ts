@@ -79,9 +79,9 @@ export function renderHeaderPanel(
   const contentWidth = width - 2;
   const infoWidth = Math.max(20, contentWidth);
   const infoRows = [
-    paint(`Welcome to Dream Code ${DREAM_VERSION}!`, ansi.accent + ansi.bold),
+    paint(`Dream Code (v${DREAM_VERSION})`, ansi.accent + ansi.bold),
     paint(truncateText(DREAM_SIGNATURE, infoWidth), ansi.dim),
-    infoLine("Directory:", formatWorkspacePath(), infoWidth),
+    infoLine("directory:", formatWorkspacePath(), infoWidth),
   ] as const;
 
   return infoRows.map((infoRow) => panelLine(infoRow, contentWidth));
@@ -109,9 +109,9 @@ function infoLine(
   width: number,
   valueColor: string = ansi.blue,
 ): string {
-  const labelWidth = label.length + 1;
+  const labelWidth = 13;
   const remainingWidth = Math.max(1, width - labelWidth);
-  return `${paint(label, ansi.dim)} ${paint(truncateText(value, remainingWidth), valueColor)}`;
+  return `${paint(label.padEnd(labelWidth), ansi.dim)}${paint(truncateText(value, remainingWidth), valueColor)}`;
 }
 
 function panelLine(content: string, width: number): string {

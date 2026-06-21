@@ -4,19 +4,21 @@ import assert from "node:assert/strict";
 import { defaultConfig } from "../src/config.js";
 import { renderHeaderPanel } from "../src/tui-render.js";
 
-test("header panel keeps upper guide lines transparent while primary color is undecided", () => {
+test("header panel renders a clean text-only Dream Code header", () => {
   const panel = renderHeaderPanel(defaultConfig(), false, 80);
+  const text = panel.join("\n");
 
-  assert.doesNotMatch(panel.join("\n"), /[┌┐└┘│─]/);
-  assert.match(panel[0] ?? "", /Welcome to Dream Code/);
+  assert.doesNotMatch(text, /[╭╮╰╯│─]/u);
+  assert.match(text, /Dream Code \(v0\.1\.0\)/u);
+  assert.match(text, /Even while you sleep, your dreams keep building\. ☾/u);
 });
 
-test("header panel omits model and permission details", () => {
+test("header panel keeps model out of the top chrome", () => {
   const panel = renderHeaderPanel(defaultConfig(), true, 80);
   const text = panel.join("\n");
 
-  assert.match(text, /Directory:/u);
+  assert.match(text, /directory:/u);
   assert.doesNotMatch(text, /Model:/u);
-  assert.doesNotMatch(text, /Permission:/u);
-  assert.doesNotMatch(text, /YOLO ON/u);
+  assert.doesNotMatch(text, /permissions:/u);
+  assert.doesNotMatch(text, /YOLO mode/u);
 });
