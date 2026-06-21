@@ -2,6 +2,8 @@
 
 **Even while you sleep, your dreams keep building.**
 
+<img width="666" height="540" alt="image" src="https://github.com/user-attachments/assets/b79d34d1-2718-4b11-85ee-d40660890ae5" />
+
 Dream Code is a fast, Termux-first coding harness CLI. It keeps the base small
 and the TUI smooth, while giving you the power tools expected from modern coding
 agents: durable sessions, model routing, skills, agents, swarm fan-out, compact
