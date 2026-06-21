@@ -2,6 +2,7 @@ import { ansi, paint } from "./ansi.js";
 import type { SelectedModel } from "./model-routing.js";
 import { createThinkingAnimation } from "./thinking-animation.js";
 import type { IntervalClearer, IntervalScheduler } from "./thinking-animation.js";
+import { highlightCodeLine } from "./tui-code-highlight.js";
 import {
   isMarkdownTableDivider,
   isMarkdownTableRow,
@@ -25,9 +26,9 @@ export type AgentResponseSessionOptions = {
   readonly thinkingAnimationIntervalMs?: number;
 };
 
-type MarkdownState = {
-  readonly inFence: boolean;
-};
+type MarkdownState =
+  | { readonly kind: "text" }
+  | { readonly kind: "fence"; readonly language: string };
 
 type RenderedMarkdownLine = {
   readonly text: string;
@@ -40,7 +41,7 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
   let receivedToken = false;
   let characterCount = 0;
   let lineBuffer = "";
-  let markdownState: MarkdownState = { inFence: false };
+  let markdownState: MarkdownState = { kind: "text" };
   let tableBuffer: readonly string[] = [];
 
   const model = modelLabel(options.selectedModel);
@@ -64,7 +65,7 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
     tableBuffer = [];
   };
   const writeLine = (line: string): void => {
-    if (!markdownState.inFence && (isMarkdownTableRow(line) || isMarkdownTableDivider(line))) {
+    if (markdownState.kind === "text" && (isMarkdownTableRow(line) || isMarkdownTableDivider(line))) {
       tableBuffer = [...tableBuffer, line];
       return;
     }
@@ -158,17 +159,17 @@ function responseRail(): string {
 function renderMarkdownLine(line: string, state: MarkdownState): RenderedMarkdownLine {
   const fence = /^```([A-Za-z0-9_-]+)?\s*$/u.exec(line.trim());
   if (fence !== null) {
-    return state.inFence
-      ? { text: paint("╰─", ansi.guide), state: { inFence: false } }
+    return state.kind === "fence"
+      ? { text: paint("╰─", ansi.guide), state: { kind: "text" } }
       : {
         text: paint(`╭─ ${fence[1] ?? "code"}`, ansi.guide),
-        state: { inFence: true },
+        state: { kind: "fence", language: fence[1] ?? "plain" },
       };
   }
 
-  if (state.inFence) {
+  if (state.kind === "fence") {
     return {
-      text: `${paint("  ", ansi.guide)}${paint(line, ansi.yellow)}`,
+      text: `${paint("  ", ansi.guide)}${highlightCodeLine(line, state.language)}`,
       state,
     };
   }

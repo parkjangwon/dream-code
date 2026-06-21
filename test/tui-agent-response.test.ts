@@ -151,7 +151,28 @@ test("agent response session renders fenced code blocks", () => {
   const rawOutput = chunks.join("");
   const plainOutput = stripAnsi(rawOutput);
   assert.match(plainOutput, /│ ╭─ bash\n│   ls -la \/tmp\n│ ╰─\n│ Done/);
-  assert.equal(rawOutput.includes(paint("ls -la /tmp", ansi.yellow)), true);
+  assert.equal(rawOutput.includes(paint("ls", ansi.yellow)), true);
+  assert.equal(rawOutput.includes(paint("tmp", ansi.yellow)), true);
+});
+
+test("agent response session highlights fenced code by language", () => {
+  const chunks: string[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    now: () => 0,
+  });
+
+  session.start();
+  session.token("```java\npublic class App {\n  return 1;\n}\n```\n");
+  session.finish();
+
+  const rawOutput = chunks.join("");
+  const plainOutput = stripAnsi(rawOutput);
+  assert.match(plainOutput, /│ ╭─ java\n│   public class App \{\n│     return 1;\n│   \}\n│ ╰─/);
+  assert.equal(rawOutput.includes(paint("public", ansi.blue)), true);
+  assert.equal(rawOutput.includes(paint("class", ansi.blue)), true);
+  assert.equal(rawOutput.includes(paint("1", ansi.accent)), true);
 });
 
 test("agent response session renders markdown tables as terminal rows", () => {
