@@ -186,8 +186,12 @@ export async function handleInput(
 }
 
 function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questioner {
+  let wasCancelled = false;
   return {
     question: async (prompt) => {
+      if (wasCancelled) {
+        return "";
+      }
       const answer = await readInteractiveInput({
         prompt,
         history: [],
@@ -195,10 +199,15 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
         redrawHeader: () => {
           renderHeader(config, options.oneShotYolo);
         },
+        cancelOnEmptyBackspace: true,
       });
+      wasCancelled = answer.kind === "cancel";
       return answer.kind === "submit" ? answer.text : "";
     },
     secret: async (prompt) => {
+      if (wasCancelled) {
+        return "";
+      }
       const answer = await readInteractiveInput({
         prompt,
         history: [],
@@ -207,9 +216,12 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
         redrawHeader: () => {
           renderHeader(config, options.oneShotYolo);
         },
+        cancelOnEmptyBackspace: true,
       });
+      wasCancelled = answer.kind === "cancel";
       return answer.kind === "submit" ? answer.text : "";
     },
+    wasCancelled: () => wasCancelled,
     select: async (pickerOptions) => readInteractivePicker({
       ...pickerOptions,
       redrawHeader: () => {

@@ -16,6 +16,7 @@ export type InteractiveInputOptions = {
   readonly redrawHeader: () => void;
   readonly secret?: boolean;
   readonly statusLines?: readonly string[];
+  readonly cancelOnEmptyBackspace?: boolean;
 };
 
 export type InteractiveInputResult =
@@ -35,7 +36,9 @@ export function readInteractiveInput(
   options: InteractiveInputOptions,
 ): Promise<InteractiveInputResult> {
   return new Promise((resolve) => {
-    let state = createInputState(options.history, options.commands, options.skills ?? []);
+    let state = createInputState(options.history, options.commands, options.skills ?? [], {
+      cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
+    });
     let renderedLines = 0;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
@@ -45,12 +48,12 @@ export function readInteractiveInput(
       renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
     };
 
-    const finish = (result: InteractiveInputResult): void => {
+    const finish = (result: InteractiveInputResult, echoCancel = true): void => {
       clearRenderedLines(renderedLines);
       cleanup();
       if (result.kind === "submit") {
         output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [])}\n`);
-      } else {
+      } else if (echoCancel) {
         output.write("^C\n");
       }
       resolve(result);
@@ -82,6 +85,10 @@ export function readInteractiveInput(
           return;
         case "cancel":
           {
+            if (update.effect.reason === "emptyBackspace") {
+              finish({ kind: "cancel" }, false);
+              return;
+            }
             const now = Date.now();
             if (shouldExitOnRepeatedCtrlC(lastCtrlCAt, now)) {
               finish({ kind: "cancel" });

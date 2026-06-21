@@ -114,11 +114,17 @@ async function runSideQuestion(options: UtilityCommandOptions): Promise<void> {
 }
 
 async function runInterview(options: UtilityCommandOptions): Promise<void> {
-  const answers = [
-    await options.questioner.question("Primary outcome: "),
-    await options.questioner.question("Constraints: "),
-    await options.questioner.question("Definition of done: "),
-  ].map((answer) => answer.trim()).filter((answer) => answer.length > 0);
+  const answers: string[] = [];
+  for (const prompt of ["Primary outcome: ", "Constraints: ", "Definition of done: "] as const) {
+    const answer = await options.questioner.question(prompt);
+    if (options.questioner.wasCancelled?.() === true) {
+      return;
+    }
+    const trimmed = answer.trim();
+    if (trimmed.length > 0) {
+      answers.push(trimmed);
+    }
+  }
   if (answers.length === 0) {
     output.write("interview skipped\n");
     return;

@@ -168,3 +168,16 @@ test("question mark stays in the input and backspace removes it naturally", () =
   assert.equal(inserted.state.cursor, 1);
   assert.equal(removed.state.text, "");
 });
+
+test("empty backspace cancels cancellable prompt input only", () => {
+  const mainPrompt = reduceInputState(createInputState([], slashCommands), { kind: "backspace" });
+  const modalPrompt = reduceInputState(createInputState([], slashCommands, [], { cancelOnEmptyBackspace: true }), {
+    kind: "backspace",
+  });
+
+  assert.equal(mainPrompt.effect.kind, "none");
+  assert.equal(modalPrompt.effect.kind, "cancel");
+  if (modalPrompt.effect.kind === "cancel") {
+    assert.equal(modalPrompt.effect.reason, "emptyBackspace");
+  }
+});

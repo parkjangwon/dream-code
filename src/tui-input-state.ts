@@ -17,6 +17,7 @@ export type InputState = {
   readonly commands: readonly SlashCommand[];
   readonly skills: readonly DreamSkill[];
   readonly palette: PaletteState | undefined;
+  readonly cancelOnEmptyBackspace: boolean;
 };
 
 export type InputAction =
@@ -40,7 +41,7 @@ export type InputEffect =
   | { readonly kind: "none" }
   | { readonly kind: "submit"; readonly text: string }
   | { readonly kind: "redraw" }
-  | { readonly kind: "cancel" };
+  | { readonly kind: "cancel"; readonly reason: "ctrlC" | "emptyBackspace" };
 
 export type InputUpdate = {
   readonly state: InputState;
@@ -51,6 +52,7 @@ export function createInputState(
   history: readonly string[],
   commands: readonly SlashCommand[],
   skills: readonly DreamSkill[] = [],
+  options: { readonly cancelOnEmptyBackspace?: boolean } = {},
 ): InputState {
   return {
     text: "",
@@ -61,6 +63,7 @@ export function createInputState(
     commands,
     skills,
     palette: undefined,
+    cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
   };
 }
 
@@ -95,7 +98,7 @@ export function reduceInputState(state: InputState, action: InputAction): InputU
     case "ctrlL":
       return { state, effect: { kind: "redraw" } };
     case "ctrlC":
-      return { state, effect: { kind: "cancel" } };
+      return { state, effect: { kind: "cancel", reason: "ctrlC" } };
     default:
       return assertNever(action);
   }
@@ -108,6 +111,9 @@ function insertText(state: InputState, value: string): InputUpdate {
 
 function deleteBeforeCursor(state: InputState): InputUpdate {
   if (state.cursor === 0) {
+    if (state.text.length === 0 && state.cancelOnEmptyBackspace) {
+      return { state, effect: { kind: "cancel", reason: "emptyBackspace" } };
+    }
     return { state, effect: { kind: "none" } };
   }
 

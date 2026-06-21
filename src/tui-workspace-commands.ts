@@ -36,6 +36,7 @@ export type Questioner = {
   readonly secret?: (prompt: string) => Promise<string>;
   readonly select?: (options: PickerOptions) => Promise<string | undefined>;
   readonly manageSkills?: (options: SkillManagerOptions) => Promise<readonly string[] | undefined>;
+  readonly wasCancelled?: () => boolean;
 };
 
 export async function runWorkspaceCommand(

@@ -135,6 +135,41 @@ test("plan and goal commands save workflow notes before model execution", async 
   }
 });
 
+test("interview command stops immediately when prompt input is cancelled", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-interview-cancel-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-interview-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    let calls = 0;
+    await runWorkspaceCommand(
+      "/interview",
+      defaultConfig(),
+      true,
+      {
+        question: async () => {
+          calls += 1;
+          return "";
+        },
+        wasCancelled: () => true,
+      },
+      root,
+      undefined,
+      project,
+    );
+
+    assert.equal(calls, 1);
+    assert.equal(stripAnsi(chunks.join("")).includes("interview skipped"), false);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("copyLastAssistantResponse accepts nth latest assistant response", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-copy-nth-"));
   try {
