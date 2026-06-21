@@ -1,27 +1,17 @@
+import { highlight, supportsLanguage } from "cli-highlight";
+import type { Theme } from "cli-highlight";
+
 import { ansi, paint } from "./ansi.js";
 
-type LanguageFamily =
-  | "shell"
-  | "java"
-  | "typescript"
-  | "python"
-  | "go"
-  | "rust"
-  | "json"
-  | "yaml"
-  | "toml"
-  | "sql"
-  | "plain";
-
-const languageAliases: Readonly<Record<string, LanguageFamily>> = {
-  bash: "shell",
-  sh: "shell",
-  shell: "shell",
-  zsh: "shell",
+const languageAliases: Readonly<Record<string, string>> = {
+  bash: "bash",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
   java: "java",
-  js: "typescript",
-  javascript: "typescript",
-  jsx: "typescript",
+  js: "javascript",
+  javascript: "javascript",
+  jsx: "javascript",
   ts: "typescript",
   tsx: "typescript",
   typescript: "typescript",
@@ -38,121 +28,76 @@ const languageAliases: Readonly<Record<string, LanguageFamily>> = {
   sql: "sql",
 } as const;
 
-const languageKeywords: Readonly<Record<LanguageFamily, readonly string[]>> = {
-  shell: ["case", "do", "done", "elif", "else", "esac", "export", "fi", "for", "function", "if", "in", "local", "then", "while"],
-  java: ["abstract", "boolean", "break", "case", "catch", "class", "const", "continue", "default", "else", "enum", "extends", "final", "finally", "for", "if", "implements", "import", "instanceof", "interface", "new", "package", "private", "protected", "public", "return", "static", "switch", "this", "throw", "throws", "try", "void", "while"],
-  typescript: ["async", "await", "break", "case", "catch", "class", "const", "continue", "default", "else", "export", "extends", "finally", "for", "from", "function", "if", "import", "interface", "let", "new", "private", "public", "readonly", "return", "satisfies", "switch", "throw", "try", "type", "while"],
-  python: ["and", "as", "async", "await", "break", "class", "continue", "def", "elif", "else", "except", "False", "finally", "for", "from", "if", "import", "in", "is", "lambda", "None", "not", "or", "pass", "raise", "return", "True", "try", "while", "with", "yield"],
-  go: ["break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var"],
-  rust: ["as", "async", "await", "break", "const", "continue", "crate", "else", "enum", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "trait", "type", "unsafe", "use", "where", "while"],
-  json: ["false", "null", "true"],
-  yaml: ["false", "no", "null", "off", "on", "true", "yes"],
-  toml: ["false", "true"],
-  sql: ["alter", "and", "as", "by", "create", "delete", "drop", "from", "group", "having", "in", "insert", "into", "join", "left", "limit", "not", "null", "on", "or", "order", "right", "select", "set", "table", "update", "values", "where"],
-  plain: [],
-} as const;
+const dreamTheme: Theme = {
+  default: (text) => paint(text, ansi.yellow),
+  keyword: (text) => paint(text, ansi.blue),
+  built_in: (text) => paint(text, ansi.muted),
+  type: (text) => paint(text, ansi.accent),
+  literal: (text) => paint(text, ansi.accent),
+  number: (text) => paint(text, ansi.accent),
+  regexp: (text) => paint(text, ansi.green),
+  string: (text) => paint(text, ansi.green),
+  subst: (text) => paint(text, ansi.accent),
+  symbol: (text) => paint(text, ansi.accent),
+  class: (text) => paint(text, ansi.accent),
+  function: (text) => paint(text, ansi.accent),
+  title: (text) => paint(text, ansi.accent),
+  params: (text) => paint(text, ansi.yellow),
+  comment: (text) => paint(text, ansi.guide),
+  doctag: (text) => paint(text, ansi.muted),
+  meta: (text) => paint(text, ansi.muted),
+  "meta-keyword": (text) => paint(text, ansi.blue),
+  "meta-string": (text) => paint(text, ansi.green),
+  section: (text) => paint(text, ansi.accent),
+  tag: (text) => paint(text, ansi.blue),
+  name: (text) => paint(text, ansi.blue),
+  "builtin-name": (text) => paint(text, ansi.muted),
+  attr: (text) => paint(text, ansi.blue),
+  attribute: (text) => paint(text, ansi.blue),
+  variable: (text) => paint(text, ansi.accent),
+  bullet: (text) => paint(text, ansi.guide),
+  code: (text) => paint(text, ansi.yellow),
+  emphasis: (text) => paint(text, ansi.accent),
+  strong: (text) => paint(text, ansi.bold),
+  formula: (text) => paint(text, ansi.yellow),
+  link: (text) => paint(text, ansi.blue),
+  quote: (text) => paint(text, ansi.guide),
+  "selector-tag": (text) => paint(text, ansi.blue),
+  "selector-id": (text) => paint(text, ansi.accent),
+  "selector-class": (text) => paint(text, ansi.accent),
+  "selector-attr": (text) => paint(text, ansi.blue),
+  "selector-pseudo": (text) => paint(text, ansi.muted),
+  "template-tag": (text) => paint(text, ansi.blue),
+  "template-variable": (text) => paint(text, ansi.accent),
+  addition: (text) => paint(text, ansi.green),
+  deletion: (text) => paint(text, ansi.red),
+};
 
 export function highlightCodeLine(line: string, language: string): string {
-  const family = languageAliases[language.toLowerCase()] ?? "plain";
-  if (family === "plain") {
+  if (line.length === 0) {
+    return "";
+  }
+
+  const normalized = normalizeLanguage(language);
+  if (normalized === undefined) {
     return paint(line, ansi.yellow);
   }
-  if (family === "shell") {
-    return highlightShellLine(line);
-  }
-  return highlightGenericLine(line, languageKeywords[family], family);
-}
 
-function highlightShellLine(line: string): string {
-  const commentIndex = line.indexOf("#");
-  const commandPart = commentIndex === -1 ? line : line.slice(0, commentIndex);
-  const commentPart = commentIndex === -1 ? "" : line.slice(commentIndex);
-  return `${highlightGenericLine(commandPart, languageKeywords.shell, "shell")}${paint(commentPart, ansi.guide)}`;
-}
-
-function highlightGenericLine(
-  line: string,
-  keywords: readonly string[],
-  family: LanguageFamily,
-): string {
-  const comment = splitTrailingComment(line, family);
-  if (comment !== undefined) {
-    return `${highlightGenericLine(comment.code, keywords, family)}${paint(comment.comment, ansi.guide)}`;
-  }
-
-  const keywordPattern = keywords.length === 0 ? undefined : new RegExp(`\\b(${keywords.join("|")})\\b`, family === "sql" ? "iu" : "u");
-  const tokenPattern = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|[A-Za-z_$][\w$-]*)/gu;
-  let result = "";
-  let cursor = 0;
-  for (const match of line.matchAll(tokenPattern)) {
-    const token = match[0];
-    const index = match.index;
-    result += line.slice(cursor, index);
-    result += paintToken(token, keywordPattern, family);
-    cursor = index + token.length;
-  }
-  return `${result}${line.slice(cursor)}`;
-}
-
-function splitTrailingComment(
-  line: string,
-  family: LanguageFamily,
-): { readonly code: string; readonly comment: string } | undefined {
-  const marker = commentMarkerFor(family);
-  if (marker === undefined) {
-    return undefined;
-  }
-  const index = line.indexOf(marker);
-  if (index === -1) {
-    return undefined;
-  }
-  return { code: line.slice(0, index), comment: line.slice(index) };
-}
-
-function commentMarkerFor(family: LanguageFamily): string | undefined {
-  switch (family) {
-    case "java":
-    case "typescript":
-    case "go":
-    case "rust":
-      return "//";
-    case "python":
-    case "yaml":
-    case "toml":
-      return "#";
-    case "sql":
-      return "--";
-    case "json":
-    case "plain":
-    case "shell":
-      return undefined;
+  try {
+    return highlight(line, {
+      language: normalized,
+      ignoreIllegals: true,
+      theme: dreamTheme,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return paint(line, ansi.yellow);
+    }
+    throw error;
   }
 }
 
-function paintToken(token: string, keywordPattern: RegExp | undefined, family: LanguageFamily): string {
-  if (isQuoted(token)) {
-    return paint(token, ansi.green);
-  }
-  if (/^\d/u.test(token)) {
-    return paint(token, ansi.accent);
-  }
-  if (isLiteral(token, family)) {
-    return paint(token, ansi.accent);
-  }
-  if (keywordPattern?.test(token) === true) {
-    keywordPattern.lastIndex = 0;
-    return paint(token, ansi.blue);
-  }
-  return paint(token, token.startsWith("$") ? ansi.accent : ansi.yellow);
-}
-
-function isQuoted(token: string): boolean {
-  return token.startsWith("\"") || token.startsWith("'") || token.startsWith("`");
-}
-
-function isLiteral(token: string, family: LanguageFamily): boolean {
-  if (family === "json" || family === "toml" || family === "yaml") {
-    return /^(false|null|no|off|on|true|yes)$/iu.test(token);
-  }
-  return /^(False|None|True|false|null|self|this|true)$/u.test(token);
+function normalizeLanguage(language: string): string | undefined {
+  const normalized = languageAliases[language.toLowerCase()] ?? language.toLowerCase();
+  return supportsLanguage(normalized) ? normalized : undefined;
 }

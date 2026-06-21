@@ -151,8 +151,7 @@ test("agent response session renders fenced code blocks", () => {
   const rawOutput = chunks.join("");
   const plainOutput = stripAnsi(rawOutput);
   assert.match(plainOutput, /│ ╭─ bash\n│   ls -la \/tmp\n│ ╰─\n│ Done/);
-  assert.equal(rawOutput.includes(paint("ls", ansi.yellow)), true);
-  assert.equal(rawOutput.includes(paint("tmp", ansi.yellow)), true);
+  assert.equal(rawOutput.includes(paint("ls -la /tmp", ansi.yellow)), true);
 });
 
 test("agent response session highlights fenced code by language", () => {
