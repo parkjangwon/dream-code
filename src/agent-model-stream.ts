@@ -15,6 +15,7 @@ import { createAgentResponseSession } from "./tui-agent-response.js";
 type AgentModelStreamOptions = {
   readonly configRoot?: string;
   readonly signal?: AbortSignal;
+  readonly renderResponse?: boolean;
   readonly write: (text: string) => void;
 };
 
@@ -48,6 +49,9 @@ async function streamAgentOnce(
   selectedModel: SelectedModel,
   messages: readonly ChatMessage[],
 ): Promise<string> {
+  if (options.renderResponse === false) {
+    return streamAgentSilently(options, selectedModel, messages);
+  }
   const response = createAgentResponseSession({ selectedModel, write: options.write });
   let assistantText = "";
   const startedAt = Date.now();
@@ -64,6 +68,30 @@ async function streamAgentOnce(
     return assistantText;
   } catch (error) {
     response.stop();
+    await recordModelTelemetry(configRoot, {
+      ...modelTelemetryInput(selectedModel, false, startedAt, messages, assistantText),
+      error: error instanceof Error ? error.message : "Unknown provider failure",
+    });
+    throw error;
+  }
+}
+
+async function streamAgentSilently(
+  options: AgentModelStreamOptions,
+  selectedModel: SelectedModel,
+  messages: readonly ChatMessage[],
+): Promise<string> {
+  let assistantText = "";
+  const startedAt = Date.now();
+  const configRoot = options.configRoot ?? defaultConfigRoot();
+  const onToken = (token: string): void => {
+    assistantText = `${assistantText}${token}`;
+  };
+  try {
+    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
+    await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
+    return assistantText;
+  } catch (error) {
     await recordModelTelemetry(configRoot, {
       ...modelTelemetryInput(selectedModel, false, startedAt, messages, assistantText),
       error: error instanceof Error ? error.message : "Unknown provider failure",

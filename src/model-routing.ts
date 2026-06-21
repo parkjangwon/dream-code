@@ -6,11 +6,9 @@ import {
   classifyPromptCategoryImpl,
   selectAutoCandidates,
 } from "./model-routing-selection.js";
-import { defaultReasoningConfig, reasoningEfforts, type ReasoningEffort } from "./reasoning-effort.js";
 
 export const modelTierSchema = z.enum(["low", "mid", "high"]);
 export type ModelTier = z.infer<typeof modelTierSchema>;
-export const reasoningEffortSchema = z.enum(reasoningEfforts);
 export const autoModelCategorySchema = z.enum([
   "quick",
   "reader",
@@ -65,9 +63,6 @@ export type AutoModelAgentRoute = z.infer<typeof autoModelAgentRouteSchema>;
 
 export const modelConfigSchema = z.object({
   mode: z.enum(["single", "auto"]),
-  reasoning: z.object({
-    effort: reasoningEffortSchema,
-  }).optional(),
   single: singleProviderModelConfigSchema,
   auto: z.object({
     routes: z.array(autoModelRouteSchema),
@@ -83,7 +78,6 @@ export type SelectedModel = {
   readonly provider: string;
   readonly model: string;
   readonly tier: ModelTier;
-  readonly reasoningEffort?: ReasoningEffort;
   readonly reason: string;
   readonly category?: AutoModelCategory;
   readonly agent?: string;
@@ -94,13 +88,13 @@ export type SelectModelOptions = {
   readonly connectedProviders?: ReadonlySet<string>;
   readonly unhealthyModels?: ReadonlySet<string>;
   readonly excludedModels?: ReadonlySet<string>;
+  readonly modelAvailable?: (provider: string, model: string) => boolean;
   readonly agentId?: string;
 };
 
 export function selectSingleProviderModel(
   config: SingleProviderModelConfig,
   requestedTier?: ModelTier,
-  reasoningEffort?: ReasoningEffort,
 ): SelectedModel {
   const tier = requestedTier ?? config.defaultTier;
 
@@ -108,7 +102,6 @@ export function selectSingleProviderModel(
     provider: config.provider,
     model: modelNameForTier(config.models, tier),
     tier,
-    ...(reasoningEffort === undefined || reasoningEffort === "auto" ? {} : { reasoningEffort }),
     reason: "single provider tier selection",
   };
 }
@@ -128,7 +121,7 @@ export function selectModelForPrompt(
       return selectSingleProviderModel(config.single, requestedTier);
     case "auto":
       return {
-        ...selectSingleProviderModel(config.single, requestedTier, reasoningEffortForConfig(config)),
+        ...selectSingleProviderModel(config.single, requestedTier),
         reason: "auto routing fallback",
       };
     default:
@@ -144,17 +137,12 @@ export function selectModelCandidatesForPrompt(
 ): readonly SelectedModel[] {
   switch (config.mode) {
     case "single":
-      return [selectSingleProviderModel(config.single, requestedTier, reasoningEffortForConfig(config))];
+      return selectSingleProviderCandidates(config.single, requestedTier, options);
     case "auto":
-      return selectAutoCandidates(config, prompt, requestedTier, options)
-        .map((candidate) => attachReasoningEffort(candidate, reasoningEffortForConfig(config)));
+      return selectAutoCandidates(config, prompt, requestedTier, options);
     default:
       return assertNever(config.mode);
   }
-}
-
-export function reasoningEffortForConfig(config: ModelConfig): ReasoningEffort {
-  return config.reasoning?.effort ?? defaultReasoningConfig.effort;
 }
 
 export function describeModelMode(config: ModelConfig): string {
@@ -213,8 +201,38 @@ function modelNameForTier(
   }
 }
 
-function attachReasoningEffort(selected: SelectedModel, effort: ReasoningEffort): SelectedModel {
-  return effort === "auto" ? selected : { ...selected, reasoningEffort: effort };
+function selectSingleProviderCandidates(
+  config: SingleProviderModelConfig,
+  requestedTier: ModelTier | undefined,
+  options: SelectModelOptions,
+): readonly SelectedModel[] {
+  const primary = selectSingleProviderModel(config, requestedTier);
+  if (!modelExcluded(primary, options)) {
+    return [primary];
+  }
+
+  const tiers = fallbackTiers(requestedTier ?? config.defaultTier);
+  return tiers
+    .map((tier) => selectSingleProviderModel(config, tier))
+    .filter((candidate) => !modelExcluded(candidate, options));
+}
+
+function fallbackTiers(activeTier: ModelTier): readonly ModelTier[] {
+  switch (activeTier) {
+    case "low":
+      return ["mid", "high"];
+    case "mid":
+      return ["high", "low"];
+    case "high":
+      return ["mid", "low"];
+    default:
+      return assertNever(activeTier);
+  }
+}
+
+function modelExcluded(selected: SelectedModel, options: SelectModelOptions): boolean {
+  return (options.excludedModels?.has(`${selected.provider}/${selected.model}`) ?? false)
+    || options.modelAvailable?.(selected.provider, selected.model) === false;
 }
 
 function assertNever(value: never): never {

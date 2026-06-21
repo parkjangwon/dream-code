@@ -222,8 +222,8 @@ function configWithOpenAi(): ReturnType<typeof defaultConfig> {
       single: {
         provider: "openai",
         models: {
-          low: "gpt-5.4-nano",
-          mid: "gpt-5.4-mini",
+          low: "gpt-5.4-mini",
+          mid: "gpt-5.5",
           high: "gpt-5.5",
         },
         defaultTier: "mid",

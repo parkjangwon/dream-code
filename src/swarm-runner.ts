@@ -1,9 +1,9 @@
-import { runAgentPrompt } from "./agent-runner.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
-import { ansi, paint, stripAnsi } from "./ansi.js";
+import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { writeSwarmMemory } from "./memory-writer.js";
+import { defaultSwarmAgentRunner } from "./swarm-agent-runner.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
@@ -200,28 +200,6 @@ async function runSynthesis(
   }
 }
 
-function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
-  return async (input) => {
-    let transcript = "";
-    await runAgentPrompt({
-      config: options.config,
-      configRoot: options.configRoot,
-      cwd: options.cwd,
-      prompt: input.prompt,
-      agent: input.agent,
-      signal: input.signal,
-      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
-      runKind: input.kind === "lane" ? "swarm-lane" : "swarm-synthesis",
-      runLabel: input.kind === "lane" ? input.lane.title : input.agent.name,
-      write: (chunk) => {
-        transcript = `${transcript}${stripAnsi(chunk)}`;
-        input.report({ characters: transcript.length, preview: tailPreview(transcript) });
-      },
-    });
-    return transcript.trim();
-  };
-}
-
 async function absorbSwarmMemory(options: SwarmRunOptions, summary: SwarmRunSummary): Promise<void> {
   if (options.sessionId === undefined) {
     return;
@@ -259,10 +237,6 @@ function runWithAbort(task: Promise<string>, signal: AbortSignal, cancelledOutpu
       signal.removeEventListener("abort", abort);
     });
   });
-}
-
-function tailPreview(text: string): string {
-  return text.split(/\r?\n/u).slice(-8).join("\n").trim();
 }
 
 function swarmPlanOptions(options: SwarmRunOptions): { readonly forceAgents?: number } {

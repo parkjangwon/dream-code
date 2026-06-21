@@ -31,8 +31,10 @@ import {
   ProviderRequestError,
 } from "./llm-provider.js";
 import { loadUnhealthyModelKeys } from "./model-telemetry.js";
+import { modelAvailableForCredential } from "./model-availability.js";
 import { selectModelCandidatesForPrompt, selectModelForPrompt, type SelectedModel } from "./model-routing.js";
 import { formatMemoryContext } from "./memory-store.js";
+import { notifyAgentComplete } from "./notifications.js";
 import { providerIsEnabled } from "./provider-settings.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
@@ -52,6 +54,7 @@ export type AgentPromptOptions = {
   readonly signal?: AbortSignal;
   readonly runKind?: AgentRunKind;
   readonly runLabel?: string;
+  readonly renderResponse?: boolean;
   readonly write: (text: string) => void;
 };
 
@@ -59,9 +62,10 @@ export { createAgentMessages } from "./agent-messages.js";
 
 const maxToolCycles = 3;
 
-export async function runAgentPrompt(options: AgentPromptOptions): Promise<void> {
+export async function runAgentPrompt(options: AgentPromptOptions): Promise<string> {
   const configRoot = options.configRoot ?? defaultConfigRoot();
   const activeCwd = options.cwd ?? cwd();
+  const startedAt = Date.now();
   const run = await startAgentRun(configRoot, {
     kind: options.runKind ?? "agent",
     agentId: options.agent?.id ?? "dream",
@@ -86,10 +90,13 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   };
   let finalStatus: Exclude<AgentRunStatus, "queued" | "running"> = "done";
   let finalError: string | undefined;
+  let finalAssistantText = "";
 
+  const credentials = await loadCredentials(configRoot);
   const selectedModels = selectModelCandidatesForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
     connectedProviders: await connectedProviderIds(configRoot, options.config, process.env),
     unhealthyModels: await loadUnhealthyModelKeys(configRoot),
+    modelAvailable: (provider, model) => modelAvailableForCredential(provider, model, credentials.providers[provider]),
     ...(options.agent === undefined ? {} : { agentId: options.agent.id }),
   });
   const primaryModel = firstSelectedModel(selectedModels);
@@ -110,19 +117,20 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
       if (run.signal.aborted) {
         finalStatus = "cancelled";
-        return;
+        return finalAssistantText;
       }
       messages = await appendActorInboxMessages(configRoot, actor.id, messages);
       const assistantText = await streamAgentWithFailover(runOptions, selectedModels, messages);
+      finalAssistantText = assistantText;
       const requests = extractAgentToolRequests(assistantText);
       if (requests.length === 0) {
-        return;
+        return finalAssistantText;
       }
       const results: AgentToolResult[] = [];
       for (const request of requests) {
         if (run.signal.aborted) {
           finalStatus = "cancelled";
-          return;
+          return finalAssistantText;
         }
         await runHookEvent(configRoot, "preTool", { tool: request.tool });
         const result = await runAgentToolRequest(request, agentToolPolicy(options, run.signal));
@@ -137,22 +145,29 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
         { role: "user", content: formatToolResults(results) },
       ];
     }
+    return finalAssistantText;
   } catch (error) {
     if (run.signal.aborted) {
       finalStatus = "cancelled";
-      return;
+      return finalAssistantText;
     }
     if (error instanceof MissingProviderConfigError) {
       finalStatus = "failed";
       finalError = error.message;
+      if (options.renderResponse === false) {
+        throw error;
+      }
       writeAgentFailure(runOptions, primaryModel, error.message, "warn");
-      return;
+      return finalAssistantText;
     }
     if (error instanceof ProviderRequestError || error instanceof ProviderProtocolError) {
       finalStatus = "failed";
       finalError = error.message;
+      if (options.renderResponse === false) {
+        throw error;
+      }
       writeAgentFailure(runOptions, primaryModel, error.message, "error");
-      return;
+      return finalAssistantText;
     }
     finalStatus = run.signal.aborted ? "cancelled" : "failed";
     finalError = error instanceof Error ? error.message : "Unknown agent failure";
@@ -161,6 +176,9 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     const status = run.signal.aborted && finalStatus === "done" ? "cancelled" : finalStatus;
     await run.finish(status, finalError === undefined ? undefined : { error: finalError });
     await updateActorStatus(configRoot, actor.id, status, finalError === undefined ? {} : { error: finalError });
+    if (status === "done" && options.renderResponse !== false) {
+      await notifyAgentComplete(options.config, options.prompt, Date.now() - startedAt);
+    }
   }
 }
 
@@ -190,7 +208,7 @@ function firstSelectedModel(selectedModels: readonly SelectedModel[]): SelectedM
     mode: "single",
     single: {
       provider: "openai",
-      models: { low: "gpt-5.4-nano", mid: "gpt-5.4-mini", high: "gpt-5.5" },
+      models: { low: "gpt-5.4-mini", mid: "gpt-5.5", high: "gpt-5.5" },
       defaultTier: "mid",
     },
     auto: { routes: [] },

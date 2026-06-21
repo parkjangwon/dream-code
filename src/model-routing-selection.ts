@@ -31,7 +31,10 @@ export function selectAutoCandidates(
   }
 
   const fallback = selectSingleProviderFallback(config.single, requestedTier);
-  if (!candidates.some((candidate) => modelKey(candidate.provider, candidate.model) === modelKey(fallback.provider, fallback.model))) {
+  if (
+    candidateAllowed(fallback.provider, fallback.model, options, skipped)
+    && !candidates.some((candidate) => modelKey(candidate.provider, candidate.model) === modelKey(fallback.provider, fallback.model))
+  ) {
     candidates.push({
       ...fallback,
       reason: requestedTier === undefined ? "auto routing fallback" : "auto routing forced tier fallback",
@@ -152,6 +155,10 @@ function candidateAllowed(
   }
   if (options.excludedModels?.has(modelKey(provider, model)) === true) {
     skipped.push(`${provider}/${model} failed`);
+    return false;
+  }
+  if (options.modelAvailable?.(provider, model) === false) {
+    skipped.push(`${provider}/${model} unavailable`);
     return false;
   }
   return true;

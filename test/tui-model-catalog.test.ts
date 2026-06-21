@@ -86,6 +86,39 @@ test("configureModels refreshes live models for any connected provider", async (
   }
 });
 
+test("configureModels hides non-Codex OAuth OpenAI models", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-model-openai-oauth-"));
+  const restoreEnv = clearEnvKeys(allProviderApiKeyEnvKeys());
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await writeProviderCredential(root, "openai", {
+      authMode: "oauth",
+      region: "chatgpt",
+      baseUrl: "https://chatgpt.com/backend-api/codex",
+    });
+
+    await configureModels({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "",
+      questioner: {
+        question: async () => "",
+        select: async (options) => {
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.5"), true);
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.4-mini"), true);
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.5-pro"), false);
+          assert.equal(options.choices.some((choice) => choice.value === "gpt-5.3-codex"), false);
+          return undefined;
+        },
+      },
+    });
+  } finally {
+    stdout.mock.restore();
+    restoreEnv();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function configWithOpenCodeGo(): ReturnType<typeof defaultConfig> {
   const config = defaultConfig();
   return {

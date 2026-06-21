@@ -20,6 +20,7 @@ import { showAgentsMenu } from "./tui-agent-commands.js";
 import { enableAutoRouting } from "./tui-auto-routing-command.js";
 import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-file-commands.js";
 import { configureModels } from "./tui-model-commands.js";
+import { runNotificationsCommand } from "./tui-notification-command.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import type { ProviderManagerOptions, ProviderManagerResult } from "./tui-provider-manager-state.js";
@@ -29,7 +30,6 @@ import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
 import { formatPermissionMode, printHelp } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
-import { configureThinking } from "./tui-thinking-command.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
 
@@ -176,20 +176,16 @@ async function runWorkspaceCommandBody(
         }),
         shouldContinue: true,
       };
+    case "/notifications": {
+      const result = await runNotificationsCommand(config, configRoot, command.rest);
+      output.write(result.output);
+      return { config: result.config, shouldContinue: true };
+    }
     case "/auto":
       return {
         config: await enableAutoRouting({
           config,
           configRoot,
-        }),
-        shouldContinue: true,
-      };
-    case "/think":
-      return {
-        config: await configureThinking({
-          config,
-          configRoot,
-          args: command.rest,
         }),
         shouldContinue: true,
       };

@@ -61,6 +61,7 @@ export function createSwarmSynthesisAgent(): AgentDefinition {
     prompt: [
       "You merge Dream Code Agent Swarm outputs.",
       "Preserve concrete findings, remove duplicates, resolve conflicts, and return the shortest decisive next action list.",
+      "Return a user-facing final answer, not raw lane logs.",
     ].join(" "),
     source: "built-in",
   };
@@ -72,6 +73,8 @@ export function createSwarmSynthesisPrompt(
 ): string {
   return [
     "Merge these parallel Dream Code swarm results into one final answer.",
+    "Do not include Lane Signals, raw tool traces, or per-lane transcript dumps.",
+    "Write the final answer the user can act on immediately.",
     `Original goal: ${goal}`,
     "",
     ...laneResults.map((result) => [

@@ -72,25 +72,25 @@ const openCodeGoModels = [
 
 const openAiModels = [
   "gpt-5.5",
-  "gpt-5.5-pro",
   "gpt-5.4",
-  "gpt-5.4-pro",
   "gpt-5.4-mini",
-  "gpt-5.4-nano",
-  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.3",
   "gpt-5.2",
-  "gpt-5.2-pro",
   "gpt-5.1",
   "gpt-5",
-  "gpt-5-mini",
-  "gpt-5-nano",
-  "gpt-5-pro",
+  "gpt-5.3-codex",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex",
+  "gpt-5-codex",
+  "gpt-5.1-codex-max",
+  "gpt-5.1-codex-mini",
 ] as const;
 
 export const providerDefinitions = [
   define("openai", "OpenAI", "chat-completions", "authorization", ["OPENAI_API_KEY"], [
     region("global", "Global", "https://api.openai.com/v1"),
-  ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key", "oauth"], "https://developers.openai.com/api/docs/models", openAiModels),
+  ], "global", models("gpt-5.4-mini", "gpt-5.5", "gpt-5.5"), ["api-key", "oauth"], "https://developers.openai.com/codex/models", openAiModels),
   define("deepseek", "DeepSeek", "chat-completions", "authorization", ["DEEPSEEK_API_KEY"], [
     region("global", "Global", "https://api.deepseek.com"),
   ], "global", models("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-pro"), ["api-key"], "https://api-docs.deepseek.com/"),
@@ -99,7 +99,7 @@ export const providerDefinitions = [
   ], "global", models("deepseek-v4-flash", "kimi-k2.7-code", "glm-5.2"), ["api-key"], "https://opencode.ai/docs/go/", openCodeGoModels),
   define("opencode-zen", "OpenCode Zen", "responses", "authorization", ["OPENCODE_ZEN_API_KEY", "OPENCODE_API_KEY"], [
     region("global", "Global", "https://opencode.ai/zen/v1"),
-  ], "global", models("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.5"), ["api-key"], "https://opencode.ai/docs/zen/"),
+  ], "global", models("gpt-5.4-mini", "gpt-5.5", "gpt-5.5"), ["api-key"], "https://opencode.ai/docs/zen/"),
   define("minimax", "MiniMax", "chat-completions", "authorization", ["MINIMAX_API_KEY"], [
     region("global", "International", "https://api.minimax.io/v1"),
     region("cn", "China", "https://api.minimaxi.com/v1"),
@@ -121,7 +121,7 @@ export const providerDefinitions = [
   ], "payg", models("mimo-v2.5", "mimo-v2.5-pro", "mimo-v2.5-pro"), ["api-key"], "https://mimo.mi.com/docs/en-US/api/chat/openai-api"),
   define("openrouter", "OpenRouter", "chat-completions", "authorization", ["OPENROUTER_API_KEY"], [
     region("global", "Global", "https://openrouter.ai/api/v1"),
-  ], "global", models("openai/gpt-5.4-mini", "openai/gpt-5.5", "openai/gpt-5.5-pro-20260423"), ["api-key"], "https://openrouter.ai/docs/quickstart"),
+  ], "global", models("openai/gpt-5.4-mini", "openai/gpt-5.5", "openai/gpt-5.5"), ["api-key"], "https://openrouter.ai/docs/quickstart"),
   define("groq", "Groq", "chat-completions", "authorization", ["GROQ_API_KEY"], [
     region("global", "Global", "https://api.groq.com/openai/v1"),
   ], "global", models("llama-3.3-70b-versatile", "openai/gpt-oss-20b", "openai/gpt-oss-120b"), ["api-key"], "https://console.groq.com/docs/models"),

@@ -1,4 +1,6 @@
 import type { DreamConfig } from "./config.js";
+import { readProviderCredential } from "./credentials.js";
+import { modelAvailableForCredential } from "./model-availability.js";
 import { catalogModelsForProvider, loadModelCatalog } from "./model-catalog.js";
 import { refreshModelCatalogForProviders } from "./model-discovery.js";
 import type { ProviderDefinition } from "./provider-registry.js";
@@ -15,12 +17,13 @@ export async function modelsForProviderMenu(
     : await loadModelCatalog(root);
   const catalogModels = catalogModelsForProvider(catalog, definition.id);
   const sourceModels = catalogModels.length > 0 ? catalogModels : definition.availableModels;
+  const credential = await readProviderCredential(definition.id, root);
   return uniqueModels([
     ...sourceModels,
     config.model.single.models.low,
     config.model.single.models.mid,
     config.model.single.models.high,
-  ]);
+  ]).filter((model) => modelAvailableForCredential(definition.id, model, credential));
 }
 
 function uniqueModels(models: readonly string[]): readonly string[] {

@@ -2,13 +2,9 @@ import type { SwarmLaneResult } from "./swarm-runner.js";
 
 export type SwarmSynthesisMode = "auto" | "fast" | "llm";
 
-const fastSynthesisLaneThreshold = 8;
-const maxLaneSummaryLines = 3;
-const maxLaneSummaryChars = 420;
-
 export function shouldUseFastSwarmSynthesis(
   mode: SwarmSynthesisMode,
-  laneCount: number,
+  _laneCount: number,
 ): boolean {
   if (mode === "fast") {
     return true;
@@ -16,7 +12,7 @@ export function shouldUseFastSwarmSynthesis(
   if (mode === "llm") {
     return false;
   }
-  return laneCount >= fastSynthesisLaneThreshold;
+  return false;
 }
 
 export function createFastSwarmSynthesis(
@@ -26,31 +22,17 @@ export function createFastSwarmSynthesis(
   const failed = laneResults.filter((result) => result.output.startsWith("Lane failed:"));
   const completed = laneResults.length - failed.length;
   return [
-    "Fast synthesis complete.",
+    "Swarm synthesis fallback complete.",
     "",
     `Goal: ${goal}`,
     `Lanes: ${completed}/${laneResults.length} completed${failed.length === 0 ? "" : `, ${failed.length} failed`}`,
-    "",
-    "## Lane Signals",
-    "",
-    ...laneResults.map(formatLaneSignal),
     "",
     "## Next Actions",
     "",
     ...createNextActions(laneResults),
     "",
-    "✓ Done 0ms · local fast merge",
+    "✓ Done 0ms · fallback merge",
   ].join("\n");
-}
-
-function formatLaneSignal(result: SwarmLaneResult): string {
-  const status = result.output.startsWith("Lane failed:") ? "failed" : "done";
-  const summary = summarizeLaneOutput(result.output);
-  return [
-    `- ${result.lane.title}`,
-    `(${status}, ${(result.elapsedMs / 1000).toFixed(1)}s, ${formatCharacters(result.output.length)})`,
-    summary,
-  ].join(" ");
 }
 
 function createNextActions(laneResults: readonly SwarmLaneResult[]): readonly string[] {
@@ -62,44 +44,7 @@ function createNextActions(laneResults: readonly SwarmLaneResult[]): readonly st
     ];
   }
   return [
-    "- Review the lane signals above, then act on the highest-confidence overlapping findings first.",
-    "- Open the saved swarm artifact when you need the complete per-lane output.",
+    "- Use the saved swarm artifact for complete per-lane output.",
+    "- Run a normal synthesis pass when you need a polished final answer.",
   ];
-}
-
-function summarizeLaneOutput(output: string): string {
-  const lines = output
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(isSignalLine)
-    .slice(0, maxLaneSummaryLines);
-  const summary = lines.length === 0 ? "(no clear signal)" : lines.join(" ");
-  return truncate(summary, maxLaneSummaryChars);
-}
-
-function isSignalLine(line: string): boolean {
-  if (line.length === 0) {
-    return false;
-  }
-  if (/^```/u.test(line)) {
-    return false;
-  }
-  if (/^(✓ Done|● Dream|○ Thinking|╭|╰|│|┌|└)/u.test(line)) {
-    return false;
-  }
-  return true;
-}
-
-function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
-}
-
-function formatCharacters(characters: number): string {
-  if (characters >= 1000) {
-    return `${(characters / 1000).toFixed(1)}k chars`;
-  }
-  return `${characters} chars`;
 }

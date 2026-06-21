@@ -14,6 +14,8 @@ import {
   togglePersistedYolo,
   type DreamConfig,
 } from "../src/config.js";
+import { initializeDreamHome } from "../src/config-init.js";
+import { credentialsFilePath } from "../src/credentials.js";
 
 test("loadConfig returns defaults when the config file is absent", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-config-"));
@@ -28,6 +30,29 @@ test("loadConfig returns defaults when the config file is absent", async () => {
 
 test("configFilePath uses TOML as the main config file", () => {
   assert.equal(configFilePath("/tmp/dream-home"), join("/tmp/dream-home", "config.toml"));
+});
+
+test("initializeDreamHome creates first-run files and directories", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-init-"));
+  try {
+    await initializeDreamHome(root);
+
+    const savedConfig = await readFile(configFilePath(root), "utf8");
+    const savedModels = await readFile(modelConfigFilePath(root), "utf8");
+    const savedCredentials = await readFile(credentialsFilePath(root), "utf8");
+
+    assert.match(savedConfig, /\[permissions\]\nmode = "ask"/u);
+    assert.match(savedModels, /\[model\.single\.models\]/u);
+    assert.deepEqual(JSON.parse(savedCredentials), { version: 1, providers: {} });
+    await assertDirectory(join(root, "artifacts"));
+    await assertDirectory(join(root, "compacts"));
+    await assertDirectory(join(root, "exports"));
+    await assertDirectory(join(root, "sessions"));
+    await assertDirectory(join(root, "skills"));
+    await assertDirectory(join(root, "workflows", "runs"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("togglePersistedYolo flips and saves the permission mode", async () => {
@@ -74,6 +99,10 @@ test("loadConfig persists provider enabled overrides", async () => {
 
 async function assertFileMissing(filePath: string): Promise<void> {
   await assert.rejects(() => stat(filePath), { code: "ENOENT" });
+}
+
+async function assertDirectory(filePath: string): Promise<void> {
+  assert.equal((await stat(filePath)).isDirectory(), true);
 }
 
 function legacyAgentConfigFileName(): string {

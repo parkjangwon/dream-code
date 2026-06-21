@@ -8,7 +8,6 @@ import { stripAnsi } from "../src/ansi.js";
 import type { AgentDefinition } from "../src/agent-library.js";
 import { defaultConfig } from "../src/config.js";
 import { checkpointPath, taskProgressPath } from "../src/memory-store.js";
-import { renderSwarmMonitorSnapshot } from "../src/swarm-monitor-render.js";
 import { runAgentSwarmWithAgents } from "../src/swarm-runner.js";
 
 test("runAgentSwarmWithAgents starts fan-out lanes in parallel before synthesis", async () => {
@@ -127,7 +126,7 @@ test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time",
   assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Done 56\.0s/u);
 });
 
-test("runAgentSwarmWithAgents uses local fast synthesis for large swarms", async () => {
+test("runAgentSwarmWithAgents synthesizes large swarms by default", async () => {
   const chunks: string[] = [];
   const calls: string[] = [];
   const summary = await runAgentSwarmWithAgents({
@@ -149,7 +148,7 @@ test("runAgentSwarmWithAgents uses local fast synthesis for large swarms", async
     runAgent: async (input) => {
       calls.push(input.kind);
       if (input.kind === "synthesis") {
-        throw new Error("large swarms should skip the synthesis model");
+        return "Final merged answer from all swarm lanes.";
       }
       return [
         `Summary from ${input.agent.name}`,
@@ -160,10 +159,10 @@ test("runAgentSwarmWithAgents uses local fast synthesis for large swarms", async
   });
 
   assert.equal(summary.laneResults.length, 8);
-  assert.equal(calls.every((kind) => kind === "lane"), true);
-  assert.match(summary.synthesis, /Fast synthesis complete/u);
-  assert.match(summary.synthesis, /Lanes: 8\/8 completed/u);
-  assert.match(stripAnsi(chunks.join("")), /local fast merge/u);
+  assert.equal(calls.filter((kind) => kind === "lane").length, 8);
+  assert.equal(calls.at(-1), "synthesis");
+  assert.match(summary.synthesis, /Final merged answer/u);
+  assert.doesNotMatch(stripAnsi(chunks.join("")), /Lane Signals/u);
 });
 
 test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", async () => {
@@ -227,37 +226,6 @@ test("runAgentSwarmWithAgents absorbs completed swarms into memory layers", asyn
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
-
-test("renderSwarmMonitorSnapshot shows an armed escape stop hint", () => {
-  const rendered = stripAnsi(renderSwarmMonitorSnapshot({
-    goal: "Stop hint",
-    startedAt: 1000,
-    now: 1100,
-    frame: 1,
-    synthesisStatus: "waiting",
-    selectedIndex: 1,
-    view: "monitor",
-    interactive: true,
-    abortArmed: true,
-    maxVisibleLanes: undefined,
-    synthesisStartedAt: undefined,
-    synthesisFinishedAt: undefined,
-    lanes: [
-      {
-        id: "lane-1",
-        index: 1,
-        title: "Tech Lead",
-        status: "running",
-        characters: 0,
-        preview: "",
-        startedAt: 1000,
-        finishedAt: undefined,
-      },
-    ],
-  }));
-
-  assert.match(rendered, /esc again stop swarm/u);
 });
 
 function agent(id: string, name: string, summary: string): AgentDefinition {

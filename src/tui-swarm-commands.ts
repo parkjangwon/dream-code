@@ -2,6 +2,7 @@ import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
 import type { DreamConfig } from "./config.js";
 import { ansi, paint } from "./ansi.js";
+import { notifySwarmComplete } from "./notifications.js";
 import { saveSwarmArtifact } from "./swarm-artifacts.js";
 import { runAgentSwarm } from "./swarm-runner.js";
 
@@ -47,6 +48,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
   const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
   const artifactPath = await saveSwarmArtifact(options.configRoot, summary);
   output.write(`${paint("swarm artifact:", ansi.green)} ${paint(artifactPath, ansi.blue)}\n`);
+  await notifySwarmComplete(options.config, goal, summary.laneResults.length);
 }
 
 export function parseSwarmArgs(args: string): SwarmArgs {

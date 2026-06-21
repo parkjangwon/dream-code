@@ -10,6 +10,7 @@ import {
   selectSingleProviderModel,
 } from "../src/model-routing.js";
 import { bootstrapAutoModelConfig } from "../src/model-auto-bootstrap.js";
+import { defaultConfig } from "../src/config.js";
 
 test("selectSingleProviderModel returns the requested tier model", () => {
   const route = selectSingleProviderModel({
@@ -94,7 +95,7 @@ test("selectModelForPrompt skips disconnected category candidates", () => {
   });
 
   assert.equal(selected.provider, "openai");
-  assert.equal(selected.model, "gpt-5.3-codex");
+  assert.equal(selected.model, "gpt-5.5");
   assert.equal(selected.category, "deep");
 });
 
@@ -240,22 +241,9 @@ function defaultAutoConfig(): Parameters<typeof selectModelForPrompt>[0] {
 }
 
 function defaultDreamConfigForRouting(): Parameters<typeof bootstrapAutoModelConfig>[0] {
+  const config = defaultConfig();
   return {
-    version: 1,
-    permissions: { mode: "ask" },
-    providers: {},
+    ...config,
     model: defaultAutoConfig(),
-    tokenSaving: {
-      enabled: true,
-      contextBudgetPercent: 70,
-      preferSummaries: true,
-      useRipgrepFirst: true,
-    },
-    tools: {
-      ripgrep: true,
-      lsp: true,
-      webResearch: true,
-    },
-    team: [],
   };
 }

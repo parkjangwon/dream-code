@@ -60,9 +60,12 @@ npm uninstall -g dream-code
 - **Provider cost control:** disable expensive env-detected providers with
   `/provider disable <provider>` and re-enable them when needed.
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
-  for high-parallel fan-out when speed matters.
+  for high-parallel fan-out when speed matters. Use `/swarm --size N` when you
+  want to force a specific number of parallel lanes.
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
   progress without flooding every request.
+- **Native notifications:** completion and permission-required alerts through
+  standard OS notification tools, with hook-friendly command overrides.
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
   `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
   templates.
@@ -84,6 +87,20 @@ qwen, custom-openai
 ```
 
 OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
+
+## Dream Swarm
+
+Dream Swarm fans a task out across multiple specialized agents, shows a live
+monitor, then merges the lanes into one final synthesis.
+
+```text
+/swarm analyze this project
+/swarm --size 10 run a security review
+```
+
+Without `--size`, Dream Code uses adaptive fan-out. With `--size N`, Dream Code
+forces exactly `N` swarm lanes, useful when you want to push a large job hard and
+spend more tokens for faster parallel coverage.
 
 ## Commands
 
@@ -107,6 +124,7 @@ OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 /lsp          Run project diagnostics
 /mcp          Show MCP settings and live tools
 /model        Choose model or model routing mode
+/notifications Toggle native completion and permission alerts
 /plan         Create an implementation plan
 /provider     Switch, list, enable, or disable providers
 /rename       Rename current session
@@ -171,6 +189,7 @@ Enter       Submit input or choose a menu item
 - Hook execution with recent run logs
 - Local file read/write/edit helpers
 - Shell command support with permission mode awareness
+- Native OS notifications for long completions and permission-required states
 - YOLO bypass mode through `dream --yolo` or `/yolo`
 - Copy/export conversation helpers
 - Ripgrep/fd/jq-friendly local tool checks
@@ -195,6 +214,20 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/artifacts/              generated artifacts
 ~/.dream/workflows/runs/         workflow run traces
 ```
+
+Notification settings live in `~/.dream/config.toml`:
+
+```toml
+[notifications]
+enabled = true
+completion = true
+permissionRequired = true
+minCompletionMs = 10000
+```
+
+Dream Code uses `termux-notification`, `osascript`, `notify-send`, or
+PowerShell depending on the platform. Set `DREAM_NOTIFICATION_COMMAND` if you
+want to route notifications through your own hook command.
 
 Project-local files:
 

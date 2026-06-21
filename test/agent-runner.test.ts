@@ -145,7 +145,7 @@ test("runAgentPrompt retries the next auto-route candidate when a provider fails
           mode: "auto",
           single: {
             provider: "openai",
-            models: { low: "gpt-5.4-nano", mid: "gpt-5.4-mini", high: "gpt-5.5" },
+            models: { low: "gpt-5.4-mini", mid: "gpt-5.5", high: "gpt-5.5" },
             defaultTier: "mid",
           },
           auto: {
@@ -175,6 +175,40 @@ test("runAgentPrompt retries the next auto-route candidate when a provider fails
     const output = chunks.join("");
     assert.match(output, /model failover/u);
     assert.match(output, /failover ok/u);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runAgentPrompt can collect tokens without rendering response chrome", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-silent-"));
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.end([
+      "data: {\"choices\":[{\"delta\":{\"content\":\"silent output\"}}]}",
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n"));
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+    const chunks: string[] = [];
+
+    await runAgentPrompt({
+      config: defaultConfig(),
+      configRoot: root,
+      prompt: "hello",
+      cwd: "/repo",
+      renderResponse: false,
+      write: (chunk) => {
+        chunks.push(chunk);
+      },
+    });
+
+    assert.equal(chunks.join(""), "");
   } finally {
     server.close();
     await rm(root, { recursive: true, force: true });

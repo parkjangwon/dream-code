@@ -2,18 +2,16 @@ import type { DreamConfig } from "./config.js";
 import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
 import type { ModelConfig } from "./model-routing.js";
 import { providerModelIdForRequest } from "./provider-registry.js";
-import { defaultReasoningConfig } from "./reasoning-effort.js";
 
 export function defaultModelConfig(): ModelConfig {
   return {
     mode: "single",
-    reasoning: defaultReasoningConfig,
     single: {
       provider: "openai",
       models: {
-        low: "gpt-4.1-mini",
-        mid: "gpt-4.1",
-        high: "o3",
+        low: "gpt-5.4-mini",
+        mid: "gpt-5.5",
+        high: "gpt-5.5",
       },
       defaultTier: "mid",
     },
@@ -23,14 +21,14 @@ export function defaultModelConfig(): ModelConfig {
         {
           id: "fast-classifier",
           provider: "openai",
-          model: "gpt-4.1-mini",
+          model: "gpt-5.4-mini",
           tier: "low",
           match: ["classify", "summarize", "rename", "grep"],
         },
         {
           id: "deep-builder",
           provider: "openai",
-          model: "o3",
+          model: "gpt-5.5",
           tier: "high",
           match: ["architecture", "debug", "refactor", "review"],
         },
@@ -46,7 +44,6 @@ export function normalizeLoadedConfig(config: DreamConfig): DreamConfig {
     ...config,
     model: {
       ...config.model,
-      reasoning: config.model.reasoning ?? defaultReasoningConfig,
       single: {
         ...config.model.single,
         models: {

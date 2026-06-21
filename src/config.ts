@@ -34,12 +34,25 @@ const providerSettingSchema = z.object({
   enabled: z.boolean(),
 });
 
+const notificationSettingsSchema = z.object({
+  enabled: z.boolean(),
+  completion: z.boolean(),
+  permissionRequired: z.boolean(),
+  minCompletionMs: z.number().int().min(0).max(3_600_000),
+}).default({
+  enabled: true,
+  completion: true,
+  permissionRequired: true,
+  minCompletionMs: 10_000,
+});
+
 export const dreamConfigSchema = z.object({
   version: z.literal(1),
   permissions: z.object({
     mode: permissionModeSchema,
   }),
   providers: z.record(z.string(), providerSettingSchema).default({}),
+  notifications: notificationSettingsSchema,
   model: modelConfigSchema,
   tokenSaving: tokenSavingSchema,
   tools: z.object({
@@ -72,6 +85,12 @@ export function defaultConfig(): DreamConfig {
     version: 1,
     permissions: { mode: "ask" },
     providers: {},
+    notifications: {
+      enabled: true,
+      completion: true,
+      permissionRequired: true,
+      minCompletionMs: 10_000,
+    },
     model: defaultModelConfig(),
     tokenSaving: {
       enabled: true,
@@ -135,6 +154,7 @@ async function loadMainConfig(root: string, defaults: DreamConfig): Promise<Omit
       version: defaults.version,
       permissions: defaults.permissions,
       providers: defaults.providers,
+      notifications: defaults.notifications,
       tokenSaving: defaults.tokenSaving,
       tools: defaults.tools,
     };

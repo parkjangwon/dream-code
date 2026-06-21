@@ -11,6 +11,7 @@ import {
   writeWorkspaceFile,
 } from "./workspace-tools.js";
 import { runResearch } from "./research-tool.js";
+import { notifyPermissionRequired } from "./notifications.js";
 import { riskyShellReason } from "./shell-safety.js";
 
 export type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
@@ -48,6 +49,7 @@ export async function runAgentToolRequest(
     return { request, ok: false, output: `Tool ${request.tool} is not allowed for this agent.` };
   }
   if (request.tool !== "read" && request.tool !== "research" && policy.mode !== "yolo") {
+    await notifyPermissionRequired(policy.configRoot ?? defaultConfigRoot(), toolLabel(request));
     return { request, ok: false, output: "Permission required. Enable YOLO or run the command manually." };
   }
 

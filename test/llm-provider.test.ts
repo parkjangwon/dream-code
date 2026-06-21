@@ -107,19 +107,13 @@ test("buildProviderRequestBody moves system messages into Responses instructions
   });
 });
 
-test("buildProviderRequestBody includes supported reasoning effort for Responses requests", () => {
+test("buildProviderRequestBody ignores reasoning controls for stable provider compatibility", () => {
   const messages = [{ role: "user", content: "think" }] as const;
 
-  assert.deepEqual(buildProviderRequestBody("responses", "gpt-5.5", messages, "high"), {
+  assert.deepEqual(buildProviderRequestBody("responses", "gpt-5.5", messages), {
     model: "gpt-5.5",
     input: messages,
-    reasoning: { effort: "high" },
     store: false,
-    stream: true,
-  });
-  assert.deepEqual(buildProviderRequestBody("chat-completions", "deepseek-v4-pro", messages, "high"), {
-    model: "deepseek-v4-pro",
-    messages,
     stream: true,
   });
 });

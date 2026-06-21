@@ -40,6 +40,7 @@ fi
 cd "$INSTALL_DIR"
 npm install --ignore-scripts
 npm run build
+node dist/src/cli.js init
 npm install -g . --ignore-scripts
 
 say "Dream Code installed."

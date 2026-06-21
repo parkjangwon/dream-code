@@ -64,12 +64,12 @@ test("provider defaults track official coding model tiers", () => {
   const together = required(resolveProviderDefinition("together"));
 
   assert.deepEqual(openai.defaultModels, {
-    low: "gpt-5.4-nano",
-    mid: "gpt-5.4-mini",
+    low: "gpt-5.4-mini",
+    mid: "gpt-5.5",
     high: "gpt-5.5",
   });
-  assert.equal(openai.availableModels.includes("gpt-5.4-pro"), true);
-  assert.equal(openai.availableModels.includes("gpt-5.3-codex"), true);
+  assert.equal(openai.availableModels.includes("gpt-5.4"), true);
+  assert.equal(openai.availableModels.includes("gpt-5.3-codex-spark"), true);
   assert.deepEqual(zen.defaultModels, openai.defaultModels);
   assert.equal(qwen.defaultModels.high, "qwen3.7-max");
   assert.equal(cerebras.defaultModels.high, "zai-glm-4.7");

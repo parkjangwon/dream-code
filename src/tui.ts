@@ -6,6 +6,7 @@ import {
   loadConfig,
   type DreamConfig,
 } from "./config.js";
+import { initializeDreamHome } from "./config-init.js";
 import { startSession, type DreamSession } from "./session-store.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
@@ -34,7 +35,9 @@ export type TuiOptions = {
 };
 
 export async function runTui(options: TuiOptions): Promise<void> {
-  let config = await loadConfig(options.configRoot);
+  const configRoot = options.configRoot ?? defaultConfigRoot();
+  await initializeDreamHome(configRoot);
+  let config = await loadConfig(configRoot);
   setTerminalTitle(output, dreamTerminalTitle);
   renderHeader(config, options.oneShotYolo);
 

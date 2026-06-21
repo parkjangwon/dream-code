@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
+import { initializeDreamHome } from "./config-init.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { runTui } from "./tui.js";
 
-type CliCommand = "tui" | "doctor" | "help" | "version";
+type CliCommand = "tui" | "doctor" | "help" | "init" | "version";
 
 type ParsedArgs = {
   readonly command: CliCommand;
@@ -23,6 +24,11 @@ async function main(): Promise<void> {
     case "help":
       printHelp();
       return;
+    case "init": {
+      const result = await initializeDreamHome();
+      console.log(`Dream Code initialized: ${result.root}`);
+      return;
+    }
     case "version":
       console.log(DREAM_VERSION);
       return;
@@ -42,6 +48,9 @@ function parseArgs(args: readonly string[]): ParsedArgs {
         break;
       case "doctor":
         command = "doctor";
+        break;
+      case "init":
+        command = "init";
         break;
       case "--help":
       case "-h":
@@ -69,6 +78,7 @@ function printHelp(): void {
     "  dream             open the TUI",
     "  dream --yolo      open the TUI with one-shot unconditional bypass",
     "  dream doctor      check local tool availability",
+    "  dream init        initialize ~/.dream files",
     "  dream --version   print the version",
   ].join("\n"));
 }
