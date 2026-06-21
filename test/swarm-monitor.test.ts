@@ -58,8 +58,9 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /DONE/u);
   assert.match(rendered, /⣤⣶⣿⣶⣤⣄⣀⣄/u);
   assert.match(rendered, /⣿⣿⣿⣿⣿⣿⣿⣿/u);
-  assert.match(rendered, /activity {3}\.\. {3} parallel lanes mixing/u);
+  assert.match(rendered, /activity\s+\.\.\s+parallel lanes mixing/u);
   assert.equal(activityLine.indexOf(".."), runningLine.indexOf("⣤"));
+  assert.equal(activityLine.indexOf("parallel lanes mixing"), runningLine.indexOf("Tech Lead"));
   assert.doesNotMatch(rendered, /[⠁⠂⠄⠈⠐⠠⢀⡀]/u);
   assert.match(rendered, /1\.5k chars/u);
   assert.match(rendered, /parallel lanes mixing/u);
