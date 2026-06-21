@@ -3,6 +3,7 @@ import { cwd } from "node:process";
 import { actorRoleForRun } from "./agent-actor.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { createAgentMessages } from "./agent-messages.js";
+import { isAgentToolName, messageChars, optionalSignal } from "./agent-runner-utils.js";
 import { registerActor, updateActorStatus } from "./actor-store.js";
 import {
   startAgentRun,
@@ -20,7 +21,6 @@ import {
   formatToolResults,
   runAgentToolRequest,
   type AgentToolResult,
-  type AgentToolName,
   type AgentToolPolicy,
 } from "./agent-tools.js";
 import {
@@ -188,6 +188,7 @@ async function streamAgentOnce(
     await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
     return assistantText;
   } catch (error) {
+    response.stop();
     await recordModelTelemetry(configRoot, {
       ...modelTelemetryInput(selectedModel, false, startedAt, messages, assistantText),
       error: error instanceof Error ? error.message : "Unknown provider failure",
@@ -234,25 +235,4 @@ function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): Agen
     signal,
     ...(allowedTools === undefined || allowedTools.length === 0 ? {} : { allowedTools }),
   };
-}
-
-function isAgentToolName(value: string): value is AgentToolName {
-  switch (value) {
-    case "read":
-    case "research":
-    case "shell":
-    case "write":
-    case "edit":
-      return true;
-    default:
-      return false;
-  }
-}
-
-function messageChars(messages: readonly ChatMessage[]): number {
-  return messages.reduce((total, message) => total + message.content.length, 0);
-}
-
-function optionalSignal<T extends object>(input: T, signal: AbortSignal | undefined): T | T & { readonly signal: AbortSignal } {
-  return signal === undefined ? input : { ...input, signal };
 }

@@ -13,12 +13,12 @@ export function brailleActivity(frame: number, width = 8): string {
   }).join("");
 }
 
-export function brailleProgressBar(status: BrailleProgressStatus): string {
+export function brailleProgressBar(status: BrailleProgressStatus, frame = 0): string {
   switch (status) {
     case "queued":
       return "⠄⠄⠄⠄⠄⠄⠄⠄";
     case "running":
-      return "⣀⣄⣤⣶⣿⣶⣤⣄";
+      return rotateGlyphs("⣀⣄⣤⣶⣿⣶⣤⣄", frame);
     case "done":
       return "⣿⣿⣿⣿⣿⣿⣿⣿";
     case "failed":
@@ -32,6 +32,12 @@ export function brailleProgressBar(status: BrailleProgressStatus): string {
 
 function positiveModulo(value: number, divisor: number): number {
   return ((value % divisor) + divisor) % divisor;
+}
+
+function rotateGlyphs(text: string, frame: number): string {
+  const glyphs = Array.from(text);
+  const offset = positiveModulo(frame, glyphs.length);
+  return [...glyphs.slice(offset), ...glyphs.slice(0, offset)].join("");
 }
 
 function assertNever(value: never): never {

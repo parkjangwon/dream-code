@@ -62,7 +62,7 @@ type VisibleLaneWindow = {
 function laneWindowLines(window: VisibleLaneWindow, snapshot: SwarmMonitorSnapshot): readonly string[] {
   return [
     ...(window.before > 0 ? [`${paint("│", ansi.guide)} ${paint(`↑ ${window.before} lanes above`, ansi.dim)}`] : []),
-    ...window.lanes.map((lane) => renderLane(lane, snapshot.now, isSelected(snapshot, lane.index))),
+    ...window.lanes.map((lane) => renderLane(lane, snapshot.now, snapshot.frame, isSelected(snapshot, lane.index))),
     ...(window.after > 0 ? [`${paint("│", ansi.guide)} ${paint(`↓ ${window.after} lanes below`, ansi.dim)}`] : []),
   ];
 }
@@ -92,14 +92,14 @@ function anchorLaneIndex(snapshot: SwarmMonitorSnapshot): number {
   return active >= 0 ? active : 0;
 }
 
-function renderLane(lane: SwarmMonitorLane, now: number, selected: boolean): string {
+function renderLane(lane: SwarmMonitorLane, now: number, frame: number, selected: boolean): string {
   const duration = lane.startedAt === undefined ? "0.0s" : formatDuration((lane.finishedAt ?? now) - lane.startedAt);
   const marker = selected ? paint("›", ansi.accent) : paint("│", ansi.guide);
   return [
     marker,
     String(lane.index).padStart(2, "0"),
     statusLabel(lane.status),
-    statusBar(lane.status),
+    statusBar(lane.status, frame),
     padVisible(truncate(lane.title, 24), 24),
     paint(duration.padStart(5), ansi.dim),
     paint(formatCharacters(lane.characters).padStart(10), ansi.guide),
@@ -164,8 +164,8 @@ function statusLabel(status: SwarmLaneStatus): string {
   }
 }
 
-function statusBar(status: SwarmLaneStatus): string {
-  const bar = brailleProgressBar(status);
+function statusBar(status: SwarmLaneStatus, frame: number): string {
+  const bar = brailleProgressBar(status, frame);
   switch (status) {
     case "queued":
       return paint(bar, ansi.guide);

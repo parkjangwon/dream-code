@@ -49,7 +49,7 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /1\/2 done/u);
   assert.match(rendered, /RUNNING/u);
   assert.match(rendered, /DONE/u);
-  assert.match(rendered, /⣀⣄⣤⣶⣿⣶⣤⣄/u);
+  assert.match(rendered, /⣤⣶⣿⣶⣤⣄⣀⣄/u);
   assert.match(rendered, /⣿⣿⣿⣿⣿⣿⣿⣿/u);
   assert.match(rendered, /[⠁⠂⠄⠈⠐⠠⢀⡀]/u);
   assert.match(rendered, /1\.5k chars/u);
@@ -57,6 +57,41 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /merging parallel outputs/u);
   assert.match(rendered, /1\.5s/u);
   assert.match(rendered, /token mixing radar online/u);
+});
+
+test("renderSwarmMonitorSnapshot animates running lane progress across frames", () => {
+  const baseSnapshot = {
+    goal: "Keep a running lane alive on screen",
+    startedAt: 1000,
+    now: 2500,
+    synthesisStatus: "waiting" as const,
+    selectedIndex: undefined,
+    view: "monitor" as const,
+    interactive: false,
+    abortArmed: false,
+    maxVisibleLanes: undefined,
+    synthesisStartedAt: undefined,
+    synthesisFinishedAt: undefined,
+    lanes: [
+      {
+        id: "lane-1",
+        index: 1,
+        title: "UX Reviewer",
+        status: "running" as const,
+        characters: 1536,
+        preview: "Reviewing interaction flow.",
+        startedAt: 1000,
+        finishedAt: undefined,
+      },
+    ],
+  };
+
+  const firstFrame = stripAnsi(renderSwarmMonitorSnapshot({ ...baseSnapshot, frame: 0 }));
+  const secondFrame = stripAnsi(renderSwarmMonitorSnapshot({ ...baseSnapshot, frame: 1 }));
+
+  assert.match(firstFrame, /⣀⣄⣤⣶⣿⣶⣤⣄/u);
+  assert.match(secondFrame, /⣄⣤⣶⣿⣶⣤⣄⣀/u);
+  assert.notEqual(firstFrame, secondFrame);
 });
 
 test("renderSwarmMonitorSnapshot highlights selected lanes and shows lane details", () => {

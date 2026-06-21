@@ -43,6 +43,35 @@ test("agent response session renders provider errors as a response block", () =>
   assert.match(output, /│ Missing API key/);
 });
 
+test("agent response session animates thinking in place until the first token", () => {
+  const chunks: string[] = [];
+  const ticks: Array<() => void> = [];
+  const cleared: unknown[] = [];
+  const session = createAgentResponseSession({
+    selectedModel: selectedModelFixture,
+    write: (text) => chunks.push(text),
+    setInterval: (callback) => {
+      ticks.push(callback);
+      return ticks.length;
+    },
+    clearInterval: (handle) => {
+      cleared.push(handle);
+    },
+  });
+
+  session.start();
+  ticks[0]?.();
+  session.token("Hello");
+  ticks[0]?.();
+
+  const rawOutput = chunks.join("");
+  const visibleOutput = stripAnsi(rawOutput);
+  assert.equal(rawOutput.includes("\u001B[1A\r\u001B[2K"), true);
+  assert.match(visibleOutput, /⠙ Thinking\. openai\/gpt-test · mid/);
+  assert.match(visibleOutput, /⣿ Dream openai\/gpt-test · mid/);
+  assert.equal(cleared.length, 1);
+});
+
 test("agent response session applies lightweight markdown styling", () => {
   const chunks: string[] = [];
   const session = createAgentResponseSession({

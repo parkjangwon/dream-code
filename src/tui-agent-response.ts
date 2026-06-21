@@ -1,6 +1,7 @@
 import { ansi, paint } from "./ansi.js";
-import { brailleSpinner } from "./braille-ui.js";
 import type { SelectedModel } from "./model-routing.js";
+import { createThinkingAnimation } from "./thinking-animation.js";
+import type { IntervalClearer, IntervalScheduler } from "./thinking-animation.js";
 import {
   isMarkdownTableDivider,
   isMarkdownTableRow,
@@ -12,12 +13,16 @@ export type AgentResponseSession = {
   readonly token: (token: string) => void;
   readonly finish: () => void;
   readonly fail: (message: string, tone: "warn" | "error") => void;
+  readonly stop: () => void;
 };
 
 export type AgentResponseSessionOptions = {
   readonly selectedModel: SelectedModel;
   readonly write: (text: string) => void;
   readonly now?: () => number;
+  readonly setInterval?: IntervalScheduler;
+  readonly clearInterval?: IntervalClearer;
+  readonly thinkingAnimationIntervalMs?: number;
 };
 
 type MarkdownState = {
@@ -39,6 +44,13 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
   let tableBuffer: readonly string[] = [];
 
   const model = modelLabel(options.selectedModel);
+  const thinkingAnimation = createThinkingAnimation({
+    label: model,
+    write: options.write,
+    ...(options.setInterval === undefined ? {} : { setInterval: options.setInterval }),
+    ...(options.clearInterval === undefined ? {} : { clearInterval: options.clearInterval }),
+    ...(options.thinkingAnimationIntervalMs === undefined ? {} : { intervalMs: options.thinkingAnimationIntervalMs }),
+  });
   const writeRenderedLine = (line: string): void => {
     options.write(`${responseRail()}${line}\n`);
   };
@@ -74,17 +86,19 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
 
   return {
     start: () => {
-      options.write(`${paint(brailleSpinner(0), ansi.accent)} ${paint("Thinking", ansi.dim)} ${paint(model, ansi.guide)}\n`);
+      thinkingAnimation.start();
     },
     token: (token) => {
       if (!receivedToken) {
         receivedToken = true;
+        thinkingAnimation.stop();
         options.write(`${paint("⣿", ansi.green)} ${paint("Dream", ansi.bold)} ${paint(model, ansi.guide)}\n`);
       }
       characterCount += token.length;
       lineBuffer = writeBufferedLines(token, lineBuffer, writeLine);
     },
     finish: () => {
+      thinkingAnimation.stop();
       if (!receivedToken) {
         options.write(`${paint("●", ansi.green)} ${paint("Dream", ansi.bold)}\n`);
         options.write(`${responseRail()}${paint("No response received.", ansi.dim)}\n`);
@@ -94,10 +108,14 @@ export function createAgentResponseSession(options: AgentResponseSessionOptions)
       options.write(`${paint("✓", ansi.green)} ${paint("Done", ansi.dim)} ${paint(responseStats(startedAt, now(), characterCount), ansi.guide)}\n`);
     },
     fail: (message, tone) => {
+      thinkingAnimation.stop();
       flushLineBuffer();
       const color = tone === "warn" ? ansi.yellow : ansi.red;
       options.write(`${paint("✕", color)} ${paint("Error", `${ansi.bold}${color}`)}\n`);
       options.write(`${responseRail()}${paint(message, color)}\n`);
+    },
+    stop: () => {
+      thinkingAnimation.stop();
     },
   };
 }
