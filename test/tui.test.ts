@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
 import { defaultConfig, loadConfig } from "../src/config.js";
+import { listAgentRuns } from "../src/agent-run-store.js";
 import { appendSessionTurn, listSessions, startSession } from "../src/session-store.js";
 import { handleInput } from "../src/tui.js";
 
@@ -123,6 +124,30 @@ test("handleInput restores selected session transcript", async () => {
     assert.match(outputText, /explain this project/u);
     assert.match(outputText, /This is an older answer\./u);
     assert.equal(restoredUserPrompt, "explain this project");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("handleInput marks an interrupted prompt as cancelled", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-interrupt-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const controller = new AbortController();
+    controller.abort();
+
+    await handleInput(
+      "long running agent prompt",
+      defaultConfig(),
+      { oneShotYolo: true, configRoot: root },
+      { question: async () => "" },
+      undefined,
+      controller.signal,
+    );
+
+    const runs = await listAgentRuns(root);
+    assert.equal(runs[0]?.status, "cancelled");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

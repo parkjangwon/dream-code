@@ -136,6 +136,10 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
       ];
     }
   } catch (error) {
+    if (run.signal.aborted) {
+      finalStatus = "cancelled";
+      return;
+    }
     if (error instanceof MissingProviderConfigError) {
       finalStatus = "failed";
       finalError = error.message;

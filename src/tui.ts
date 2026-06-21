@@ -12,6 +12,7 @@ import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
+import { runWithEscInterrupt } from "./tui-interrupt.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import {
   renderHeader,
@@ -86,7 +87,9 @@ async function runInteractiveLoop(
     }
     history = appendHistory(history, answer.text);
     const questioner = interactiveQuestioner(config, options);
-    const result = await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
+    const result = shouldUseEscInterrupt(answer.text)
+      ? await runWithEscInterrupt((signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal))
+      : await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
     config = result.config;
     shouldContinue = result.shouldContinue;
   }
@@ -125,6 +128,7 @@ export async function handleInput(
   options: TuiOptions,
   questioner: Questioner,
   sessionRuntime?: SessionRuntime,
+  signal?: AbortSignal,
 ): Promise<CommandResult> {
   if (text.length === 0) {
     return { config, shouldContinue: true };
@@ -135,7 +139,12 @@ export async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime);
+  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal);
+}
+
+function shouldUseEscInterrupt(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && !trimmed.startsWith("/") && !trimmed.startsWith("!");
 }
 
 function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questioner {

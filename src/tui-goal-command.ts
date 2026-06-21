@@ -11,6 +11,7 @@ export type GoalCommandOptions = {
   readonly configRoot: string;
   readonly rest: string;
   readonly write?: (text: string) => void;
+  readonly signal?: AbortSignal;
 };
 
 export async function runGoalCommand(options: GoalCommandOptions): Promise<void> {
@@ -42,6 +43,7 @@ export async function runGoalCommand(options: GoalCommandOptions): Promise<void>
       "Produce success criteria, risks, a task breakdown, and the next concrete action.",
       `Active goal: ${state.title}`,
     ].join("\n"),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     write: options.write ?? ((chunk) => output.write(chunk)),
   });
 }

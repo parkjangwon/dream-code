@@ -32,6 +32,7 @@ export type UtilityCommandOptions = {
   readonly questioner: Questioner;
   readonly sessionRuntime?: SessionRuntime | undefined;
   readonly cwd: string;
+  readonly signal?: AbortSignal;
 };
 
 export async function runUtilityCommand(options: UtilityCommandOptions): Promise<boolean> {
@@ -59,6 +60,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
         config: options.config,
         configRoot: options.configRoot,
         rest: options.rest,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
       return true;
     case "/hooks":
@@ -109,7 +111,13 @@ async function runSideQuestion(options: UtilityCommandOptions): Promise<void> {
     return;
   }
   output.write(`${paint("BTW", `${ansi.bold}${ansi.accent}`)} ${paint("side question", ansi.dim)}\n`);
-  await runAgentPrompt({ config: options.config, configRoot: options.configRoot, prompt, write: (chunk) => output.write(chunk) });
+  await runAgentPrompt({
+    config: options.config,
+    configRoot: options.configRoot,
+    prompt,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    write: (chunk) => output.write(chunk),
+  });
 }
 
 async function runInterview(options: UtilityCommandOptions): Promise<void> {
@@ -149,6 +157,7 @@ async function runResearchCommand(options: UtilityCommandOptions): Promise<void>
       "Search results:",
       result.output,
     ].join("\n"),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     write: (chunk) => output.write(chunk),
   });
 }
@@ -164,6 +173,7 @@ async function runFramedAgentPrompt(options: UtilityCommandOptions, title: strin
     config: options.config,
     configRoot: options.configRoot,
     prompt: `${instruction}\n\nUser request:\n${prompt}`,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     write: (chunk) => output.write(chunk),
   });
 }

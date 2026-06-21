@@ -15,7 +15,12 @@ export async function runWorkflowCommand(options: UtilityCommandOptions): Promis
     return;
   }
   const filePath = resolve(options.cwd, scriptPath.trim());
-  const script = await readFile(filePath, "utf8");
+  const script = await readWorkflowScript(filePath);
+  if (script === undefined) {
+    output.write(`${paint("workflow not found:", ansi.yellow)} ${paint(scriptPath.trim(), ansi.blue)}\n`);
+    output.write(`${paint("usage:", ansi.dim)} /workflow ${paint("or", ansi.dim)} /workflow path/to/workflow.js\n`);
+    return;
+  }
   output.write(`${paint("Workflow", `${ansi.bold}${ansi.accent}`)} ${paint(filePath, ansi.blue)}\n`);
   const result = await runWorkflowScript({
     root: options.configRoot,
@@ -86,12 +91,24 @@ async function runWorkflowAgent(options: UtilityCommandOptions, prompt: string, 
     cwd: options.cwd,
     prompt,
     runLabel: agentOptions.name ?? "Workflow Agent",
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     write: (chunk) => {
       transcript = `${transcript}${stripAnsi(chunk)}`;
       output.write(chunk);
     },
   });
   return transcript.trim();
+}
+
+async function readWorkflowScript(filePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 function formatWorkflowTrace(events: readonly WorkflowRunEvent[], durationMs: number): string {

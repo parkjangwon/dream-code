@@ -51,8 +51,9 @@ export async function runWorkspaceCommand(
   configRoot = defaultConfigRoot(),
   sessionRuntime?: SessionRuntime,
   cwd = currentWorkingDirectory(),
+  signal?: AbortSignal,
 ): Promise<CommandResult> {
-  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd);
+  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd, signal);
   await runHookEvent(configRoot, "postCommand", { command: text, ok: String(result.shouldContinue) });
   return result;
 }
@@ -65,6 +66,7 @@ async function runWorkspaceCommandBody(
   configRoot: string,
   sessionRuntime: SessionRuntime | undefined,
   cwd: string,
+  signal: AbortSignal | undefined,
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
@@ -84,6 +86,7 @@ async function runWorkspaceCommandBody(
       configRoot,
       prompt: text,
       cwd,
+      ...(signal === undefined ? {} : { signal }),
       write: (chunk: string) => {
         output.write(chunk);
         assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
@@ -216,6 +219,7 @@ async function runWorkspaceCommandBody(
         questioner,
         sessionRuntime,
         cwd,
+        ...(signal === undefined ? {} : { signal }),
       })) {
         return { config, shouldContinue: true };
       }
