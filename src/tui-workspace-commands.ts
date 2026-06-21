@@ -29,6 +29,7 @@ import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
 import { formatPermissionMode, printHelp } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
+import { configureThinking } from "./tui-thinking-command.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
 
@@ -180,6 +181,15 @@ async function runWorkspaceCommandBody(
         config: await enableAutoRouting({
           config,
           configRoot,
+        }),
+        shouldContinue: true,
+      };
+    case "/think":
+      return {
+        config: await configureThinking({
+          config,
+          configRoot,
+          args: command.rest,
         }),
         shouldContinue: true,
       };

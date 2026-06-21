@@ -1,10 +1,10 @@
 import { ansi, paint } from "./ansi.js";
 
 export function formatSwarmHeader(agentCount: number, forced: boolean): string {
-  const mode = forced ? "forced overdrive" : "adaptive fan-out";
+  const mode = forced ? "Dream forced overdrive" : "Dream adaptive fan-out";
   return [
     `${paint("✹ Dream Swarm", ansi.accent)} ${paint(`${agentCount} parallel agents`, ansi.bold)}`,
-    paint(`Kimi-style ${mode} · token mixing on · synthesis pass enabled`, ansi.guide),
+    paint(`${mode} · token mixing on · synthesis pass enabled`, ansi.guide),
   ].join("\n").concat("\n");
 }
 

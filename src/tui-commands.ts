@@ -36,6 +36,7 @@ export const slashCommands = [
   { name: "/status", summary: "Show goal, tasks, and model health", acceptsArgs: false },
   { name: "/swarm", summary: "Explode a goal across parallel agents", acceptsArgs: true },
   { name: "/tasks", summary: "Show or add tasks", acceptsArgs: true },
+  { name: "/think", summary: "Set reasoning effort", acceptsArgs: true },
   { name: "/verify", summary: "Plan verification checks", acceptsArgs: true },
   { name: "/workflow", summary: "Run a workflow script", acceptsArgs: true },
   { name: "/yolo", summary: "Toggle saved bypass mode", acceptsArgs: false },

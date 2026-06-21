@@ -47,6 +47,24 @@ test("renderBottomStatusLines marks auto routing mode", () => {
   assert.doesNotMatch(lines.join("\n"), /deepseek\/deepseek-v4-flash/u);
 });
 
+test("renderBottomStatusLines shows manual reasoning effort when set", () => {
+  const lines = renderBottomStatusLines({
+    model: "openai/gpt-5.5",
+    mode: "single",
+    tier: "mid",
+    projectName: "dream-code",
+    gitBranch: "main",
+    gitDirty: false,
+    contextTokens: 0,
+    contextWindowTokens: 262_100,
+    permission: "ASK",
+    reasoningEffort: "xhigh",
+  }).map(stripAnsi);
+
+  assert.match(lines.join("\n"), /\[openai\/gpt-5\.5 · mid · think xhigh\]/u);
+});
+
+
 test("buildBottomStatusLines estimates context from compact summary when present", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-status-compact-"));
   const project = await mkdtemp(join(tmpdir(), "dream-status-project-"));

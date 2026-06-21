@@ -159,10 +159,10 @@ Enter       Submit input or choose a menu item
 - Task ledger with todo/doing/done/blocked states
 - Skills from `~/.dream/skills` and `~/.agents/skills`
 - `@skill` autocomplete and explicit skill activation
-- Claude-style custom agents and running-agent inboxes
-- Kimi-inspired Dream Swarm fan-out with live monitor
+- Custom agents and running-agent inboxes
+- Dream Swarm fan-out with live monitor
 - Swarm synthesis artifacts and memory absorption
-- MiMo-inspired memory layers: project memory, checkpoint, task progress
+- Memory layers: project memory, checkpoint, task progress
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in search fallback

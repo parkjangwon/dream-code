@@ -23,7 +23,7 @@ rests.
 ## MVP Scope
 
 1. **CLI/TUI shell**
-   - `dream` opens a simple Antigravity-style TUI.
+   - `dream` opens a simple, fast TUI.
    - `dream --yolo` enables one-shot bypass for the current process.
    - `/help`, `/status`, `/doctor`, `/yolo`, `/model`, and `/quit`.
    - Basic `/read`, `/write`, `/edit`, and `/shell` commands.
@@ -70,7 +70,7 @@ rests.
 - Harden `read`, `write`, `edit`, and `shell` tools.
 - `rg`-first file search with fallback.
 - Tool output compression policy.
-- Kimi-inspired session storage: `session_index.jsonl`, per-session `state.json`, and append-only `wire.jsonl`.
+- Lightweight session storage: `session_index.jsonl`, per-session `state.json`, and append-only `wire.jsonl`.
 
 ### M3: Model Layer
 
@@ -95,10 +95,10 @@ rests.
 
 ### M5: Parallel Work
 
-- Kimi-inspired Dream Swarm fan-out with forced lane count, live monitor,
+- Dream Swarm fan-out with forced lane count, live monitor,
   lane inspection, cancellation, and synthesis.
 - Swarm reports are saved as Markdown artifacts after fan-out.
-- Claude-style agent library and project/personal agent Markdown profiles.
+- Agent library and project/personal agent Markdown profiles.
 - Remaining depth: rate-limit aware scheduling and resumable long-running
   swarm jobs.
 

@@ -6,9 +6,11 @@ import {
   classifyPromptCategoryImpl,
   selectAutoCandidates,
 } from "./model-routing-selection.js";
+import { defaultReasoningConfig, reasoningEfforts, type ReasoningEffort } from "./reasoning-effort.js";
 
 export const modelTierSchema = z.enum(["low", "mid", "high"]);
 export type ModelTier = z.infer<typeof modelTierSchema>;
+export const reasoningEffortSchema = z.enum(reasoningEfforts);
 export const autoModelCategorySchema = z.enum([
   "quick",
   "reader",
@@ -63,6 +65,9 @@ export type AutoModelAgentRoute = z.infer<typeof autoModelAgentRouteSchema>;
 
 export const modelConfigSchema = z.object({
   mode: z.enum(["single", "auto"]),
+  reasoning: z.object({
+    effort: reasoningEffortSchema,
+  }).optional(),
   single: singleProviderModelConfigSchema,
   auto: z.object({
     routes: z.array(autoModelRouteSchema),
@@ -78,6 +83,7 @@ export type SelectedModel = {
   readonly provider: string;
   readonly model: string;
   readonly tier: ModelTier;
+  readonly reasoningEffort?: ReasoningEffort;
   readonly reason: string;
   readonly category?: AutoModelCategory;
   readonly agent?: string;
@@ -94,6 +100,7 @@ export type SelectModelOptions = {
 export function selectSingleProviderModel(
   config: SingleProviderModelConfig,
   requestedTier?: ModelTier,
+  reasoningEffort?: ReasoningEffort,
 ): SelectedModel {
   const tier = requestedTier ?? config.defaultTier;
 
@@ -101,6 +108,7 @@ export function selectSingleProviderModel(
     provider: config.provider,
     model: modelNameForTier(config.models, tier),
     tier,
+    ...(reasoningEffort === undefined || reasoningEffort === "auto" ? {} : { reasoningEffort }),
     reason: "single provider tier selection",
   };
 }
@@ -120,7 +128,7 @@ export function selectModelForPrompt(
       return selectSingleProviderModel(config.single, requestedTier);
     case "auto":
       return {
-        ...selectSingleProviderModel(config.single, requestedTier),
+        ...selectSingleProviderModel(config.single, requestedTier, reasoningEffortForConfig(config)),
         reason: "auto routing fallback",
       };
     default:
@@ -136,12 +144,17 @@ export function selectModelCandidatesForPrompt(
 ): readonly SelectedModel[] {
   switch (config.mode) {
     case "single":
-      return [selectSingleProviderModel(config.single, requestedTier)];
+      return [selectSingleProviderModel(config.single, requestedTier, reasoningEffortForConfig(config))];
     case "auto":
-      return selectAutoCandidates(config, prompt, requestedTier, options);
+      return selectAutoCandidates(config, prompt, requestedTier, options)
+        .map((candidate) => attachReasoningEffort(candidate, reasoningEffortForConfig(config)));
     default:
       return assertNever(config.mode);
   }
+}
+
+export function reasoningEffortForConfig(config: ModelConfig): ReasoningEffort {
+  return config.reasoning?.effort ?? defaultReasoningConfig.effort;
 }
 
 export function describeModelMode(config: ModelConfig): string {
@@ -198,6 +211,10 @@ function modelNameForTier(
     default:
       return assertNever(tier);
   }
+}
+
+function attachReasoningEffort(selected: SelectedModel, effort: ReasoningEffort): SelectedModel {
+  return effort === "auto" ? selected : { ...selected, reasoningEffort: effort };
 }
 
 function assertNever(value: never): never {

@@ -7,6 +7,7 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig, PermissionMode } from "./config.js";
 import { resolveEffectivePermissionMode } from "./config.js";
 import { selectModelForPrompt } from "./model-routing.js";
+import { formatReasoningEffort, type ReasoningEffort } from "./reasoning-effort.js";
 import { listSessions } from "./session-store.js";
 
 const execFileAsync = promisify(execFile);
@@ -22,6 +23,7 @@ export type BottomStatusInput = {
   readonly contextTokens: number;
   readonly contextWindowTokens: number;
   readonly permission: string;
+  readonly reasoningEffort?: ReasoningEffort;
 };
 
 export async function buildBottomStatusLines(options: {
@@ -45,6 +47,7 @@ export async function buildBottomStatusLines(options: {
     contextTokens: await estimateSessionContextTokens(options.configRoot, options.sessionId),
     contextWindowTokens: defaultContextWindowTokens,
     permission: permissionLabel(resolveEffectivePermissionMode(options.config, options.oneShotYolo)),
+    ...(options.config.model.reasoning?.effort === undefined ? {} : { reasoningEffort: options.config.model.reasoning.effort }),
   });
 }
 
@@ -59,9 +62,16 @@ export function renderBottomStatusLines(input: BottomStatusInput): readonly stri
 
 function modelBadge(input: BottomStatusInput): string {
   if (input.mode === "auto") {
-    return "AUTO routing";
+    return withThinking("AUTO routing", input.reasoningEffort);
   }
-  return `${input.model} · ${input.tier}`;
+  return withThinking(`${input.model} · ${input.tier}`, input.reasoningEffort);
+}
+
+function withThinking(label: string, effort: ReasoningEffort | undefined): string {
+  if (effort === undefined || effort === "auto") {
+    return label;
+  }
+  return `${label} · think ${formatReasoningEffort(effort)}`;
 }
 
 async function estimateSessionContextTokens(root: string, sessionId: string): Promise<number> {

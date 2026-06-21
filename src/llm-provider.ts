@@ -3,6 +3,7 @@ import { request } from "undici";
 import { CodexOAuthError, readCodexOAuthCredential } from "./codex-oauth.js";
 import { readProviderCredential, type ProviderCredential } from "./credentials.js";
 import type { SelectedModel } from "./model-routing.js";
+import { resolveReasoningEffort, type ReasoningEffort } from "./reasoning-effort.js";
 import {
   apiKeyEnvKeys,
   baseUrlEnvKeys,
@@ -142,13 +143,16 @@ export async function resolveProviderSettingsForRequest(
 export async function streamChatCompletion(input: StreamChatInput): Promise<void> {
   const credential = await readProviderCredential(input.selectedModel.provider, input.configRoot);
   const settings = await resolveProviderSettingsForRequest(input.selectedModel.provider, input.env, credential);
+  const requestModel = providerModelIdForRequest(settings.provider, input.selectedModel.model);
+  const reasoningEffort = resolveReasoningEffort(settings.provider, settings.protocol, requestModel, input.selectedModel.reasoningEffort);
   const requestOptions = input.signal === undefined ? {
     method: "POST",
     headers: buildProviderRequestHeaders(settings),
     body: JSON.stringify(buildProviderRequestBody(
       settings.protocol,
-      providerModelIdForRequest(settings.provider, input.selectedModel.model),
+      requestModel,
       input.messages,
+      reasoningEffort,
     )),
     headersTimeout: 15_000,
     bodyTimeout: 120_000,
@@ -157,8 +161,9 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
     headers: buildProviderRequestHeaders(settings),
     body: JSON.stringify(buildProviderRequestBody(
       settings.protocol,
-      providerModelIdForRequest(settings.provider, input.selectedModel.model),
+      requestModel,
       input.messages,
+      reasoningEffort,
     )),
     signal: input.signal,
     headersTimeout: 15_000,
@@ -211,12 +216,13 @@ export function buildProviderRequestBody(
   protocol: ProviderProtocol,
   model: string,
   messages: readonly ChatMessage[],
+  reasoningEffort?: Exclude<ReasoningEffort, "auto">,
 ): Readonly<Record<string, unknown>> {
   switch (protocol) {
     case "chat-completions":
       return { model, messages, stream: true };
     case "responses":
-      return responseRequestBody(model, messages);
+      return responseRequestBody(model, messages, reasoningEffort);
     default:
       return assertNever(protocol);
   }
@@ -225,15 +231,17 @@ export function buildProviderRequestBody(
 function responseRequestBody(
   model: string,
   messages: readonly ChatMessage[],
+  reasoningEffort: Exclude<ReasoningEffort, "auto"> | undefined,
 ): Readonly<Record<string, unknown>> {
   const instructions = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
     .join("\n\n");
   const input = messages.filter((message) => message.role !== "system");
+  const reasoning = reasoningEffort === undefined ? {} : { reasoning: { effort: reasoningEffort } };
   return instructions.length === 0
-    ? { model, input: messages, store: false, stream: true }
-    : { model, input, instructions, store: false, stream: true };
+    ? { model, input: messages, store: false, stream: true, ...reasoning }
+    : { model, input, instructions, store: false, stream: true, ...reasoning };
 }
 
 function firstEnv(env: ProviderEnv, keys: readonly string[]): string | undefined {

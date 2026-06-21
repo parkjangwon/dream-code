@@ -2,10 +2,12 @@ import type { DreamConfig } from "./config.js";
 import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
 import type { ModelConfig } from "./model-routing.js";
 import { providerModelIdForRequest } from "./provider-registry.js";
+import { defaultReasoningConfig } from "./reasoning-effort.js";
 
 export function defaultModelConfig(): ModelConfig {
   return {
     mode: "single",
+    reasoning: defaultReasoningConfig,
     single: {
       provider: "openai",
       models: {
@@ -44,6 +46,7 @@ export function normalizeLoadedConfig(config: DreamConfig): DreamConfig {
     ...config,
     model: {
       ...config.model,
+      reasoning: config.model.reasoning ?? defaultReasoningConfig,
       single: {
         ...config.model.single,
         models: {

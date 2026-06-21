@@ -14,7 +14,7 @@ import {
   writeAgentTemplate,
 } from "../src/agent-library.js";
 
-test("defaultAgentTemplates include Claude-style reviewer roles", () => {
+test("defaultAgentTemplates include reviewer roles", () => {
   const ids = defaultAgentTemplates().map((template) => template.id);
 
   assert.deepEqual(ids.includes("code-reviewer"), true);
