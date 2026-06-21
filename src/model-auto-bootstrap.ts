@@ -9,17 +9,15 @@ export function bootstrapAutoModelConfig(
 ): DreamConfig {
   const connectedDefinitions = listProviderDefinitions()
     .filter((definition) => connectedProviders.has(definition.id));
-  const nextAuto = connectedDefinitions.length === 0
-    ? {
-      ...config.model.auto,
-      categories: [...defaultAutoCategories()],
-      agentRoutes: [...defaultAutoAgentRoutes()],
-    }
-    : {
-      ...config.model.auto,
-      categories: defaultAutoCategories().map((route) => bootstrapCategoryRoute(route, connectedDefinitions)),
-      agentRoutes: defaultAutoAgentRoutes().map((route) => bootstrapAgentRoute(route, connectedDefinitions)),
-    };
+  if (connectedDefinitions.length === 0) {
+    return config;
+  }
+
+  const nextAuto = {
+    ...config.model.auto,
+    categories: defaultAutoCategories().map((route) => bootstrapCategoryRoute(route, connectedDefinitions)),
+    agentRoutes: defaultAutoAgentRoutes().map((route) => bootstrapAgentRoute(route, connectedDefinitions)),
+  };
 
   return {
     ...config,

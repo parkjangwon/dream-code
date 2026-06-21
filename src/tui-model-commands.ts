@@ -2,26 +2,21 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import { saveConfig, type DreamConfig } from "./config.js";
-import { loadCredentials } from "./credentials.js";
-import type { ProviderEnv } from "./llm-provider.js";
-import { bootstrapAutoModelConfig } from "./model-auto-bootstrap.js";
+import { connectedProviderIds, enableAutoRouting, formatAutoRoutes } from "./tui-auto-routing-command.js";
 import {
-  autoAgentRoutes,
-  autoCategories,
   describeModelMode,
   formatRoutePreview,
   modelTierSchema,
   type ModelTier,
 } from "./model-routing.js";
 import {
-  listProviderDefinitions,
   providerModelIdForRequest,
   resolveProviderDefinition,
   type ProviderDefinition,
   type ProviderTierModels,
 } from "./provider-registry.js";
+import { formatModelMenu, modelChoices } from "./tui-model-menu.js";
 import type { ProviderQuestioner } from "./tui-provider-picker.js";
-import { providerConnectionSource } from "./tui-provider-status.js";
 
 export type ConfigureModelsOptions = {
   readonly config: DreamConfig;
@@ -55,14 +50,6 @@ export async function configureModels(options: ConfigureModelsOptions): Promise<
   const nextConfig = configWithModelSelection(options.config, selection);
   await saveConfig(options.configRoot, nextConfig);
   output.write(formatSelectedModel(nextConfig));
-  return nextConfig;
-}
-
-export async function enableAutoRouting(options: ConfigureModelsOptions): Promise<DreamConfig> {
-  const connectedProviders = await connectedProviderIds(options.configRoot, process.env);
-  const nextConfig = bootstrapAutoModelConfig(options.config, connectedProviders);
-  await saveConfig(options.configRoot, nextConfig);
-  output.write(formatAutoEnabled(nextConfig, connectedProviders.size));
   return nextConfig;
 }
 
@@ -211,87 +198,9 @@ function modelSet(
   }
 }
 
-function formatModelMenu(config: DreamConfig, definition: ProviderDefinition): string {
-  const currentTier = config.model.single.defaultTier;
-  const models = config.model.single.models;
-  const lines = [
-    `${paint("Models", ansi.accent)} ${definition.displayName}`,
-    `${paint("mode", ansi.dim)} ${describeModelMode(config.model)}`,
-  ];
-  for (const model of definition.availableModels) {
-    lines.push(formatModelLine(model, models, currentTier));
-  }
-  lines.push("Type a model id, low, mid, high, auto, single, routes, or custom.", "");
-  return lines.join("\n");
-}
-
-function formatModelLine(
-  model: string,
-  models: ProviderTierModels,
-  currentTier: ModelTier,
-): string {
-  const tier = tierForModel(models, model);
-  const selected = tier === currentTier ? ">" : " ";
-  const suffix = tier === undefined ? "" : ` ${paint(`(${tier})`, ansi.dim)}`;
-  return `${selected} ${model}${suffix}`;
-}
-
-function modelChoices(definition: ProviderDefinition, models: ProviderTierModels) {
-  return definition.availableModels.map((model) => ({
-    value: model,
-    label: model,
-    description: tierForModel(models, model) ?? "",
-    keywords: [definition.displayName, definition.id],
-  }));
-}
-
-function tierForModel(models: ProviderTierModels, model: string): ModelTier | undefined {
-  if (models.low === model) {
-    return "low";
-  }
-  if (models.mid === model) {
-    return "mid";
-  }
-  if (models.high === model) {
-    return "high";
-  }
-  return undefined;
-}
-
 function formatSelectedModel(config: DreamConfig): string {
   const tier = config.model.single.defaultTier;
   return `model set: ${config.model.single.provider} ${modelForTier(config.model.single.models, tier)} (${formatTier(tier)})\n`;
-}
-
-function formatAutoRoutes(config: DreamConfig): string {
-  return [
-    `${paint("Multi-Model Routing", `${ansi.bold}${ansi.accent}`)} ${paint(config.model.mode, ansi.dim)}`,
-    ...autoCategories(config.model).map((route) => {
-      return `${paint(route.id.padEnd(11), ansi.blue)} ${route.tier.padEnd(4)} ${route.candidates.join(" -> ")}`;
-    }),
-    "",
-    `${paint("Agent Routes", `${ansi.bold}${ansi.accent}`)}`,
-    ...autoAgentRoutes(config.model).map((route) => {
-      return `${paint(route.agent.padEnd(18), ansi.blue)} ${route.tier.padEnd(4)} ${route.candidates.join(" -> ")}`;
-    }),
-    "",
-  ].join("\n");
-}
-
-function formatAutoEnabled(config: DreamConfig, connectedProviderCount: number): string {
-  return [
-    `${paint("auto mode:", ansi.green)} ${describeModelMode(config.model)}`,
-    `${paint("providers", ansi.dim)} ${connectedProviderCount} connected · ${paint("strategy", ansi.dim)} models.toml`,
-    connectedProviderCount === 0 ? `${paint("tip", ansi.yellow)} connect a provider with /login for stronger routing.` : "",
-    "",
-  ].filter((line) => line.length > 0).join("\n");
-}
-
-async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {
-  const credentials = await loadCredentials(root);
-  return new Set(listProviderDefinitions()
-    .filter((definition) => providerConnectionSource(definition, credentials.providers[definition.id], env) !== "missing")
-    .map((definition) => definition.id));
 }
 
 function modelForTier(models: ProviderTierModels, tier: ModelTier): string {

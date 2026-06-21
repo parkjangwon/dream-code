@@ -124,6 +124,19 @@ test("selectModelCandidatesForPrompt prioritizes agent routes and keeps fallback
   assert.equal(selected.some((candidate) => candidate.provider === "openai"), true);
 });
 
+test("selectModelCandidatesForPrompt routes swarm synthesis through the agent profile", () => {
+  const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Merge swarm lane outputs", undefined, {
+    agentId: "swarm-synthesizer",
+    connectedProviders: new Set(["openai", "deepseek"]),
+  });
+
+  assert.equal(selected[0]?.agent, "swarm-synthesizer");
+  assert.equal(selected[0]?.tier, "high");
+  assert.equal(selected[0]?.provider, "openai");
+  assert.equal(selected[0]?.model, "gpt-5.5");
+  assert.equal(selected[1]?.provider, "deepseek");
+});
+
 test("selectModelCandidatesForPrompt excludes failed models for same-turn failover", () => {
   const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
     connectedProviders: new Set(["gemini", "deepseek", "openai"]),

@@ -17,8 +17,9 @@ import { runHookEvent } from "./hooks.js";
 import { appendSessionTurn } from "./session-store.js";
 import { maybeAutoCompactSession } from "./session-actions.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
+import { enableAutoRouting } from "./tui-auto-routing-command.js";
 import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-file-commands.js";
-import { configureModels, enableAutoRouting } from "./tui-model-commands.js";
+import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
@@ -177,8 +178,6 @@ async function runWorkspaceCommandBody(
         config: await enableAutoRouting({
           config,
           configRoot,
-          args: "",
-          questioner,
         }),
         shouldContinue: true,
       };

@@ -7,7 +7,9 @@ import test, { mock } from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import { registerActor } from "../src/actor-store.js";
 import { defaultConfig, loadConfig } from "../src/config.js";
+import { writeProviderCredential } from "../src/credentials.js";
 import { drainInboxMessages } from "../src/inbox-store.js";
+import { apiKeyEnvKeys, listProviderDefinitions } from "../src/provider-registry.js";
 import { loadSkillSettings } from "../src/skill-settings.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
@@ -35,11 +37,17 @@ test("runWorkspaceCommand routes /model to model configuration", async () => {
 test("runWorkspaceCommand routes /auto to automatic model routing", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-auto-"));
   const chunks: string[] = [];
+  const restoreEnv = clearEnvKeys(allProviderApiKeyEnvKeys());
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
+    await writeProviderCredential(root, "deepseek", {
+      apiKey: "sk-deepseek",
+      region: "global",
+      baseUrl: "https://api.deepseek.com",
+    });
     const result = await runWorkspaceCommand(
       "/auto",
       defaultConfig(),
@@ -54,6 +62,7 @@ test("runWorkspaceCommand routes /auto to automatic model routing", async () => 
     assert.match(stripAnsi(chunks.join("")), /auto mode:/u);
   } finally {
     stdout.mock.restore();
+    restoreEnv();
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -341,3 +350,24 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
+
+function clearEnvKeys(keys: readonly string[]): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const key of keys) {
+    previous.set(key, process.env[key]);
+    delete process.env[key];
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+}
+
+function allProviderApiKeyEnvKeys(): readonly string[] {
+  return [...new Set(listProviderDefinitions().flatMap(apiKeyEnvKeys))];
+}

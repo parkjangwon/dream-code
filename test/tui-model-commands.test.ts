@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 import { defaultConfig, loadConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
+import { apiKeyEnvKeys, listProviderDefinitions } from "../src/provider-registry.js";
 import { configureModels } from "../src/tui-model-commands.js";
 
 test("configureModels sets the active tier from command args", async () => {
@@ -129,6 +130,7 @@ test("configureModels lists extended OpenAI models through the picker", async ()
 test("configureModels toggles multi-provider auto mode", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-models-auto-"));
   const stdout = mock.method(process.stdout, "write", () => true);
+  const restoreEnv = clearEnvKeys(allProviderApiKeyEnvKeys());
   try {
     await writeProviderCredential(root, "deepseek", {
       apiKey: "sk-deepseek",
@@ -148,6 +150,35 @@ test("configureModels toggles multi-provider auto mode", async () => {
     assert.equal((await loadConfig(root)).model.mode, "auto");
   } finally {
     stdout.mock.restore();
+    restoreEnv();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("configureModels keeps single mode when auto has no connected providers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-models-auto-empty-"));
+  const chunks: string[] = [];
+  const restoreEnv = clearEnvKeys(allProviderApiKeyEnvKeys());
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const config = configWithOpenAi();
+    const nextConfig = await configureModels({
+      config,
+      configRoot: root,
+      args: "auto",
+      questioner: { question: async () => "" },
+    });
+
+    assert.equal(nextConfig.model.mode, "single");
+    assert.equal((await loadConfig(root)).model.mode, "single");
+    assert.match(chunks.join(""), /needs at least one connected provider/u);
+    assert.match(chunks.join(""), /\/login/u);
+  } finally {
+    stdout.mock.restore();
+    restoreEnv();
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -238,4 +269,8 @@ function clearEnvKeys(keys: readonly string[]): () => void {
       }
     }
   };
+}
+
+function allProviderApiKeyEnvKeys(): readonly string[] {
+  return [...new Set(listProviderDefinitions().flatMap(apiKeyEnvKeys))];
 }

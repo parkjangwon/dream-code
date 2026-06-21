@@ -55,7 +55,8 @@ npm uninstall -g dream-code
   support.
 - **Auto model routing:** use one provider by default, or switch on `/auto` to
   route each prompt, agent, and swarm lane across connected providers with
-  fallback chains.
+  fallback chains. Connect at least one provider with `/login` before enabling
+  it.
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
   for high-parallel fan-out when speed matters.
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
