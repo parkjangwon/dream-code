@@ -223,7 +223,7 @@ async function runWorkflowPrompt(
     output.write(`${title.toLowerCase()} skipped: no prompt\n`);
     return;
   }
-  const filePath = await appendWorkflowNote(options.configRoot, fileName, taskLabel, prompt);
+  const filePath = await appendWorkflowNote(options.configRoot, fileName, taskLabel, prompt, options.cwd);
   await appendTask(options.configRoot, taskLabel, prompt);
   output.write(`${paint(`${taskLabel.toLowerCase()} saved:`, ansi.green)} ${paint(filePath, ansi.blue)}\n`);
   await runFramedAgentPrompt({ ...options, rest: prompt }, title, instruction);

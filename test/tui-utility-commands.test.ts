@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -59,7 +59,8 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     await mkdir(join(root, "artifacts"), { recursive: true });
     await writeFile(join(root, "artifacts", "note.md"), "# Artifact", "utf8");
 
-    await runWorkspaceCommand("/add-dir", defaultConfig(), true, { question: async () => project }, root, undefined, project);
+    const extraDir = join(project, "packages", "mobile");
+    await runWorkspaceCommand("/add-dir", defaultConfig(), true, { question: async () => extraDir }, root, undefined, project);
     await runWorkspaceCommand("/tasks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/tasks Polish command UX", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
     await runWorkspaceCommand("/artifact", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
@@ -67,8 +68,10 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     await runWorkspaceCommand("/hooks", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
 
     const state = await readFile(join(root, "workspace.toml"), "utf8");
+    const extraDirStat = await stat(extraDir);
     const outputText = stripAnsi(chunks.join(""));
     assert.match(state, /paths = \[/u);
+    assert.equal(extraDirStat.isDirectory(), true);
     assert.match(outputText, /Tasks/u);
     assert.match(outputText, /No tasks yet/u);
     assert.match(outputText, /Task: Polish command UX/u);
@@ -124,10 +127,12 @@ test("plan and goal commands save workflow notes before model execution", async 
     const tasks = await readFile(join(root, "tasks.md"), "utf8");
     const goals = await readFile(join(root, "goals.md"), "utf8");
     const plans = await readFile(join(root, "plans.md"), "utf8");
+    const projectPlans = await readFile(join(project, ".dream", "plans.md"), "utf8");
     assert.match(tasks, /Goal: Ship the harness/u);
     assert.match(tasks, /Plan: Implement tool loop/u);
     assert.match(goals, /Ship the harness/u);
     assert.match(plans, /Implement tool loop/u);
+    assert.match(projectPlans, /Implement tool loop/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

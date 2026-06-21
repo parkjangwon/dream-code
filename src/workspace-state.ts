@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot } from "./config.js";
@@ -15,6 +15,7 @@ export async function addWorkspaceDir(root: string, inputPath: string, cwd: stri
     return "add-dir skipped: no directory";
   }
   const directory = resolvePath(trimmed, cwd);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
   const paths = await loadWorkspaceDirs(root);
   const next = [...new Set([...paths, directory])].sort((left, right) => left.localeCompare(right));
   await saveWorkspaceDirs(root, next);
@@ -60,13 +61,28 @@ export async function appendTask(root: string, label: string, detail: string): P
   await writeFile(join(root, "tasks.md"), `${previous ?? ""}${line}`, "utf8");
 }
 
-export async function appendWorkflowNote(root: string, fileName: "goals.md" | "plans.md", title: string, detail: string): Promise<string> {
+export async function appendWorkflowNote(
+  root: string,
+  fileName: "goals.md" | "plans.md",
+  title: string,
+  detail: string,
+  projectRoot?: string,
+): Promise<string> {
   await mkdir(root, { recursive: true, mode: 0o700 });
-  const filePath = join(root, fileName);
   const entry = [`## ${new Date().toISOString()} ${title}`, "", detail.trim(), ""].join("\n");
+  await appendFile(join(root, fileName), entry);
+  if (projectRoot === undefined) {
+    return join(root, fileName);
+  }
+  const projectFilePath = join(projectRoot, ".dream", fileName);
+  await appendFile(projectFilePath, entry);
+  return projectFilePath;
+}
+
+async function appendFile(filePath: string, entry: string): Promise<void> {
+  await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
   const previous = await readOptional(filePath);
   await writeFile(filePath, `${previous ?? ""}${entry}`, "utf8");
-  return filePath;
 }
 
 export async function formatSettingsFile(root: string, name: "mcp" | "hooks"): Promise<string> {
