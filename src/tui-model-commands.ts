@@ -2,6 +2,7 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import { saveConfig, type DreamConfig } from "./config.js";
+import { modelsForProviderMenu } from "./model-menu-catalog.js";
 import { connectedProviderIds, enableAutoRouting, formatAutoRoutes } from "./tui-auto-routing-command.js";
 import {
   describeModelMode,
@@ -42,7 +43,8 @@ export async function configureModels(options: ConfigureModelsOptions): Promise<
     return options.config;
   }
 
-  const selection = await resolveModelSelection(options, definition);
+  const availableModels = await modelsForProviderMenu(options.configRoot, options.config, definition);
+  const selection = await resolveModelSelection(options, definition, availableModels);
   if (selection.kind === "unchanged") {
     return options.config;
   }
@@ -80,28 +82,30 @@ async function maybeHandleModelModeCommand(options: ConfigureModelsOptions): Pro
 function resolveModelSelection(
   options: ConfigureModelsOptions,
   definition: ProviderDefinition,
+  availableModels: readonly string[],
 ): Promise<ModelSelection> {
   const args = options.args.trim();
   if (args.length > 0) {
     if (args === "list") {
-      output.write(formatModelMenu(options.config, definition));
+      output.write(formatModelMenu(options.config, definition, availableModels));
       return Promise.resolve({ kind: "unchanged" });
     }
     return Promise.resolve(parseModelSelection(args, definition.id, options.config.model.single.defaultTier));
   }
 
-  return promptModelSelection(options.config, definition, options.questioner);
+  return promptModelSelection(options.config, definition, availableModels, options.questioner);
 }
 
 async function promptModelSelection(
   config: DreamConfig,
   definition: ProviderDefinition,
+  availableModels: readonly string[],
   questioner: ProviderQuestioner,
 ): Promise<ModelSelection> {
   if (questioner.select !== undefined) {
     const selected = await questioner.select({
       title: `Models ${definition.displayName}`,
-      choices: modelChoices(definition, config.model.single.models),
+      choices: modelChoices(definition, config.model.single.models, availableModels),
       initialValue: modelForTier(config.model.single.models, config.model.single.defaultTier),
     });
     return selected === undefined
@@ -109,7 +113,7 @@ async function promptModelSelection(
       : { kind: "set-model", tier: config.model.single.defaultTier, model: selected };
   }
 
-  output.write(formatModelMenu(config, definition));
+  output.write(formatModelMenu(config, definition, availableModels));
   const answer = await questioner.question("Model: ");
   if (answer.trim().length === 0) {
     output.write("model unchanged\n");
