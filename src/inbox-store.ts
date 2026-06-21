@@ -55,6 +55,10 @@ export async function drainInboxMessages(root: string, receiverActorId: string):
   return drained;
 }
 
+export async function listPendingInboxMessages(root: string): Promise<readonly InboxMessage[]> {
+  return (await readInbox(root)).filter((message) => message.deliveredAt === undefined);
+}
+
 async function readInbox(root: string): Promise<readonly InboxMessage[]> {
   try {
     return (await readFile(actorInboxPath(root), "utf8"))

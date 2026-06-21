@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
+import { appendMemoryIndex, relevantMemoryEntries } from "./memory-index.js";
+
 const maxMemorySectionChars = 2_000;
 
 export type CheckpointInput = {
@@ -41,7 +43,9 @@ export async function writeCheckpoint(
   await ensureProjectMemory(root, directory);
   const filePath = checkpointPath(root, directory, sessionId);
   await mkdir(join(memoryProjectRoot(root, directory), "sessions", sessionId), { recursive: true, mode: 0o700 });
-  await writeFile(filePath, renderCheckpoint(checkpoint), "utf8");
+  const rendered = renderCheckpoint(checkpoint);
+  await writeFile(filePath, rendered, "utf8");
+  await appendMemoryIndex(memoryProjectRoot(root, directory), { kind: "checkpoint", path: filePath, title: checkpoint.title, body: rendered });
   return filePath;
 }
 
@@ -54,19 +58,23 @@ export async function appendTaskProgress(
   await ensureProjectMemory(root, directory);
   const filePath = taskProgressPath(root, directory, taskId);
   await mkdir(join(memoryProjectRoot(root, directory), "tasks", taskId), { recursive: true, mode: 0o700 });
-  await appendFile(filePath, progressEntry(note), "utf8");
+  const entry = progressEntry(note);
+  await appendFile(filePath, entry, "utf8");
+  await appendMemoryIndex(memoryProjectRoot(root, directory), { kind: "task-progress", path: filePath, title: taskId, body: note });
   return filePath;
 }
 
-export async function formatMemoryContext(root: string, directory: string, sessionId?: string): Promise<string> {
+export async function formatMemoryContext(root: string, directory: string, sessionId?: string, query = ""): Promise<string> {
   await ensureProjectMemory(root, directory);
   const projectRoot = memoryProjectRoot(root, directory);
   const memory = await readOptional(join(projectRoot, "MEMORY.md"));
   const checkpoint = sessionId === undefined ? undefined : await readOptional(checkpointPath(root, directory, sessionId));
+  const relevant = await relevantMemoryEntries(projectRoot, query);
   const progress = await readRecentProgress(projectRoot);
   const sections = [
     memorySection("MEMORY.md", memory),
     memorySection("checkpoint.md", checkpoint),
+    relevant.length === 0 ? "relevant memory: none." : ["relevant memory:", ...relevant.map(formatIndexEntry)].join("\n"),
     progress.length === 0 ? "task progress: none." : ["task progress:", ...progress].join("\n"),
   ];
   return ["Dream memory:", ...sections].join("\n");
@@ -142,6 +150,10 @@ async function readOptional(filePath: string): Promise<string | undefined> {
 
 function memorySection(label: string, content: string | undefined): string {
   return content === undefined ? `${label}: none.` : `${label}:\n${trimSection(content)}`;
+}
+
+function formatIndexEntry(entry: Awaited<ReturnType<typeof relevantMemoryEntries>>[number]): string {
+  return `- ${entry.kind} ${entry.title}: ${entry.preview}`;
 }
 
 function trimSection(content: string): string {

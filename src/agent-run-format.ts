@@ -1,9 +1,12 @@
 import { ansi, paint } from "./ansi.js";
 import type { AgentRunRecord, AgentRunStatus } from "./agent-run-record.js";
 import { listAgentRuns } from "./agent-run-store.js";
+import { listActors } from "./actor-store.js";
+import { listPendingInboxMessages } from "./inbox-store.js";
 
 export async function formatAgentRuns(root: string): Promise<string> {
   const runs = await listAgentRuns(root);
+  const inboxCounts = await pendingInboxCountsByRun(root);
   if (runs.length === 0) {
     return [
       paint("Running", ansi.accent),
@@ -15,18 +18,32 @@ export async function formatAgentRuns(root: string): Promise<string> {
   const activeCount = runs.filter((run) => run.status === "running" || run.status === "queued").length;
   return [
     `${paint("Running", ansi.accent)} ${paint(`${activeCount} active`, ansi.bold)} ${paint("·", ansi.guide)} ${runs.length} recent`,
-    ...runs.map(formatRunLine),
+    ...runs.map((run) => formatRunLine(run, inboxCounts.get(run.id) ?? 0)),
     "",
   ].join("\n");
 }
 
-function formatRunLine(run: AgentRunRecord): string {
+async function pendingInboxCountsByRun(root: string): Promise<ReadonlyMap<string, number>> {
+  const actors = await listActors(root);
+  const runByActor = new Map(actors.flatMap((actor) => actor.runId === undefined ? [] : [[actor.id, actor.runId] as const]));
+  const counts = new Map<string, number>();
+  for (const message of await listPendingInboxMessages(root)) {
+    const runId = runByActor.get(message.receiverActorId);
+    if (runId !== undefined) {
+      counts.set(runId, (counts.get(runId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function formatRunLine(run: AgentRunRecord, inboxCount: number): string {
   return [
     statusLabel(run.status),
     paint(run.agentName.padEnd(22), ansi.bold),
     paint(formatAge(run.startedAt, run.endedAt), ansi.dim),
     paint(formatCharacters(run.outputChars).padStart(10), ansi.guide),
     paint(`tools ${run.toolCalls}`, ansi.dim),
+    inboxCount > 0 ? paint(`inbox ${inboxCount}`, ansi.yellow) : paint("inbox 0", ansi.dim),
     paint(truncate(run.prompt, 56), ansi.blue),
   ].join(" ");
 }

@@ -7,6 +7,8 @@ import test from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import { formatAgentRuns } from "../src/agent-run-format.js";
 import { listAgentRuns, startAgentRun } from "../src/agent-run-store.js";
+import { registerActor } from "../src/actor-store.js";
+import { sendInboxMessage } from "../src/inbox-store.js";
 
 test("agent run store persists state, output, and wire events", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-"));
@@ -49,12 +51,26 @@ test("formatAgentRuns shows active and completed runs", async () => {
       agentName: "Security Reviewer",
       prompt: "audit secrets",
     });
+    const actor = await registerActor(root, {
+      id: "actor-live",
+      role: "subagent",
+      name: "Security Reviewer",
+      task: "audit secrets",
+      runId: run.id,
+    });
+    await sendInboxMessage(root, {
+      receiverActorId: actor.id,
+      senderActorId: "main",
+      type: "user",
+      content: "Also check CI secrets.",
+    });
     run.write("scanning");
 
     const live = stripAnsi(await formatAgentRuns(root));
     assert.match(live, /Running/u);
     assert.match(live, /RUNNING/u);
     assert.match(live, /Security Reviewer/u);
+    assert.match(live, /inbox 1/u);
 
     await run.finish("cancelled", { error: "stopped" });
     const completed = stripAnsi(await formatAgentRuns(root));

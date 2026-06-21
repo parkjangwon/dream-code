@@ -18,6 +18,7 @@ import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
 import { runTasksCommand } from "./tui-task-command.js";
 import { runWorkflowScript, type WorkflowAgentOptions } from "./workflow-engine.js";
+import { saveWorkflowRun } from "./workflow-runs.js";
 import {
   addWorkspaceDir,
   appendProjectWorkflowNote,
@@ -171,10 +172,14 @@ async function runWorkflowCommand(options: UtilityCommandOptions): Promise<void>
     runAgent: (prompt, agentOptions) => runWorkflowAgent(options, prompt, agentOptions),
   });
   if (result.status === "failed") {
+    const runPath = await saveWorkflowRun(options.configRoot, { scriptPath: filePath, workspace: options.cwd, status: "failed", error: result.error });
     output.write(`${paint("workflow failed:", ansi.red)} ${result.error}\n`);
+    output.write(`${paint("workflow run:", ansi.dim)} ${paint(runPath, ansi.blue)}\n`);
     return;
   }
+  const runPath = await saveWorkflowRun(options.configRoot, { scriptPath: filePath, workspace: options.cwd, status: "done", value: result.value });
   output.write(`${paint("workflow done", ansi.green)}\n${renderWorkflowValue(result.value)}\n`);
+  output.write(`${paint("workflow run:", ansi.dim)} ${paint(runPath, ansi.blue)}\n`);
 }
 
 async function runWorkflowAgent(

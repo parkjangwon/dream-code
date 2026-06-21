@@ -1,6 +1,7 @@
 import { cwd } from "node:process";
 
 import { actorRoleForRun } from "./agent-actor.js";
+import { appendActorInboxMessages } from "./agent-inbox-context.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { createAgentMessages } from "./agent-messages.js";
 import { isAgentToolName, messageChars, optionalSignal } from "./agent-runner-utils.js";
@@ -96,8 +97,12 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const workspaceDirs = await loadWorkspaceDirs(configRoot);
   const mcpContext = await formatMcpServersForPrompt(configRoot);
   const compactContext = await formatCompactContext(configRoot, options.sessionId);
-  const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId);
-  let messages = createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd);
+  const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId, options.prompt);
+  let messages = await appendActorInboxMessages(
+    configRoot,
+    actor.id,
+    createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd),
+  );
 
   try {
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
@@ -105,6 +110,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
         finalStatus = "cancelled";
         return;
       }
+      messages = await appendActorInboxMessages(configRoot, actor.id, messages);
       const assistantText = await streamAgentOnce(runOptions, selectedModel, messages);
       const requests = extractAgentToolRequests(assistantText);
       if (requests.length === 0) {

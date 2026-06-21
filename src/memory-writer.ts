@@ -62,11 +62,7 @@ function renderSwarmCheckpoint(summary: SwarmMemorySummary): string {
     truncate(summary.synthesis),
     "",
     "## Lane Results",
-    ...summary.laneResults.map((result) => [
-      `### ${result.lane.title}`,
-      `Elapsed: ${(result.elapsedMs / 1000).toFixed(1)}s`,
-      truncate(result.output),
-    ].join("\n")),
+    ...summary.laneResults.map(renderLaneCheckpoint),
   ].join("\n");
 }
 
@@ -78,16 +74,35 @@ async function writeLaneProgress(
   const taskId = swarmTaskId(summary.goal);
   const paths: string[] = [];
   for (const result of summary.laneResults) {
-    const path = await appendTaskProgress(root, directory, taskId, [
-      `${result.lane.title} (${(result.elapsedMs / 1000).toFixed(1)}s)`,
-      "",
-      truncate(result.output),
-    ].join("\n"));
+    const path = await appendTaskProgress(root, directory, taskId, renderLaneProgress(result));
     if (!paths.includes(path)) {
       paths.push(path);
     }
   }
   return paths;
+}
+
+function renderLaneCheckpoint(result: MemoryLaneResult): string {
+  return [
+    `### ${result.lane.title}`,
+    `Agent: ${result.lane.agent.id}`,
+    `Elapsed: ${(result.elapsedMs / 1000).toFixed(1)}s`,
+    `Prompt: ${singleLine(result.lane.prompt)}`,
+    "",
+    "Output:",
+    truncate(result.output),
+  ].join("\n");
+}
+
+function renderLaneProgress(result: MemoryLaneResult): string {
+  return [
+    `Lane: ${result.lane.title}`,
+    `Agent: ${result.lane.agent.id}`,
+    `Elapsed: ${(result.elapsedMs / 1000).toFixed(1)}s`,
+    `Signal: ${progressSignal(result.output)}`,
+    "",
+    truncate(result.output),
+  ].join("\n");
 }
 
 function memoryWriterActorId(sessionId: string): string {
@@ -105,6 +120,21 @@ function slug(value: string): string {
 function truncate(value: string): string {
   const trimmed = value.trim();
   return trimmed.length > 2_400 ? `${trimmed.slice(0, 2_400)}\n[Truncated]` : trimmed;
+}
+
+function singleLine(value: string): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+}
+
+function progressSignal(output: string): string {
+  if (/failed|error|missing|risk|vulnerab|secret/iu.test(output)) {
+    return "needs-review";
+  }
+  if (/cancelled|stopped/iu.test(output)) {
+    return "cancelled";
+  }
+  return "usable";
 }
 
 function errorMessage(error: unknown): string {

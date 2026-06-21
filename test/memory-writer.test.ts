@@ -34,7 +34,10 @@ test("hidden memory writer absorbs swarm output into checkpoint and task progres
 
     assert.match(checkpoint, /Audit security/u);
     assert.match(checkpoint, /Overall security/u);
+    assert.match(checkpoint, /Agent: security-reviewer/u);
+    assert.match(checkpoint, /Prompt: Audit security/u);
     assert.match(progress, /Security Reviewer/u);
+    assert.match(progress, /Signal: needs-review/u);
     assert.match(progress, /No leaked secrets/u);
     assert.equal(actors[0]?.name, "memory-writer");
     assert.equal(actors[0]?.status, "done");

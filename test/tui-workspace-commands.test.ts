@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
 import { stripAnsi } from "../src/ansi.js";
+import { registerActor } from "../src/actor-store.js";
 import { defaultConfig, loadConfig } from "../src/config.js";
+import { drainInboxMessages } from "../src/inbox-store.js";
 import { loadSkillSettings } from "../src/skill-settings.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
@@ -228,6 +230,42 @@ test("runWorkspaceCommand delegates a task to a selected agent", async () => {
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Delegating to Code Reviewer/u);
     assert.match(outputText, /unknown provider/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand queues inbox messages for running agents", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-inbox-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-inbox-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const actor = await registerActor(root, {
+      id: "actor-running",
+      role: "subagent",
+      name: "Security Reviewer",
+      task: "Audit the repository",
+      runId: "run-security",
+    });
+    const selections = ["running", actor.id];
+
+    await runWorkspaceCommand(
+      "/agents",
+      defaultConfig(),
+      true,
+      {
+        question: async () => "Check dependency risk too.",
+        select: async () => selections.shift(),
+      },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const messages = await drainInboxMessages(root, actor.id);
+    assert.equal(messages[0]?.content, "Check dependency risk too.");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

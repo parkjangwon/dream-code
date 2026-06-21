@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
@@ -27,9 +27,13 @@ test("workflow command runs a workspace script", async () => {
     await runWorkspaceCommand("/workflow flow.js", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
 
     const outputText = stripAnsi(chunks.join(""));
+    const runFiles = await readdir(join(root, "workflows", "runs"));
+    const runRecord = JSON.parse(await readFile(join(root, "workflows", "runs", runFiles[0] ?? ""), "utf8"));
     assert.match(outputText, /Workflow/u);
     assert.match(outputText, /workflow done/u);
     assert.match(outputText, /workflow ok/u);
+    assert.equal(runRecord.status, "done");
+    assert.equal(runRecord.value, "workflow ok");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

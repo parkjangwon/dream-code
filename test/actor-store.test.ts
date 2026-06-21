@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { listActors, registerActor, updateActorStatus } from "../src/actor-store.js";
+import { appendActorInboxMessages } from "../src/agent-inbox-context.js";
 import { drainInboxMessages, sendInboxMessage } from "../src/inbox-store.js";
 
 test("actor store registers lifecycle records and inbox messages", async () => {
@@ -37,6 +38,29 @@ test("actor store registers lifecycle records and inbox messages", async () => {
 
     const inbox = await readFile(join(root, "actors", "inbox.jsonl"), "utf8");
     assert.match(inbox, /"deliveredAt"/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("actor inbox messages can be absorbed into agent context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-actor-inbox-context-"));
+  try {
+    await sendInboxMessage(root, {
+      id: "msg-ctx",
+      receiverActorId: "actor-context",
+      type: "user",
+      content: "Focus on migration risks.",
+    });
+
+    const messages = await appendActorInboxMessages(root, "actor-context", [
+      { role: "user", content: "Review the code." },
+    ]);
+    const drainedAgain = await drainInboxMessages(root, "actor-context");
+
+    assert.equal(messages.length, 2);
+    assert.match(messages[1]?.content ?? "", /Focus on migration risks/u);
+    assert.equal(drainedAgain.length, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

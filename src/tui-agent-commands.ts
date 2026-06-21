@@ -2,6 +2,7 @@ import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
 import { formatAgentRuns } from "./agent-run-format.js";
+import { listActors } from "./actor-store.js";
 import {
   agentLocations,
   customAgentTemplate,
@@ -14,6 +15,7 @@ import {
 import { runAgentPrompt } from "./agent-runner.js";
 import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
+import { sendInboxMessage } from "./inbox-store.js";
 import type { PickerOptions } from "./tui-picker.js";
 
 export type AgentQuestioner = {
@@ -59,7 +61,7 @@ export async function showAgentsMenu(
     return;
   }
   if (tab === agentTabs.running) {
-    output.write(await formatAgentRuns(configRoot));
+    await showRunningAgentsMenu(configRoot, questioner);
   }
 }
 
@@ -126,6 +128,40 @@ async function showTemplatesMenu(
   if (template !== undefined) {
     await createTemplateAgent(configRoot, questioner, cwd, template);
   }
+}
+
+async function showRunningAgentsMenu(configRoot: string, questioner: AgentQuestioner): Promise<void> {
+  const actors = (await listActors(configRoot)).filter((actor) => actor.status === "running" || actor.status === "queued" || actor.status === "idle");
+  if (questioner.select === undefined || actors.length === 0) {
+    output.write(await formatAgentRuns(configRoot));
+    return;
+  }
+  const actorId = await questioner.select({
+    title: "Running Agents",
+    choices: actors.map((actor) => ({
+      value: actor.id,
+      label: actor.name,
+      description: `${actor.status} · ${actor.task}`,
+      keywords: [actor.id, actor.name, actor.task, actor.status],
+    })),
+  });
+  const actor = actors.find((candidate) => candidate.id === actorId);
+  if (actor === undefined) {
+    output.write(await formatAgentRuns(configRoot));
+    return;
+  }
+  const message = (await questioner.question(`Message to ${actor.name}: `)).trim();
+  if (message.length === 0) {
+    output.write("agent message cancelled\n");
+    return;
+  }
+  await sendInboxMessage(configRoot, {
+    receiverActorId: actor.id,
+    senderActorId: "main",
+    type: "user",
+    content: message,
+  });
+  output.write(`${paint("queued inbox message:", ansi.green)} ${actor.name}\n`);
 }
 
 async function createTemplateAgent(
