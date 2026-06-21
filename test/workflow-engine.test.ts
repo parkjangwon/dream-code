@@ -29,6 +29,12 @@ test("workflow engine runs agent, parallel, and pipeline primitives deterministi
 
     assert.equal(result.status, "done");
     assert.deepEqual(result.value, ["REVIEWER:REVIEW HELLO", "AUDITOR:AUDIT HELLO"]);
+    assert.equal(result.events.some((event) => event.type === "writeFile" && event.status === "done"), true);
+    assert.equal(result.events.some((event) => event.type === "readFile" && event.status === "done"), true);
+    assert.equal(result.events.some((event) => event.type === "parallel" && event.status === "done"), true);
+    assert.equal(result.events.some((event) => event.type === "agent" && event.status === "done"), true);
+    assert.equal(result.events.some((event) => event.type === "pipeline" && event.status === "done"), true);
+    assert.equal(result.durationMs >= 0, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -52,6 +58,7 @@ test("workflow engine jails file primitives to the workspace", async () => {
 
     assert.equal(result.status, "done");
     assert.deepEqual(result.value, ["ok", null]);
+    assert.equal(result.events.filter((event) => event.type === "readFile" && event.status === "done").length, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,12 +1,16 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { WorkflowRunEvent } from "./workflow-engine.js";
+
 export type WorkflowRunStatus = "done" | "failed";
 
 export type SaveWorkflowRunInput = {
   readonly scriptPath: string;
   readonly workspace: string;
   readonly status: WorkflowRunStatus;
+  readonly durationMs: number;
+  readonly events: readonly WorkflowRunEvent[];
   readonly value?: unknown;
   readonly error?: string;
 };

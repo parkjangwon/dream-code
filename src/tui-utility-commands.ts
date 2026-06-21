@@ -1,8 +1,6 @@
 import { stdout as output } from "node:process";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 
-import { ansi, paint, stripAnsi } from "./ansi.js";
+import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { deleteProviderCredential } from "./credentials.js";
 import { runAgentPrompt } from "./agent-runner.js";
@@ -17,8 +15,7 @@ import type { SessionRuntime } from "./tui-session-commands.js";
 import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
 import { runTasksCommand } from "./tui-task-command.js";
-import { runWorkflowScript, type WorkflowAgentOptions } from "./workflow-engine.js";
-import { saveWorkflowRun } from "./workflow-runs.js";
+import { runWorkflowCommand } from "./tui-workflow-command.js";
 import {
   addWorkspaceDir,
   appendProjectWorkflowNote,
@@ -156,52 +153,6 @@ async function runResearchCommand(options: UtilityCommandOptions): Promise<void>
   });
 }
 
-async function runWorkflowCommand(options: UtilityCommandOptions): Promise<void> {
-  const scriptPath = await restOrAsk(options.rest, "Workflow file: ", options.questioner);
-  if (scriptPath.trim().length === 0) {
-    output.write("workflow skipped: no file\n");
-    return;
-  }
-  const filePath = resolve(options.cwd, scriptPath.trim());
-  const script = await readFile(filePath, "utf8");
-  output.write(`${paint("Workflow", `${ansi.bold}${ansi.accent}`)} ${paint(filePath, ansi.blue)}\n`);
-  const result = await runWorkflowScript({
-    root: options.configRoot,
-    workspace: options.cwd,
-    script,
-    runAgent: (prompt, agentOptions) => runWorkflowAgent(options, prompt, agentOptions),
-  });
-  if (result.status === "failed") {
-    const runPath = await saveWorkflowRun(options.configRoot, { scriptPath: filePath, workspace: options.cwd, status: "failed", error: result.error });
-    output.write(`${paint("workflow failed:", ansi.red)} ${result.error}\n`);
-    output.write(`${paint("workflow run:", ansi.dim)} ${paint(runPath, ansi.blue)}\n`);
-    return;
-  }
-  const runPath = await saveWorkflowRun(options.configRoot, { scriptPath: filePath, workspace: options.cwd, status: "done", value: result.value });
-  output.write(`${paint("workflow done", ansi.green)}\n${renderWorkflowValue(result.value)}\n`);
-  output.write(`${paint("workflow run:", ansi.dim)} ${paint(runPath, ansi.blue)}\n`);
-}
-
-async function runWorkflowAgent(
-  options: UtilityCommandOptions,
-  prompt: string,
-  agentOptions: WorkflowAgentOptions,
-): Promise<string> {
-  let transcript = "";
-  await runAgentPrompt({
-    config: options.config,
-    configRoot: options.configRoot,
-    cwd: options.cwd,
-    prompt,
-    runLabel: agentOptions.name ?? "Workflow Agent",
-    write: (chunk) => {
-      transcript = `${transcript}${stripAnsi(chunk)}`;
-      output.write(chunk);
-    },
-  });
-  return transcript.trim();
-}
-
 async function runFramedAgentPrompt(options: UtilityCommandOptions, title: string, instruction: string): Promise<void> {
   const prompt = await restOrAsk(options.rest, `${title}: `, options.questioner);
   if (prompt.trim().length === 0) {
@@ -257,11 +208,4 @@ function currentSessionId(options: UtilityCommandOptions): string {
 function copyOffset(rest: string): number {
   const parsed = Number.parseInt(rest.trim(), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
-}
-
-function renderWorkflowValue(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  return JSON.stringify(value, null, 2) ?? "null";
 }

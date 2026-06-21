@@ -24,6 +24,14 @@ export type WorkflowRuntime = {
 export type WorkflowTask = () => unknown | Promise<unknown>;
 export type WorkflowStage = (value: unknown) => unknown | Promise<unknown>;
 
+export type WorkflowRunEvent = {
+  readonly type: "agent" | "parallel" | "pipeline" | "readFile" | "writeFile" | "glob";
+  readonly label: string;
+  readonly status: "started" | "done" | "failed";
+  readonly elapsedMs: number;
+  readonly error?: string;
+};
+
 export type RunWorkflowScriptInput = {
   readonly root: string;
   readonly workspace: string;
@@ -33,21 +41,23 @@ export type RunWorkflowScriptInput = {
 };
 
 export type WorkflowRunResult =
-  | { readonly status: "done"; readonly value: unknown }
-  | { readonly status: "failed"; readonly error: string };
+  | { readonly status: "done"; readonly value: unknown; readonly events: readonly WorkflowRunEvent[]; readonly durationMs: number }
+  | { readonly status: "failed"; readonly error: string; readonly events: readonly WorkflowRunEvent[]; readonly durationMs: number };
 
 type WorkflowModule = {
   readonly main: (runtime: WorkflowRuntime) => unknown | Promise<unknown>;
 };
 
 export async function runWorkflowScript(input: RunWorkflowScriptInput): Promise<WorkflowRunResult> {
+  const startedAt = Date.now();
+  const events: WorkflowRunEvent[] = [];
   try {
     const module = loadWorkflowModule(input.script);
-    const runtime = createWorkflowRuntime(input.workspace, input.runAgent);
+    const runtime = createWorkflowRuntime(input.workspace, input.runAgent, events);
     const value = await withTimeout(Promise.resolve(module.main(runtime)), input.timeoutMs ?? 120_000);
-    return { status: "done", value: normalizeWorkflowValue(value) };
+    return { status: "done", value: normalizeWorkflowValue(value), events, durationMs: Date.now() - startedAt };
   } catch (error) {
-    return { status: "failed", error: errorMessage(error) };
+    return { status: "failed", error: errorMessage(error), events, durationMs: Date.now() - startedAt };
   }
 }
 
@@ -68,12 +78,12 @@ function loadWorkflowModule(script: string): WorkflowModule {
   return value;
 }
 
-function createWorkflowRuntime(workspace: string, runAgent: WorkflowAgentRunner): WorkflowRuntime {
+function createWorkflowRuntime(workspace: string, runAgent: WorkflowAgentRunner, events: WorkflowRunEvent[]): WorkflowRuntime {
   return {
-    agent: async (prompt, options = {}) => runAgent(prompt, options),
-    parallel: async (tasks) => Promise.all(tasks.map((task) => task())),
-    pipeline: async (value, ...stages) => runPipeline(value, stages),
-    readFile: async (path) => {
+    agent: async (prompt, options = {}) => traceWorkflowStep(events, "agent", options.name ?? prompt, () => runAgent(prompt, options)),
+    parallel: async (tasks) => traceWorkflowStep(events, "parallel", `${tasks.length} tasks`, () => Promise.all(tasks.map((task) => task()))),
+    pipeline: async (value, ...stages) => traceWorkflowStep(events, "pipeline", `${stages.length} stages`, () => runPipeline(value, stages)),
+    readFile: async (path) => traceWorkflowStep(events, "readFile", path, async () => {
       const filePath = workspacePath(workspace, path);
       if (filePath === undefined) {
         return null;
@@ -86,8 +96,8 @@ function createWorkflowRuntime(workspace: string, runAgent: WorkflowAgentRunner)
         }
         throw error;
       }
-    },
-    writeFile: async (path, content) => {
+    }),
+    writeFile: async (path, content) => traceWorkflowStep(events, "writeFile", path, async () => {
       const filePath = workspacePath(workspace, path);
       if (filePath === undefined) {
         return false;
@@ -95,9 +105,27 @@ function createWorkflowRuntime(workspace: string, runAgent: WorkflowAgentRunner)
       await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
       await writeFile(filePath, content, "utf8");
       return true;
-    },
-    glob: async (pattern) => globWorkspace(workspace, pattern),
+    }),
+    glob: async (pattern) => traceWorkflowStep(events, "glob", pattern, () => globWorkspace(workspace, pattern)),
   };
+}
+
+async function traceWorkflowStep<T>(
+  events: WorkflowRunEvent[],
+  type: WorkflowRunEvent["type"],
+  label: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  events.push({ type, label: singleLine(label), status: "started", elapsedMs: 0 });
+  try {
+    const value = await task();
+    events.push({ type, label: singleLine(label), status: "done", elapsedMs: Date.now() - startedAt });
+    return value;
+  } catch (error) {
+    events.push({ type, label: singleLine(label), status: "failed", elapsedMs: Date.now() - startedAt, error: errorMessage(error) });
+    throw error;
+  }
 }
 
 async function runPipeline(value: unknown, stages: readonly WorkflowStage[]): Promise<unknown> {
@@ -188,6 +216,11 @@ function escapeRegExp(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown workflow failure";
+}
+
+function singleLine(value: string): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
 }
 
 function normalizeWorkflowValue(value: unknown): unknown {

@@ -37,6 +37,7 @@ Inside the TUI:
 /rules
 /hooks
 /mcp
+/workflow
 ```
 
 Provider setup is env-first. If Dream Code detects a provider API key, `/login`
@@ -67,6 +68,13 @@ Tasks are stored in `~/.dream/tasks.jsonl` with ids like `T001` and statuses
 `todo`, `doing`, `done`, or `blocked`. A legacy `tasks.md` trail is still written
 for easy reading. Swarm runs save a Markdown report under `~/.dream/artifacts/`
 so long fan-outs leave an inspectable synthesis artifact behind.
+
+Workflows are project-local JavaScript recipes for deterministic multi-agent
+flows. Put scripts in `.dream/workflows/*.js` or `workflows/*.js`, then run
+`/workflow` to pick one from the TUI or `/workflow path/to/file.js` directly.
+The runtime exposes `agent()`, `parallel()`, `pipeline()`, `readFile()`,
+`writeFile()`, and `glob()`. Each run writes a trace with duration, primitive
+events, output, and failures to `~/.dream/workflows/runs/`.
 
 Compact context is automatic as sessions grow and can be forced with
 `/compact`. Saved compacts are injected back into the next agent prompt so long
