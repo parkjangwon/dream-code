@@ -26,6 +26,7 @@ export const slashCommands = [
   { name: "/model", summary: "Choose active model", acceptsArgs: true },
   { name: "/notifications", summary: "Toggle native notifications", acceptsArgs: true },
   { name: "/plan", summary: "Create an implementation plan", acceptsArgs: true },
+  { name: "/plugin", summary: "Import Claude plugins", acceptsArgs: true },
   { name: "/provider", summary: "Switch or toggle providers", acceptsArgs: true },
   { name: "/quit", summary: "Exit Dream Code", acceptsArgs: false },
   { name: "/rename", summary: "Rename current session", acceptsArgs: true },

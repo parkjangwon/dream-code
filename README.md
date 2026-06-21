@@ -21,6 +21,10 @@ Termux, macOS, and Linux:
 curl -fsSL https://raw.githubusercontent.com/parkjangwon/dream-code/main/install.sh | sh
 ```
 
+Run the same command again to update. The installer uses the latest GitHub
+Release package when available, then falls back to a source build before the
+first release exists.
+
 Windows PowerShell:
 
 ```powershell
@@ -47,6 +51,31 @@ Windows PowerShell:
 npm uninstall -g dream-code
 ```
 
+## Release
+
+Dream Code releases are built as npm tarballs with compiled `dist/` files
+inside the GitHub Release asset. The repository does not commit `dist/`.
+
+Create a release by pushing a version tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
+`dream-code-*.tgz`, and writes `SHA256SUMS`. To build releases on an OCI VM,
+register that VM as a GitHub Actions self-hosted runner and set the repository
+variable `DREAM_RELEASE_RUNNER` to the runner label, for example
+`dream-code-oci`.
+
+Useful installer overrides:
+
+```sh
+DREAM_CODE_VERSION=v0.1.0 sh install.sh
+DREAM_CODE_SOURCE=1 sh install.sh
+```
+
 ## Core Features
 
 - **Fast TUI:** slash commands, history, menus, skill autocomplete, smooth
@@ -62,6 +91,8 @@ npm uninstall -g dream-code
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
   for high-parallel fan-out when speed matters. Use `/swarm --size N` when you
   want to force a specific number of parallel lanes.
+- **Plugin import:** import Claude Code plugin packages into Dream Code skills,
+  agents, command skills, and MCP settings with `/plugin install`.
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
   progress without flooding every request.
 - **Native notifications:** completion and permission-required alerts through
@@ -71,6 +102,9 @@ npm uninstall -g dream-code
   templates.
 - **Project awareness:** load `AGENTS.md`, `DESIGN.md`, plans, tasks, sessions,
   LSP diagnostics, live MCP tools, hooks, and local tool health.
+- **Workspace control:** let the agent list, search, read, create directories,
+  write files, edit files, delete files, run shell commands, and research the
+  web with permission-aware prompts.
 
 ## Providers
 
@@ -126,6 +160,7 @@ spend more tokens for faster parallel coverage.
 /model        Choose model or model routing mode
 /notifications Toggle native completion and permission alerts
 /plan         Create an implementation plan
+/plugin       Import Claude plugin packages
 /provider     Switch, list, enable, or disable providers
 /rename       Rename current session
 /research     Research with source discipline
@@ -177,13 +212,15 @@ Enter       Submit input or choose a menu item
 - Task ledger with todo/doing/done/blocked states
 - Skills from `~/.dream/skills` and `~/.agents/skills`
 - `@skill` autocomplete and explicit skill activation
+- Claude plugin import for skills, agents, commands, and `.mcp.json`
 - Custom agents and running-agent inboxes
 - Dream Swarm fan-out with live monitor
 - Swarm synthesis artifacts and memory absorption
 - Memory layers: project memory, checkpoint, task progress
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
-- Web research through `DREAM_RESEARCH_COMMAND` or built-in search fallback
+- Agent file tools for list, search, read, mkdir, write, edit, and delete
+- Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge
 - Hook execution with recent run logs
@@ -212,6 +249,7 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/tasks.jsonl             task ledger
 ~/.dream/model_telemetry.jsonl   model routing health log
 ~/.dream/artifacts/              generated artifacts
+~/.dream/plugins/                imported Claude plugin sources and registry
 ~/.dream/workflows/runs/         workflow run traces
 ```
 
@@ -248,6 +286,10 @@ pkg -y install nodejs-lts git ripgrep fd jq
 curl -fsSL https://raw.githubusercontent.com/parkjangwon/dream-code/main/install.sh | sh
 dream
 ```
+
+For shared Android storage such as `/sdcard`, run `termux-setup-storage` once
+and grant storage permission. Project files under Termux home work without that
+extra Android storage grant.
 
 ## License
 

@@ -51,12 +51,16 @@ function formatToolProtocol(): string {
     "Never print bare tool JSON outside that fence.",
     "Each line must be one JSON object:",
     "{\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"list\",\"path\":\"src\"}",
+    "{\"tool\":\"search\",\"query\":\"TODO\",\"path\":\"src\"}",
     "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
     "{\"tool\":\"mcp\",\"server\":\"server-name\",\"name\":\"tool-name\",\"arguments\":{}}",
     "{\"tool\":\"shell\",\"command\":\"pnpm test\"}",
+    "{\"tool\":\"mkdir\",\"path\":\"src\"}",
     "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
     "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",
-    "Use shell/write/edit only when permission mode allows it; otherwise explain the needed command.",
+    "{\"tool\":\"delete\",\"path\":\"file.ts\"}",
+    "Use shell/mcp/mkdir/write/edit/delete only when permission mode allows it; otherwise explain the needed command.",
   ].join("\n");
 }
 

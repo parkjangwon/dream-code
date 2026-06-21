@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -14,18 +14,28 @@ test("extractAgentToolRequests parses JSONL dream-tool blocks", () => {
   const requests = extractAgentToolRequests([
     "```dream-tool",
     "{\"id\":\"call_1\",\"tool\":\"read\",\"path\":\"README.md\"}",
+    "{\"tool\":\"list\",\"path\":\"src\"}",
+    "{\"tool\":\"search\",\"query\":\"TODO\",\"path\":\"src\"}",
     "{\"tool\":\"research\",\"query\":\"Dream Code docs\"}",
     "{\"tool\":\"shell\",\"command\":\"pwd\"}",
+    "{\"tool\":\"mkdir\",\"path\":\"src\"}",
+    "{\"tool\":\"write\",\"path\":\"src/index.ts\",\"content\":\"console.log(1)\"}",
+    "{\"tool\":\"delete\",\"path\":\"src/index.ts\"}",
     "{\"tool\":\"mcp\",\"server\":\"fake\",\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}}",
     "```",
   ].join("\n"));
 
-  assert.equal(requests.length, 4);
+  assert.equal(requests.length, 9);
   assert.equal(requests[0]?.tool, "read");
   assert.equal(requests[0]?.id, "call_1");
-  assert.equal(requests[1]?.tool, "research");
-  assert.equal(requests[2]?.tool, "shell");
-  assert.equal(requests[3]?.tool, "mcp");
+  assert.equal(requests[1]?.tool, "list");
+  assert.equal(requests[2]?.tool, "search");
+  assert.equal(requests[3]?.tool, "research");
+  assert.equal(requests[4]?.tool, "shell");
+  assert.equal(requests[5]?.tool, "mkdir");
+  assert.equal(requests[6]?.tool, "write");
+  assert.equal(requests[7]?.tool, "delete");
+  assert.equal(requests[8]?.tool, "mcp");
 });
 
 test("extractAgentToolRequests recovers bare tool JSON objects", () => {
@@ -52,6 +62,31 @@ test("runAgentToolRequest gates shell tools behind yolo permission", async () =>
 
   assert.equal(result.ok, false);
   assert.match(result.output, /Permission required/u);
+});
+
+test("runAgentToolRequest asks before mutating workspace in ask mode", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-approval-"));
+  const previous = process.cwd();
+  try {
+    process.chdir(project);
+
+    const denied = await runAgentToolRequest(
+      { tool: "write", path: "denied.txt", content: "no" },
+      { mode: "ask", approveTool: async () => false },
+    );
+    const approved = await runAgentToolRequest(
+      { tool: "write", path: "approved.txt", content: "yes" },
+      { mode: "ask", approveTool: async () => true },
+    );
+
+    assert.equal(denied.ok, false);
+    assert.match(denied.output, /Permission required/u);
+    assert.equal(approved.ok, true);
+    assert.equal(await readFile(join(project, "approved.txt"), "utf8"), "yes");
+  } finally {
+    process.chdir(previous);
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test("runAgentToolRequest annotates risky shell commands in yolo mode", async () => {
@@ -114,6 +149,49 @@ test("runAgentToolRequest reads project files and formats results", async () => 
     assert.equal(result.ok, true);
     assert.match(result.output, /Dream Code/u);
     assert.match(formatted, /tool results/u);
+  } finally {
+    process.chdir(previous);
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("runAgentToolRequest controls files and searches workspace", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-file-control-"));
+  const previous = process.cwd();
+  try {
+    process.chdir(project);
+
+    const created = await runAgentToolRequest({ tool: "mkdir", path: "src" }, "yolo");
+    const written = await runAgentToolRequest({ tool: "write", path: "src/index.ts", content: "const marker = 'Dream';\n" }, "yolo");
+    const listed = await runAgentToolRequest({ tool: "list", path: "src" }, "ask");
+    const searched = await runAgentToolRequest({ tool: "search", query: "marker", path: "src" }, "ask");
+    const edited = await runAgentToolRequest({ tool: "edit", path: "src/index.ts", search: "Dream", replace: "Code" }, "yolo");
+    const deleted = await runAgentToolRequest({ tool: "delete", path: "src/index.ts" }, "yolo");
+
+    assert.equal(created.ok, true);
+    assert.equal(written.ok, true);
+    assert.match(listed.output, /index\.ts/u);
+    assert.match(searched.output, /marker/u);
+    assert.equal(edited.ok, true);
+    assert.equal(deleted.ok, true);
+  } finally {
+    process.chdir(previous);
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("runAgentToolRequest searches nested Java files", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-java-search-"));
+  const previous = process.cwd();
+  try {
+    process.chdir(project);
+    await mkdir(join(project, "app", "src"), { recursive: true });
+    await writeFile(join(project, "app", "src", "Main.java"), "class Main { String token = \"needle\"; }\n", "utf8");
+
+    const result = await runAgentToolRequest({ tool: "search", query: "needle", path: "app" }, "ask");
+
+    assert.equal(result.ok, true);
+    assert.match(result.output, /Main\.java:1/u);
   } finally {
     process.chdir(previous);
     await rm(project, { recursive: true, force: true });

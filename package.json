@@ -8,7 +8,7 @@
     "dream": "./dist/src/cli.js"
   },
   "files": [
-    "dist",
+    "dist/src",
     "install.sh",
     "uninstall.sh",
     "LICENSE",

@@ -25,6 +25,7 @@ import {
   type AgentToolResult,
   type AgentToolPolicy,
 } from "./agent-tools.js";
+import type { AgentToolRequest } from "./agent-tool-schema.js";
 import {
   MissingProviderConfigError,
   ProviderProtocolError,
@@ -55,6 +56,7 @@ export type AgentPromptOptions = {
   readonly runKind?: AgentRunKind;
   readonly runLabel?: string;
   readonly renderResponse?: boolean;
+  readonly approveTool?: (request: AgentToolRequest) => Promise<boolean>;
   readonly write: (text: string) => void;
 };
 
@@ -234,6 +236,8 @@ function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): Agen
     mode: options.config.permissions.mode,
     signal,
     configRoot: options.configRoot ?? defaultConfigRoot(),
+    workspaceRoot: options.cwd ?? cwd(),
+    ...(options.approveTool === undefined ? {} : { approveTool: options.approveTool }),
     ...(allowedTools === undefined || allowedTools.length === 0 ? {} : { allowedTools }),
   };
 }

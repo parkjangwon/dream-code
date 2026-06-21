@@ -12,6 +12,7 @@ const initialDirectories = [
   "artifacts",
   "compacts",
   "exports",
+  "plugins",
   "sessions",
   "skills",
   join("workflows", "runs"),

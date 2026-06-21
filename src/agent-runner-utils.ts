@@ -4,10 +4,14 @@ import type { ChatMessage } from "./llm-provider.js";
 export function isAgentToolName(value: string): value is AgentToolName {
   switch (value) {
     case "read":
+    case "list":
+    case "search":
     case "research":
     case "shell":
     case "write":
     case "edit":
+    case "delete":
+    case "mkdir":
     case "mcp":
       return true;
     default:

@@ -5,9 +5,14 @@ import { toolRequestSchema } from "./agent-tool-schema.js";
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
+import { toolLabel, toolResultLabel } from "./agent-tool-labels.js";
 import {
+  deleteWorkspacePath,
+  listWorkspacePath,
+  mkdirWorkspacePath,
   readWorkspaceFile,
   replaceInWorkspaceFile,
+  searchWorkspaceText,
   writeWorkspaceFile,
 } from "./workspace-tools.js";
 import { runResearch } from "./research-tool.js";
@@ -25,6 +30,8 @@ export type AgentToolResult = {
 export type AgentToolPolicy = {
   readonly mode: PermissionMode;
   readonly allowedTools?: readonly AgentToolName[];
+  readonly approveTool?: (request: AgentToolRequest) => Promise<boolean>;
+  readonly workspaceRoot?: string;
   readonly signal?: AbortSignal;
   readonly shellTimeoutMs?: number;
   readonly configRoot?: string;
@@ -36,8 +43,8 @@ const defaultShellTimeoutMs = 120_000;
 export function extractAgentToolRequests(text: string): readonly AgentToolRequest[] {
   const fenced = [...text.matchAll(/```dream-tool\s*\n([\s\S]*?)```/gu)]
     .flatMap((match) => parseToolLines(match[1] ?? ""))
-    .slice(0, 8);
-  return fenced.length > 0 ? fenced : parseBareToolObjects(text).slice(0, 8);
+    .slice(0, 12);
+  return fenced.length > 0 ? fenced : parseBareToolObjects(text).slice(0, 12);
 }
 
 export async function runAgentToolRequest(
@@ -48,16 +55,32 @@ export async function runAgentToolRequest(
   if (!toolAllowed(request.tool, policy.allowedTools)) {
     return { request, ok: false, output: `Tool ${request.tool} is not allowed for this agent.` };
   }
-  if (request.tool !== "read" && request.tool !== "research" && policy.mode !== "yolo") {
+  if (!readOnlyTool(request.tool) && policy.mode !== "yolo") {
+    if (policy.approveTool !== undefined && await policy.approveTool(request)) {
+      return runApprovedAgentToolRequest(request, policy);
+    }
     await notifyPermissionRequired(policy.configRoot ?? defaultConfigRoot(), toolLabel(request));
     return { request, ok: false, output: "Permission required. Enable YOLO or run the command manually." };
   }
 
+  return runApprovedAgentToolRequest(request, policy);
+}
+
+async function runApprovedAgentToolRequest(
+  request: AgentToolRequest,
+  policy: AgentToolPolicy,
+): Promise<AgentToolResult> {
   try {
     switch (request.tool) {
       case "read": {
-        const result = await readWorkspaceFile(request.path);
+        const result = await readWorkspaceFile(request.path, 8_000, policy.workspaceRoot);
         return { request, ok: true, output: `${result.path} (${result.bytes} bytes)\n${result.content}` };
+      }
+      case "list":
+        return { request, ok: true, output: await listWorkspacePath(request.path, policy.workspaceRoot) };
+      case "search": {
+        const results = await searchWorkspaceText(request.query, request.path, policy.workspaceRoot);
+        return { request, ok: true, output: formatSearchResults(results) };
       }
       case "research": {
         const result = await runResearch(request.query);
@@ -70,11 +93,19 @@ export async function runAgentToolRequest(
       case "shell":
         return { request, ...(await runShellCapture(request.command, policy)) };
       case "write": {
-        const path = await writeWorkspaceFile(request.path, request.content);
+        const path = await writeWorkspaceFile(request.path, request.content, policy.workspaceRoot);
         return { request, ok: true, output: `wrote ${path}`, changedPath: path };
       }
+      case "delete": {
+        const path = await deleteWorkspacePath(request.path, policy.workspaceRoot);
+        return { request, ok: true, output: `deleted ${path}`, changedPath: path };
+      }
+      case "mkdir": {
+        const path = await mkdirWorkspacePath(request.path, policy.workspaceRoot);
+        return { request, ok: true, output: `created directory ${path}`, changedPath: path };
+      }
       case "edit": {
-        const result = await replaceInWorkspaceFile(request.path, request.search, request.replace);
+        const result = await replaceInWorkspaceFile(request.path, request.search, request.replace, policy.workspaceRoot);
         return {
           request,
           ok: result.replaced,
@@ -210,27 +241,8 @@ function appendLimited(base: string, chunk: string): string {
   return next.length > maxShellOutput ? `${next.slice(0, maxShellOutput)}\n[truncated]` : next;
 }
 
-function toolLabel(request: AgentToolRequest): string {
-  switch (request.tool) {
-    case "read":
-      return `read ${request.path}`;
-    case "research":
-      return `research ${request.query}`;
-    case "shell":
-      return `shell ${request.command}`;
-    case "write":
-      return `write ${request.path}`;
-    case "edit":
-      return `edit ${request.path}`;
-    case "mcp":
-      return `mcp ${request.server}/${request.name}`;
-    default:
-      return assertNever(request);
-  }
-}
-
-function toolResultLabel(request: AgentToolRequest): string {
-  return request.id === undefined ? toolLabel(request) : `${request.id} ${toolLabel(request)}`;
+function formatSearchResults(results: readonly { readonly path: string; readonly line: number; readonly text: string }[]): string {
+  return results.length === 0 ? "no matches" : results.map((result) => `${result.path}:${result.line}: ${result.text}`).join("\n");
 }
 
 function normalizePolicy(policyInput: PermissionMode | AgentToolPolicy): AgentToolPolicy {
@@ -239,6 +251,10 @@ function normalizePolicy(policyInput: PermissionMode | AgentToolPolicy): AgentTo
 
 function toolAllowed(tool: AgentToolName, allowedTools: readonly AgentToolName[] | undefined): boolean {
   return allowedTools === undefined || allowedTools.includes(tool);
+}
+
+function readOnlyTool(tool: AgentToolName): boolean {
+  return tool === "read" || tool === "list" || tool === "search" || tool === "research";
 }
 
 function assertNever(value: never): never {

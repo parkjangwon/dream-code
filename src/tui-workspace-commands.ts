@@ -32,6 +32,9 @@ import { formatPermissionMode, printHelp } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
+import { runPluginCommand } from "./tui-plugin-command.js";
+import { approveAgentTool } from "./tui-tool-approval.js";
+import type { AgentToolRequest } from "./agent-tool-schema.js";
 
 export type CommandResult = {
   readonly config: DreamConfig;
@@ -91,6 +94,7 @@ async function runWorkspaceCommandBody(
       prompt: text,
       cwd,
       ...(signal === undefined ? {} : { signal }),
+      approveTool: (request: AgentToolRequest) => approveAgentTool(request, questioner),
       write: (chunk: string) => {
         output.write(chunk);
         assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
@@ -181,6 +185,9 @@ async function runWorkspaceCommandBody(
       output.write(result.output);
       return { config: result.config, shouldContinue: true };
     }
+    case "/plugin":
+      output.write(await runPluginCommand(configRoot, command.rest, cwd));
+      return { config, shouldContinue: true };
     case "/auto":
       return {
         config: await enableAutoRouting({

@@ -37,18 +37,24 @@ function runResearchCommand(command: string, query: string): Promise<ResearchRes
 
 async function runDuckDuckGoSearch(query: string): Promise<ResearchResult> {
   try {
-    const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
     const response = await request(url, {
       method: "GET",
-      headers: { "user-agent": "Dream Code research" },
+      headers: { "user-agent": "Mozilla/5.0" },
       bodyTimeout: 10_000,
       headersTimeout: 10_000,
     });
     const html = await response.body.text();
-    return { ok: response.statusCode >= 200 && response.statusCode < 300, output: parseDuckDuckGoResults(html) };
+    const output = parseDuckDuckGoResults(html);
+    if (response.statusCode >= 200 && response.statusCode < 300 && !noParsedResults(output)) {
+      return { ok: true, output };
+    }
+    return runJinaDuckDuckGoSearch(encodedQuery);
   } catch (error) {
     if (error instanceof Error) {
-      return { ok: false, output: error.message };
+      const fallback = await runJinaDuckDuckGoSearch(encodeURIComponent(query));
+      return fallback.ok ? fallback : { ok: false, output: error.message };
     }
     throw error;
   }
@@ -69,6 +75,43 @@ export function parseDuckDuckGoResults(html: string): string {
   return results.length === 0
     ? "No web results parsed. Configure DREAM_RESEARCH_COMMAND for a custom search backend."
     : results.join("\n");
+}
+
+async function runJinaDuckDuckGoSearch(encodedQuery: string): Promise<ResearchResult> {
+  try {
+    const target = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
+    const response = await request(`https://r.jina.ai/http://r.jina.ai/http://${target}`, {
+      method: "GET",
+      headers: { "user-agent": "Mozilla/5.0" },
+      bodyTimeout: 15_000,
+      headersTimeout: 15_000,
+    });
+    const markdown = await response.body.text();
+    const output = parseJinaSearchResults(markdown);
+    return { ok: response.statusCode >= 200 && response.statusCode < 300 && !noParsedResults(output), output };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { ok: false, output: error.message };
+    }
+    throw error;
+  }
+}
+
+export function parseJinaSearchResults(markdown: string): string {
+  const results = [...markdown.matchAll(/^## \[(.*?)\]\((.*?)\)/gmu)]
+    .slice(0, 5)
+    .map((match) => {
+      const title = cleanHtml(match[1] ?? "result");
+      const url = normalizeResultUrl(decodeHtml(match[2] ?? ""));
+      return [`- ${title}`, `  ${url}`].join("\n");
+    });
+  return results.length === 0
+    ? "No web results parsed. Configure DREAM_RESEARCH_COMMAND for a custom search backend."
+    : results.join("\n");
+}
+
+function noParsedResults(output: string): boolean {
+  return output.startsWith("No web results parsed.");
 }
 
 function cleanHtml(text: string): string {
