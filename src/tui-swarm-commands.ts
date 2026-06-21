@@ -15,6 +15,7 @@ export type RunSwarmCommandOptions = {
   readonly args: string;
   readonly questioner: SwarmQuestioner;
   readonly cwd?: string;
+  readonly sessionId?: string;
 };
 
 type SwarmArgs = {
@@ -41,6 +42,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     write: (chunk: string) => output.write(chunk),
     replaceMonitor,
     monitorRows: output.rows,
+    ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   };
   const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
   const artifactPath = await saveSwarmArtifact(options.configRoot, summary);

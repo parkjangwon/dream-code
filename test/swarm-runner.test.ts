@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { stripAnsi } from "../src/ansi.js";
 import type { AgentDefinition } from "../src/agent-library.js";
 import { defaultConfig } from "../src/config.js";
+import { checkpointPath, taskProgressPath } from "../src/memory-store.js";
 import { renderSwarmMonitorSnapshot } from "../src/swarm-monitor-render.js";
 import { runAgentSwarmWithAgents } from "../src/swarm-runner.js";
 
@@ -160,6 +164,30 @@ test("runAgentSwarmWithAgents stops lanes and skips synthesis when aborted", asy
   assert.deepEqual(calls, ["lane"]);
   assert.match(output, /STOPPED/u);
   assert.match(output, /Swarm stopped/u);
+});
+
+test("runAgentSwarmWithAgents absorbs completed swarms into memory layers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-swarm-memory-"));
+  try {
+    await runAgentSwarmWithAgents({
+      config: defaultConfig(),
+      configRoot: root,
+      cwd: "/repo",
+      goal: "Remember the swarm",
+      sessionId: "session-a",
+      agents: [
+        agent("tech-lead", "Tech Lead", "Plan."),
+      ],
+      forceAgents: 1,
+      write: () => undefined,
+      runAgent: async (input) => input.kind === "lane" ? "lane finding" : "merged memory",
+    });
+
+    assert.match(await readFile(checkpointPath(root, "/repo", "session-a"), "utf8"), /merged memory/u);
+    assert.match(await readFile(taskProgressPath(root, "/repo", "swarm-remember-the-swarm"), "utf8"), /lane finding/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("renderSwarmMonitorSnapshot shows an armed escape stop hint", () => {

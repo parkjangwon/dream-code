@@ -1,8 +1,9 @@
 import { runAgentPrompt } from "./agent-runner.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
-import { stripAnsi } from "./ansi.js";
+import { ansi, paint, stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
+import { writeSwarmMemory } from "./memory-writer.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
@@ -60,6 +61,7 @@ export type SwarmRunOptions = {
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
   readonly signal?: AbortSignal;
+  readonly sessionId?: string;
   readonly now?: () => number;
   readonly runAgent?: SwarmAgentRunner;
 };
@@ -125,7 +127,9 @@ export async function runAgentSwarmWithAgents(
     monitor.synthesisCancelled();
     monitor.stop();
     options.write(formatSwarmCancelled());
-    return { goal: options.goal, laneResults, synthesis: synthesisCancelledOutput };
+    const summary = { goal: options.goal, laneResults, synthesis: synthesisCancelledOutput };
+    await absorbSwarmMemory(options, summary);
+    return summary;
   }
 
   const synthesisAgent = createSwarmSynthesisAgent();
@@ -140,7 +144,9 @@ export async function runAgentSwarmWithAgents(
   }
   monitor.stop();
   options.write(formatSwarmSynthesis(synthesis, now() - swarmStartedAt));
-  return { goal: options.goal, laneResults, synthesis };
+  const summary = { goal: options.goal, laneResults, synthesis };
+  await absorbSwarmMemory(options, summary);
+  return summary;
 }
 
 async function runLane(
@@ -188,9 +194,11 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
     await runAgentPrompt({
       config: options.config,
       configRoot: options.configRoot,
+      cwd: options.cwd,
       prompt: input.prompt,
       agent: input.agent,
       signal: input.signal,
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       runKind: input.kind === "lane" ? "swarm-lane" : "swarm-synthesis",
       runLabel: input.kind === "lane" ? input.lane.title : input.agent.name,
       write: (chunk) => {
@@ -200,6 +208,17 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
     });
     return transcript.trim();
   };
+}
+
+async function absorbSwarmMemory(options: SwarmRunOptions, summary: SwarmRunSummary): Promise<void> {
+  if (options.sessionId === undefined) {
+    return;
+  }
+  try {
+    await writeSwarmMemory(options.configRoot, options.cwd, options.sessionId, summary);
+  } catch (error) {
+    options.write(`${paint("swarm memory skipped:", ansi.yellow)} ${errorMessage(error)}\n`);
+  }
 }
 
 function createSwarmAbortController(externalSignal: AbortSignal | undefined): AbortController {

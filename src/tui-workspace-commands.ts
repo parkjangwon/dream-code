@@ -8,7 +8,8 @@ import {
   resolveEffectivePermissionMode,
   type DreamConfig,
 } from "./config.js";
-import { recordGoalEvidence } from "./goal-state.js";
+import { completeGoalState, loadGoalState, recordGoalEvidence } from "./goal-state.js";
+import { runGoalJudge, type GoalJudgeTurn } from "./goal-judge.js";
 import { runHookEvent } from "./hooks.js";
 import { appendSessionTurn } from "./session-store.js";
 import { maybeAutoCompactSession } from "./session-actions.js";
@@ -76,6 +77,7 @@ async function runWorkspaceCommandBody(
       config,
       configRoot,
       prompt: text,
+      cwd,
       write: (chunk: string) => {
         output.write(chunk);
         assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
@@ -87,6 +89,7 @@ async function runWorkspaceCommandBody(
       await maybeAutoCompactSession(configRoot, sessionRuntime.currentId());
     }
     await recordGoalEvidence(configRoot, `Answered: ${truncateEvidence(text)}`);
+    await judgeGoalAfterTurn(config, configRoot, text, assistantTranscript);
     return { config, shouldContinue: true };
   }
 
@@ -143,6 +146,7 @@ async function runWorkspaceCommandBody(
         args: command.rest,
         questioner,
         cwd,
+        ...(sessionRuntime === undefined ? {} : { sessionId: sessionRuntime.currentId() }),
       });
       return { config, shouldContinue: true };
     case "/read":
@@ -172,6 +176,28 @@ async function runWorkspaceCommandBody(
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };
   }
+}
+
+async function judgeGoalAfterTurn(
+  config: DreamConfig,
+  configRoot: string,
+  userText: string,
+  assistantTranscript: string,
+): Promise<void> {
+  const goal = await loadGoalState(configRoot);
+  if (goal === undefined || goal.status !== "active" || assistantTranscript.trim().length === 0) {
+    return;
+  }
+  const transcript: readonly GoalJudgeTurn[] = [
+    { role: "user", content: userText },
+    { role: "assistant", content: assistantTranscript },
+  ];
+  const verdict = await runGoalJudge({ config, configRoot, goal: goal.title, transcript });
+  if (verdict.satisfied && verdict.confidence >= 0.7) {
+    await completeGoalState(configRoot, `Judge: ${verdict.reason}`);
+    return;
+  }
+  await recordGoalEvidence(configRoot, `Judge: ${verdict.reason}`);
 }
 
 function truncateEvidence(text: string): string {
