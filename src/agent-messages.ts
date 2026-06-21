@@ -15,6 +15,7 @@ export function createAgentMessages(
   compactContext = "Session compact: none.",
   memoryContext = "Dream memory: none.",
   workspace = cwd(),
+  recentMessages: readonly ChatMessage[] = [],
 ): readonly ChatMessage[] {
   return [
     {
@@ -37,6 +38,7 @@ export function createAgentMessages(
         formatSelectedSkills(prompt, skills),
       ].join("\n"),
     },
+    ...recentMessages,
     { role: "user", content: prompt },
   ];
 }

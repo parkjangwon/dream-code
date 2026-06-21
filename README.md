@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.6)
+Dream Code (v0.1.7)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -90,8 +90,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -100,7 +100,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.6 sh install.sh
+DREAM_CODE_VERSION=v0.1.7 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -131,6 +131,12 @@ DREAM_CODE_SOURCE=1 sh install.sh
   `claude-plugins-official` marketplace, add/remove Claude-style marketplaces
   with `/plugin marketplace add <source>` and the remove command, and search
   plugins before installing.
+- **Dreaming memory:** when an interactive session ends, Dream Code reviews the
+  session and promotes durable lessons into project memory: user preferences,
+  repeatable workflows, project truths, and mistakes to avoid.
+- **Session continuity:** recent turns are injected into the next model call as
+  fenced background context, so weaker/low-tier models keep track of the live
+  back-and-forth without treating recalled context as a fresh user request.
 - **Context memory:** compact long sessions, keep checkpoints, inspect loaded
   context with `/context`, and preserve task progress without flooding every
   request.
@@ -202,6 +208,18 @@ HTTP JSON URLs, GitHub shorthands like `owner/repo@ref`, or git URLs with
 `#ref`. `/plugin list` shows installed plugins; `/plugin uninstall <plugin>`
 removes the plugin source, imported skills, imported agents, imported command
 skills, and imported MCP server blocks.
+
+## Dreaming
+
+Dreaming is Dream Code's lightweight self-learning loop. On interactive session
+exit, it summarizes only durable takeaways and appends deduplicated entries to
+the current project's `MEMORY.md`. It deliberately ignores raw logs, secrets,
+temporary provider failures, missing local binaries, and one-off task chatter.
+
+The design borrows the practical parts of Hermes Agent's learning loop: separate
+short-term session continuity from long-term memory, wrap recalled context in a
+clear background-data fence, and keep transient failures from becoming stale
+self-imposed rules.
 
 ## Cron
 

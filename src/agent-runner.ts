@@ -42,6 +42,7 @@ import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { defaultSkillRoots, loadSkills } from "./skills.js";
 import { formatCompactContext } from "./session-actions.js";
+import { recentSessionMessages } from "./session-context.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
 import { providerConnectionSource } from "./tui-provider-status.js";
 import { loadWorkspaceDirs } from "./workspace-state.js";
@@ -109,10 +110,11 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   const mcpContext = await formatLiveMcpContext(configRoot, options.signal);
   const compactContext = await formatCompactContext(configRoot, options.sessionId);
   const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId, options.prompt);
+  const recentMessages = await recentSessionMessages(configRoot, options.sessionId, options.prompt);
   let messages = await appendActorInboxMessages(
     configRoot,
     actor.id,
-    createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd),
+    createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd, recentMessages),
   );
 
   try {

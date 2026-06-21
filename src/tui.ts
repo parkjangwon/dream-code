@@ -23,6 +23,7 @@ import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
+import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -87,6 +88,7 @@ async function runInteractiveLoop(
       },
     });
     if (answer.kind === "cancel") {
+      await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
       return config;
     }
     history = appendHistory(history, answer.text);
@@ -97,6 +99,7 @@ async function runInteractiveLoop(
     config = result.config;
     shouldContinue = result.shouldContinue;
   }
+  await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
   return config;
 }
 

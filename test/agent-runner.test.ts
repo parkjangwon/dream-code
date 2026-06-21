@@ -109,6 +109,29 @@ test("createAgentMessages injects compact session context", () => {
   assert.match(system, /Previous decisions/u);
 });
 
+test("createAgentMessages places recent session turns before the current prompt", () => {
+  const messages = createAgentMessages(
+    "continue",
+    [],
+    undefined,
+    undefined,
+    [],
+    "MCP servers: none configured.",
+    "Session compact: none.",
+    "Dream memory: none.",
+    "/repo",
+    [
+      { role: "user", content: "Earlier request" },
+      { role: "assistant", content: "Earlier answer" },
+    ],
+  );
+
+  assert.deepEqual(messages.map((message) => message.role), ["system", "user", "assistant", "user"]);
+  assert.equal(messages[1]?.content, "Earlier request");
+  assert.equal(messages[2]?.content, "Earlier answer");
+  assert.equal(messages[3]?.content, "continue");
+});
+
 test("runAgentPrompt retries the next auto-route candidate when a provider fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-agent-failover-"));
   const server = createServer((request, response) => {
