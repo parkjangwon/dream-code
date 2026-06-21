@@ -45,7 +45,7 @@ export function renderSwarmMonitorSnapshot(snapshot: SwarmMonitorSnapshot): stri
   const lines = [
     `${paint("╭─ Swarm Monitor", ansi.accent)} ${paint(`${active} active`, ansi.bold)} ${paint("·", ansi.guide)} ${completed}/${snapshot.lanes.length} done ${paint("·", ansi.guide)} ${formatDuration(snapshot.now - snapshot.startedAt)}`,
     `${paint("│", ansi.guide)} goal ${paint(truncate(snapshot.goal, 72), ansi.blue)}`,
-    ...(showActivity ? [`${paint("│", ansi.guide)} activity ${activityStrip(snapshot.frame)} ${paint("parallel lanes mixing", ansi.dim)}`] : []),
+    ...(showActivity ? [renderActivityLine(snapshot.frame)] : []),
     ...laneWindowLines(laneWindow, snapshot),
     `${paint("│", ansi.guide)} synthesis ${formatSynthesis(snapshot)}`,
     `${paint("╰─", ansi.accent)} ${footerText(snapshot.interactive, snapshot.abortArmed)}`,
@@ -184,6 +184,10 @@ function statusBar(status: SwarmLaneStatus, frame: number): string {
 
 function activityStrip(frame: number): string {
   return paint(brailleActivity(frame), ansi.accent);
+}
+
+function renderActivityLine(frame: number): string {
+  return `${paint("│", ansi.guide)} ${padVisible("activity", 11)}${activityStrip(frame)} ${paint("parallel lanes mixing", ansi.dim)}`;
 }
 
 function formatSynthesis(snapshot: SwarmMonitorSnapshot): string {

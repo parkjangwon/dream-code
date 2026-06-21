@@ -43,6 +43,13 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
     synthesisStartedAt: 1000,
     synthesisFinishedAt: undefined,
   }));
+  const renderedLines = rendered.split("\n");
+  const activityLine = renderedLines.find((line) => line.includes("activity"));
+  const runningLine = renderedLines.find((line) => line.includes("RUNNING"));
+
+  if (activityLine === undefined || runningLine === undefined) {
+    assert.fail("expected activity and running lane lines");
+  }
 
   assert.match(rendered, /Swarm Monitor/u);
   assert.match(rendered, /1 active/u);
@@ -51,7 +58,8 @@ test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis s
   assert.match(rendered, /DONE/u);
   assert.match(rendered, /⣤⣶⣿⣶⣤⣄⣀⣄/u);
   assert.match(rendered, /⣿⣿⣿⣿⣿⣿⣿⣿/u);
-  assert.match(rendered, /activity \.\. {3} parallel lanes mixing/u);
+  assert.match(rendered, /activity {3}\.\. {3} parallel lanes mixing/u);
+  assert.equal(activityLine.indexOf(".."), runningLine.indexOf("⣤"));
   assert.doesNotMatch(rendered, /[⠁⠂⠄⠈⠐⠠⢀⡀]/u);
   assert.match(rendered, /1\.5k chars/u);
   assert.match(rendered, /parallel lanes mixing/u);
