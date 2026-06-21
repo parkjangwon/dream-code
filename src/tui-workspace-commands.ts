@@ -247,6 +247,7 @@ async function runWorkspaceCommandBody(
         questioner,
         sessionRuntime,
         cwd,
+        oneShotYolo,
         ...(signal === undefined ? {} : { signal }),
       })) {
         return { config, shouldContinue: true };

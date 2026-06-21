@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
 import { initializeDreamHome } from "./config-init.js";
+import { defaultConfigRoot, loadConfig } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { runCliCronCommand, runCliDaemonCommand } from "./cron-cli.js";
 import { runTui } from "./tui.js";
+import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
 
-type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "version";
+type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "version" | "workday";
 
 type ParsedArgs = {
   readonly command: CliCommand;
@@ -29,6 +31,17 @@ async function main(): Promise<void> {
     case "doctor":
       console.log(summarizeDoctor(await runDoctor()));
       return;
+    case "workday": {
+      const config = await loadConfig(defaultConfigRoot());
+      const plan = await createWorkdayPlan({
+        cwd: process.cwd(),
+        config,
+        oneShotYolo: parsedArgs.oneShotYolo,
+        dryRun: parsedArgs.rest.includes("--dry-run"),
+      });
+      console.log(parsedArgs.rest.includes("--json") ? JSON.stringify(plan, undefined, 2) : formatWorkdayPlan(plan));
+      return;
+    }
     case "help":
       printHelp();
       return;
@@ -58,6 +71,10 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       case "doctor":
         command = "doctor";
         break;
+      case "workday":
+        command = "workday";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest };
       case "cron":
         command = "cron";
         rest.push(...args.slice(index + 1));
@@ -97,6 +114,7 @@ function printHelp(): void {
     "  dream cron list   list scheduled agent jobs",
     "  dream daemon run-once  execute due cron jobs once",
     "  dream doctor      check local tool availability",
+    "  dream workday --dry-run  show the edit-test-review release loop",
     "  dream init        initialize ~/.dream files",
     "  dream --version   print the version",
   ].join("\n"));

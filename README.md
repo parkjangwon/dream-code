@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.3)
+Dream Code (v0.1.4)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -59,6 +59,13 @@ Run Dream Code with:
 
 ```sh
 dream
+```
+
+Check workday readiness before editing, testing, or releasing:
+
+```sh
+dream workday --dry-run
+dream workday --dry-run --json
 ```
 
 ## Uninstall
@@ -258,6 +265,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /swarm        Run high-parallel agent swarm
 /tasks        Show or update task ledger
 /verify       Plan verification checks
+/workday      Show edit-test-review readiness
 /workflow     Run saved JavaScript workflow recipes
 /yolo         Toggle saved bypass mode
 ```

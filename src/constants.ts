@@ -1,2 +1,2 @@
-export const DREAM_VERSION = "0.1.3";
+export const DREAM_VERSION = "0.1.4";
 export const DREAM_SIGNATURE = "Even while you sleep, your dreams keep building. ☾";

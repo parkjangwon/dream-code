@@ -93,7 +93,7 @@ function formatWorkspacePath(): string {
   return current.startsWith(home) ? `~${current.slice(home.length)}` : current;
 }
 
-function permissionModeText(mode: PermissionMode, oneShotYolo: boolean): string {
+export function permissionModeText(mode: PermissionMode, oneShotYolo: boolean): string {
   if (mode === "yolo" && oneShotYolo) {
     return "YOLO ON (one-shot bypass)";
   }

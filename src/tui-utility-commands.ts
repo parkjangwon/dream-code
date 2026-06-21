@@ -16,6 +16,7 @@ import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
 import { runTasksCommand } from "./tui-task-command.js";
 import { runWorkflowCommand } from "./tui-workflow-command.js";
+import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
 import {
   addWorkspaceDir,
   appendProjectWorkflowNote,
@@ -32,6 +33,7 @@ export type UtilityCommandOptions = {
   readonly questioner: Questioner;
   readonly sessionRuntime?: SessionRuntime | undefined;
   readonly cwd: string;
+  readonly oneShotYolo: boolean;
   readonly signal?: AbortSignal;
 };
 
@@ -95,6 +97,14 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       return true;
     case "/verify":
       await runFramedAgentPrompt(options, "Verify mode", "Check the likely verification path, tests to run, and failure risks for the current work.");
+      return true;
+    case "/workday":
+      output.write(`${formatWorkdayPlan(await createWorkdayPlan({
+        cwd: options.cwd,
+        config: options.config,
+        oneShotYolo: options.oneShotYolo,
+        dryRun: options.rest.split(/\s+/u).includes("--dry-run"),
+      }))}\n`);
       return true;
     case "/workflow":
       await runWorkflowCommand(options);
