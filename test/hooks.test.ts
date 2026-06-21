@@ -4,7 +4,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatHooksStatus, loadHooks, runHookEvent } from "../src/hooks.js";
+import { formatHooksStatus, hooksLogFilePath, loadHooks, runHookEvent } from "../src/hooks.js";
 import { stripAnsi } from "../src/ansi.js";
 
 test("loadHooks parses enabled TOML hook blocks", async () => {
@@ -47,6 +47,27 @@ test("runHookEvent executes matching hooks with metadata env", async () => {
 
     assert.equal(results[0]?.ok, true);
     assert.equal(await readFile(outputFile, "utf8"), "read");
+    assert.match(await readFile(hooksLogFilePath(root), "utf8"), /postTool/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("formatHooksStatus shows recent hook runs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-hooks-recent-"));
+  try {
+    await writeFile(join(root, "hooks.toml"), [
+      "[[hook]]",
+      "event = \"postCommand\"",
+      "command = \"echo ok\"",
+      "enabled = true",
+    ].join("\n"), "utf8");
+    await runHookEvent(root, "postCommand", { command: "/status" });
+
+    const status = stripAnsi(await formatHooksStatus(root));
+
+    assert.match(status, /Recent runs/u);
+    assert.match(status, /postCommand/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

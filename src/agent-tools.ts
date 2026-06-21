@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { z } from "zod";
 
 import { ansi, paint } from "./ansi.js";
-import type { PermissionMode } from "./config.js";
+import { defaultConfigRoot, type PermissionMode } from "./config.js";
+import { callConfiguredMcpTool } from "./mcp-client.js";
 import {
   readWorkspaceFile,
   replaceInWorkspaceFile,
@@ -11,12 +12,18 @@ import {
 import { runResearch } from "./research-tool.js";
 import { riskyShellReason } from "./shell-safety.js";
 
-const toolNameSchema = z.enum(["read", "research", "shell", "write", "edit"]);
+const toolNameSchema = z.enum(["read", "research", "shell", "write", "edit", "mcp"]);
 const toolRequestBaseSchema = z.object({ id: z.string().min(1).optional() });
 const readRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("read"), path: z.string().min(1) });
 const researchRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("research"), query: z.string().min(1) });
 const shellRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("shell"), command: z.string().min(1) });
 const writeRequestSchema = toolRequestBaseSchema.extend({ tool: z.literal("write"), path: z.string().min(1), content: z.string() });
+const mcpRequestSchema = toolRequestBaseSchema.extend({
+  tool: z.literal("mcp"),
+  server: z.string().min(1),
+  name: z.string().min(1),
+  arguments: z.record(z.string(), z.unknown()).optional(),
+});
 const editRequestSchema = toolRequestBaseSchema.extend({
   tool: z.literal("edit"),
   path: z.string().min(1),
@@ -29,6 +36,7 @@ const toolRequestSchema = z.discriminatedUnion("tool", [
   shellRequestSchema,
   writeRequestSchema,
   editRequestSchema,
+  mcpRequestSchema,
 ]);
 
 export type AgentToolName = z.infer<typeof toolNameSchema>;
@@ -44,6 +52,7 @@ export type AgentToolPolicy = {
   readonly allowedTools?: readonly AgentToolName[];
   readonly signal?: AbortSignal;
   readonly shellTimeoutMs?: number;
+  readonly configRoot?: string;
 };
 
 const maxShellOutput = 12_000;
@@ -76,6 +85,10 @@ export async function runAgentToolRequest(
       case "research": {
         const result = await runResearch(request.query);
         return { request, ok: result.ok, output: result.output };
+      }
+      case "mcp": {
+        const output = await callConfiguredMcpTool(policy.configRoot ?? defaultConfigRoot(), request, policy.signal);
+        return { request, ok: true, output };
       }
       case "shell":
         return { request, ...(await runShellCapture(request.command, policy)) };
@@ -200,6 +213,8 @@ function toolLabel(request: AgentToolRequest): string {
       return `write ${request.path}`;
     case "edit":
       return `edit ${request.path}`;
+    case "mcp":
+      return `mcp ${request.server}/${request.name}`;
     default:
       return assertNever(request);
   }

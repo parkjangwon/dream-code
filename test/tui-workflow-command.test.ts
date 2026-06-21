@@ -84,6 +84,29 @@ test("workflow command opens a project workflow picker", async () => {
   }
 });
 
+test("workflow command creates a starter workflow when none exist", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workflow-starter-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-workflow-starter-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    await runWorkspaceCommand("/workflow", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+
+    const outputText = stripAnsi(chunks.join(""));
+    const starter = await readFile(join(project, ".dream", "workflows", "example.js"), "utf8");
+    assert.match(outputText, /workflow starter created/u);
+    assert.match(outputText, /\/workflow \.dream\/workflows\/example\.js/u);
+    assert.match(starter, /parallel/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("workflow command reports missing files without crashing", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workflow-missing-root-"));
   const project = await mkdtemp(join(tmpdir(), "dream-workflow-missing-project-"));

@@ -54,11 +54,21 @@ async function runDuckDuckGoSearch(query: string): Promise<ResearchResult> {
   }
 }
 
-function parseDuckDuckGoResults(html: string): string {
+export function parseDuckDuckGoResults(html: string): string {
   const results = [...html.matchAll(/class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gu)]
     .slice(0, 5)
-    .map((match) => `- ${cleanHtml(match[2] ?? "result")}\n  ${decodeHtml(match[1] ?? "")}`);
-  return results.length === 0 ? "No web results parsed." : results.join("\n");
+    .map((match) => {
+      const rawUrl = decodeHtml(match[1] ?? "");
+      const snippet = snippetAfter(html, match.index ?? 0);
+      return [
+        `- ${cleanHtml(match[2] ?? "result")}`,
+        `  ${normalizeResultUrl(rawUrl)}`,
+        ...(snippet.length === 0 ? [] : [`  ${snippet}`]),
+      ].join("\n");
+    });
+  return results.length === 0
+    ? "No web results parsed. Configure DREAM_RESEARCH_COMMAND for a custom search backend."
+    : results.join("\n");
 }
 
 function cleanHtml(text: string): string {
@@ -72,6 +82,27 @@ function decodeHtml(text: string): string {
     .replace(/&gt;/gu, ">")
     .replace(/&quot;/gu, "\"")
     .replace(/&#39;/gu, "'");
+}
+
+function normalizeResultUrl(rawUrl: string): string {
+  const withProtocol = rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
+  try {
+    const url = new URL(withProtocol);
+    const redirected = url.searchParams.get("uddg");
+    return redirected === null ? withProtocol : redirected;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return withProtocol;
+    }
+    throw error;
+  }
+}
+
+function snippetAfter(html: string, index: number): string {
+  const nearby = html.slice(index, index + 1500);
+  const match = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/u.exec(nearby)
+    ?? /class="result__snippet"[^>]*>([\s\S]*?)<\/div>/u.exec(nearby);
+  return cleanHtml(match?.[1] ?? "");
 }
 
 function appendLimited(base: string, chunk: string): string {

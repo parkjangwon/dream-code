@@ -15,7 +15,7 @@ import { loadContextDocs } from "./context-docs.js";
 import { loadCredentials } from "./credentials.js";
 import { runHookEvent } from "./hooks.js";
 import type { ProviderEnv } from "./llm-provider.js";
-import { formatMcpServersForPrompt } from "./mcp-config.js";
+import { formatLiveMcpContext } from "./mcp-context.js";
 import {
   extractAgentToolRequests,
   formatToolProgress,
@@ -95,7 +95,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot, cwd: activeCwd, prompt: options.prompt });
   const workspaceDirs = await loadWorkspaceDirs(configRoot);
-  const mcpContext = await formatMcpServersForPrompt(configRoot);
+  const mcpContext = await formatLiveMcpContext(configRoot, options.signal);
   const compactContext = await formatCompactContext(configRoot, options.sessionId);
   const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId, options.prompt);
   let messages = await appendActorInboxMessages(
@@ -243,6 +243,7 @@ function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): Agen
   return {
     mode: options.config.permissions.mode,
     signal,
+    configRoot: options.configRoot ?? defaultConfigRoot(),
     ...(allowedTools === undefined || allowedTools.length === 0 ? {} : { allowedTools }),
   };
 }

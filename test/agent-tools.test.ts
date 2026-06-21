@@ -16,14 +16,16 @@ test("extractAgentToolRequests parses JSONL dream-tool blocks", () => {
     "{\"id\":\"call_1\",\"tool\":\"read\",\"path\":\"README.md\"}",
     "{\"tool\":\"research\",\"query\":\"Dream Code docs\"}",
     "{\"tool\":\"shell\",\"command\":\"pwd\"}",
+    "{\"tool\":\"mcp\",\"server\":\"fake\",\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}}",
     "```",
   ].join("\n"));
 
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 4);
   assert.equal(requests[0]?.tool, "read");
   assert.equal(requests[0]?.id, "call_1");
   assert.equal(requests[1]?.tool, "research");
   assert.equal(requests[2]?.tool, "shell");
+  assert.equal(requests[3]?.tool, "mcp");
 });
 
 test("runAgentToolRequest gates shell tools behind yolo permission", async () => {

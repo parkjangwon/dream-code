@@ -51,6 +51,7 @@ function formatToolProtocol(): string {
     "Each line must be one JSON object:",
     "{\"tool\":\"read\",\"path\":\"README.md\"}",
     "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
+    "{\"tool\":\"mcp\",\"server\":\"server-name\",\"name\":\"tool-name\",\"arguments\":{}}",
     "{\"tool\":\"shell\",\"command\":\"pnpm test\"}",
     "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
     "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",

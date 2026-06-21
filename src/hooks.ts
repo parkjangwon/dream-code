@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -22,9 +22,14 @@ export type HookRunResult = {
 };
 
 const hookTimeoutMs = 5_000;
+const maxHookOutput = 4_000;
 
 export function hooksFilePath(root: string): string {
   return join(root, "hooks.toml");
+}
+
+export function hooksLogFilePath(root: string): string {
+  return join(root, "hooks.log.jsonl");
 }
 
 export async function loadHooks(root: string): Promise<readonly HookDefinition[]> {
@@ -34,12 +39,18 @@ export async function loadHooks(root: string): Promise<readonly HookDefinition[]
 
 export async function formatHooksStatus(root: string): Promise<string> {
   const hooks = await loadHooks(root);
+  const recent = await readRecentHookLogs(root);
   return [
     paint("Hooks", `${ansi.bold}${ansi.accent}`),
     `${paint("config", ansi.muted)} ${paint(hooksFilePath(root), ansi.blue)}`,
+    `${paint("log", ansi.muted)} ${paint(hooksLogFilePath(root), ansi.blue)}`,
     ...(hooks.length === 0
       ? [paint("No hooks configured.", ansi.dim)]
       : hooks.map((hook) => `${paint(hook.enabled ? "on " : "off", hook.enabled ? ansi.green : ansi.muted)} ${hook.event.padEnd(11)} ${hook.command}`)),
+    ...(recent.length === 0 ? [] : [
+      paint("Recent runs", `${ansi.bold}${ansi.muted}`),
+      ...recent.map((run) => `${paint(run.ok ? "ok " : "fail", run.ok ? ansi.green : ansi.yellow)} ${run.event.padEnd(11)} ${run.command}`),
+    ]),
   ].join("\n");
 }
 
@@ -47,7 +58,9 @@ export async function runHookEvent(root: string, event: HookEvent, metadata: Hoo
   const hooks = (await loadHooks(root)).filter((hook) => hook.enabled && hook.event === event);
   const results: HookRunResult[] = [];
   for (const hook of hooks) {
-    results.push({ hook, ...(await runHookCommand(hook.command, metadata)) });
+    const result = { hook, ...(await runHookCommand(hook.command, metadata)) };
+    results.push(result);
+    await appendHookLog(root, event, result);
   }
   return results;
 }
@@ -92,10 +105,10 @@ function runHookCommand(command: string, metadata: HookMetadata): Promise<Pick<H
     let output = "";
     const timeout = setTimeout(() => child.kill(), hookTimeoutMs);
     child.stdout.on("data", (chunk: Buffer) => {
-      output = `${output}${chunk.toString("utf8")}`;
+      output = appendLimited(output, chunk.toString("utf8"));
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      output = `${output}${chunk.toString("utf8")}`;
+      output = appendLimited(output, chunk.toString("utf8"));
     });
     child.on("error", (error) => {
       clearTimeout(timeout);
@@ -106,6 +119,59 @@ function runHookCommand(command: string, metadata: HookMetadata): Promise<Pick<H
       resolve({ ok: code === 0, output: output.trim() });
     });
   });
+}
+
+type HookLogEntry = {
+  readonly ts: string;
+  readonly event: HookEvent;
+  readonly command: string;
+  readonly ok: boolean;
+  readonly output: string;
+};
+
+async function appendHookLog(root: string, event: HookEvent, result: HookRunResult): Promise<void> {
+  const entry: HookLogEntry = {
+    ts: new Date().toISOString(),
+    event,
+    command: result.hook.command,
+    ok: result.ok,
+    output: result.output,
+  };
+  await appendFile(hooksLogFilePath(root), `${JSON.stringify(entry)}\n`, "utf8");
+}
+
+async function readRecentHookLogs(root: string): Promise<readonly HookLogEntry[]> {
+  const raw = await readOptional(hooksLogFilePath(root));
+  if (raw === undefined) {
+    return [];
+  }
+  return raw.trim().split(/\r?\n/u).filter(Boolean).slice(-3).flatMap(parseHookLog);
+}
+
+function parseHookLog(line: string): readonly HookLogEntry[] {
+  try {
+    const parsed: unknown = JSON.parse(line);
+    if (!isRecord(parsed) || typeof parsed["ts"] !== "string" || typeof parsed["event"] !== "string" || typeof parsed["command"] !== "string" || typeof parsed["ok"] !== "boolean") {
+      return [];
+    }
+    return [{
+      ts: parsed["ts"],
+      event: hookEventSchema.parse(parsed["event"]),
+      command: parsed["command"],
+      ok: parsed["ok"],
+      output: typeof parsed["output"] === "string" ? parsed["output"] : "",
+    }];
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof z.ZodError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+function appendLimited(base: string, chunk: string): string {
+  const next = `${base}${chunk}`;
+  return next.length > maxHookOutput ? `${next.slice(0, maxHookOutput)}\n[truncated]` : next;
 }
 
 function hookEnv(metadata: HookMetadata): Record<string, string> {
@@ -139,4 +205,8 @@ type ErrnoException = Error & {
 
 function isErrnoException(error: unknown): error is ErrnoException {
   return error instanceof Error && "code" in error && typeof error.code === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

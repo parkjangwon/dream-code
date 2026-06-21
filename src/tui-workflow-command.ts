@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { stdout as output } from "node:process";
 import { join, relative, resolve } from "node:path";
 
@@ -56,6 +56,12 @@ async function workflowScriptPath(options: UtilityCommandOptions): Promise<strin
   if (choices.length > 0 && options.questioner.select !== undefined) {
     return await options.questioner.select({ title: "Workflows", choices }) ?? "";
   }
+  if (choices.length === 0 && options.rest.trim().length === 0) {
+    const starterPath = await createStarterWorkflow(options.cwd);
+    output.write(`${paint("workflow starter created:", ansi.green)} ${paint(relative(options.cwd, starterPath), ansi.blue)}\n`);
+    output.write(`${paint("edit it, then run:", ansi.dim)} /workflow ${relative(options.cwd, starterPath)}\n`);
+    return "";
+  }
   return options.questioner.question("Workflow file: ");
 }
 
@@ -82,6 +88,37 @@ async function workflowFiles(cwd: string, directory: string): Promise<readonly s
     }
     throw error;
   }
+}
+
+async function createStarterWorkflow(cwd: string): Promise<string> {
+  const filePath = join(cwd, ".dream", "workflows", "example.js");
+  await mkdir(join(cwd, ".dream", "workflows"), { recursive: true, mode: 0o700 });
+  try {
+    await writeFile(filePath, starterWorkflowSource(), { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "EEXIST") {
+      return filePath;
+    }
+    throw error;
+  }
+  return filePath;
+}
+
+function starterWorkflowSource(): string {
+  return [
+    "export const meta = { name: \"example\", description: \"Inspect the project with parallel agents\" };",
+    "",
+    "export default async function main({ agent, parallel, glob, readFile }) {",
+    "  const files = await glob(\"*.md\");",
+    "  const readme = await readFile(\"README.md\");",
+    "  const lanes = await parallel([",
+    "    () => agent(`Summarize this project from README:\\n${readme ?? \"No README\"}`, { name: \"Project Summarizer\" }),",
+    "    () => agent(`Review these top-level markdown files: ${files.join(\", \")}`, { name: \"Docs Reviewer\" }),",
+    "  ]);",
+    "  return { files, lanes };",
+    "}",
+    "",
+  ].join("\n");
 }
 
 async function runWorkflowAgent(options: UtilityCommandOptions, prompt: string, agentOptions: WorkflowAgentOptions): Promise<string> {

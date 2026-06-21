@@ -8,6 +8,7 @@ export function isAgentToolName(value: string): value is AgentToolName {
     case "shell":
     case "write":
     case "edit":
+    case "mcp":
       return true;
     default:
       return false;

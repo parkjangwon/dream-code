@@ -7,18 +7,49 @@ import { ansi, paint } from "./ansi.js";
 const maxOutput = 12_000;
 
 export async function runLspCheck(cwd: string): Promise<string> {
-  if (!(await exists(join(cwd, "tsconfig.json")))) {
+  const commands = await detectDiagnosticCommands(cwd);
+  if (commands.length === 0) {
     return [
       paint("LSP", `${ansi.bold}${ansi.accent}`),
-      paint("No TypeScript project detected. Language diagnostics are not attached yet.", ansi.dim),
+      paint("No supported project diagnostics detected.", ansi.dim),
+      paint("Supported: TypeScript, Rust, Go, Python.", ansi.dim),
     ].join("\n");
   }
-  const result = await runCommand("pnpm", ["-s", "build"], cwd);
+  const results = await Promise.all(commands.map(async (command) => ({
+    command,
+    result: await runCommand(command.command, command.args, cwd),
+  })));
   return [
     paint("LSP", `${ansi.bold}${ansi.accent}`),
-    `${paint("TypeScript diagnostics", ansi.blue)} ${result.ok ? paint("clean", ansi.green) : paint("failed", ansi.red)}`,
-    result.output.length === 0 ? paint("No diagnostics.", ansi.dim) : result.output,
+    ...results.flatMap(({ command, result }) => [
+      `${paint(command.label, ansi.blue)} ${result.ok ? paint("clean", ansi.green) : paint("failed", ansi.red)} ${paint(command.display, ansi.dim)}`,
+      result.output.length === 0 ? paint("No diagnostics.", ansi.dim) : result.output,
+    ]),
   ].join("\n");
+}
+
+export type DiagnosticCommand = {
+  readonly label: string;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly display: string;
+};
+
+export async function detectDiagnosticCommands(cwd: string): Promise<readonly DiagnosticCommand[]> {
+  const commands: DiagnosticCommand[] = [];
+  if (await exists(join(cwd, "tsconfig.json"))) {
+    commands.push({ label: "TypeScript", command: "npx", args: ["tsc", "-p", "tsconfig.json", "--noEmit"], display: "npx tsc -p tsconfig.json --noEmit" });
+  }
+  if (await exists(join(cwd, "Cargo.toml"))) {
+    commands.push({ label: "Rust", command: "cargo", args: ["check"], display: "cargo check" });
+  }
+  if (await exists(join(cwd, "go.mod"))) {
+    commands.push({ label: "Go", command: "go", args: ["test", "./..."], display: "go test ./..." });
+  }
+  if (await exists(join(cwd, "pyproject.toml"))) {
+    commands.push({ label: "Python", command: "python3", args: ["-m", "compileall", "-q", "."], display: "python3 -m compileall -q ." });
+  }
+  return commands;
 }
 
 async function exists(filePath: string): Promise<boolean> {

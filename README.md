@@ -1,6 +1,6 @@
 # Dream Code
 
-**잠든 사이에도, 당신의 꿈은 빌드됩니다.**
+**Even while you sleep, your dreams keep building.**
 
 Dream Code is a fast, Termux-first coding harness CLI. It keeps the base small
 and the TUI smooth, while giving you the power tools expected from modern coding
@@ -60,9 +60,10 @@ npm uninstall -g dream-code
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
   progress without flooding every request.
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
-  `parallel()`, `pipeline()`, file helpers, and globbing.
+  `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
+  templates.
 - **Project awareness:** load `AGENTS.md`, `DESIGN.md`, plans, tasks, sessions,
-  LSP diagnostics, MCP settings, hooks, and local tool health.
+  LSP diagnostics, live MCP tools, hooks, and local tool health.
 
 ## Providers
 
@@ -94,12 +95,12 @@ OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 /export       Export the current conversation
 /goal         Start or inspect goal mode
 /help         Show commands
-/hooks        Show hook settings
+/hooks        Show hook settings and recent runs
 /interview    Align on implementation direction
 /login        Connect a provider
 /logout       Forget provider credentials
-/lsp          Run language diagnostics
-/mcp          Show MCP settings
+/lsp          Run project diagnostics
+/mcp          Show MCP settings and live tools
 /model        Choose model or model routing mode
 /plan         Create an implementation plan
 /provider     Switch provider or list connections
@@ -154,10 +155,11 @@ Enter       Submit input or choose a menu item
 - Swarm synthesis artifacts and memory absorption
 - MiMo-inspired memory layers: project memory, checkpoint, task progress
 - Hidden memory writer for compact/checkpoint updates
-- Workflow-as-code JavaScript recipes
-- Web research command hook
-- LSP diagnostics command
-- MCP and hooks configuration views
+- Workflow-as-code JavaScript recipes with starter generation
+- Web research through `DREAM_RESEARCH_COMMAND` or built-in search fallback
+- TypeScript, Rust, Go, and Python diagnostics through `/lsp`
+- MCP stdio server discovery and `tools/list` / `tools/call` bridge
+- Hook execution with recent run logs
 - Local file read/write/edit helpers
 - Shell command support with permission mode awareness
 - YOLO bypass mode through `dream --yolo` or `/yolo`
@@ -174,6 +176,7 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/models.toml             model routing and tier choices
 ~/.dream/mcp.toml                MCP server definitions
 ~/.dream/hooks.toml              preTool/postTool/postCommand hooks
+~/.dream/hooks.log.jsonl         recent hook run log
 ~/.dream/credentials.json        provider credentials
 ~/.dream/session_index.jsonl     session picker index
 ~/.dream/sessions/               session state and wire logs

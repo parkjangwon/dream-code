@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runResearch } from "../src/research-tool.js";
+import { parseDuckDuckGoResults, runResearch } from "../src/research-tool.js";
 
 test("runResearch uses DREAM_RESEARCH_COMMAND when configured", async () => {
   const previous = process.env["DREAM_RESEARCH_COMMAND"];
@@ -19,4 +19,15 @@ test("runResearch uses DREAM_RESEARCH_COMMAND when configured", async () => {
       process.env["DREAM_RESEARCH_COMMAND"] = previous;
     }
   }
+});
+
+test("parseDuckDuckGoResults normalizes redirected links and snippets", () => {
+  const output = parseDuckDuckGoResults([
+    "<a class=\"result__a\" href=\"//duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.example.com%2Fguide&amp;rut=x\">Official &amp; Docs</a>",
+    "<div class=\"result__snippet\">Use the official reference.</div>",
+  ].join("\n"));
+
+  assert.match(output, /Official & Docs/u);
+  assert.match(output, /https:\/\/docs\.example\.com\/guide/u);
+  assert.match(output, /Use the official reference/u);
 });
