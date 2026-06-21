@@ -142,6 +142,7 @@ Enter       Submit input or choose a menu item
 - Single-provider low/mid/high model tier selection
 - Cursor-style `/auto` mode with connected-provider bootstrap
 - Multi-provider category and agent route chains in `~/.dream/models.toml`
+- Live model discovery for every connected supported provider
 - Same-turn model failover when a route candidate is unavailable
 - Model route preview and telemetry-aware health filtering
 - Provider login, logout, env detection, and credential storage

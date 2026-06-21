@@ -66,7 +66,7 @@ function formatAutoEnabled(
 function formatAutoNeedsLogin(): string {
   return [
     `${paint("auto mode:", ansi.yellow)} needs at least one connected provider`,
-    `${paint("next", ansi.dim)} run ${paint("/login", ansi.blue)} to connect OpenAI, DeepSeek, Gemini, or another provider.`,
+    `${paint("next", ansi.dim)} run ${paint("/login", ansi.blue)} to connect any supported provider.`,
     `${paint("why", ansi.dim)} Dream Code builds auto routes only from models you can actually use.`,
     "",
   ].join("\n");

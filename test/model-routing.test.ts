@@ -156,6 +156,42 @@ test("bootstrapAutoModelConfig uses live catalog models for connected providers"
   assert.equal(bootstrapped.model.auto.agentRoutes?.find((route) => route.agent === "tech-lead")?.candidates[0], "deepseek/deepseek-v4-ultra");
 });
 
+test("bootstrapAutoModelConfig builds route chains from every connected provider", () => {
+  const bootstrapped = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set([
+    "gemini",
+    "qwen",
+    "openrouter",
+  ]), {
+    version: 1,
+    providers: {
+      gemini: {
+        provider: "gemini",
+        fetchedAt: "2026-06-21T00:00:00.000Z",
+        source: "live",
+        models: ["gemini-route-flash", "gemini-route-pro"],
+      },
+      qwen: {
+        provider: "qwen",
+        fetchedAt: "2026-06-21T00:00:00.000Z",
+        source: "live",
+        models: ["qwen-route-lite", "qwen-route-max"],
+      },
+      openrouter: {
+        provider: "openrouter",
+        fetchedAt: "2026-06-21T00:00:00.000Z",
+        source: "live",
+        models: ["openrouter-route-small", "openrouter-route-ultra"],
+      },
+    },
+  });
+
+  const quickCandidates = bootstrapped.model.auto.categories?.find((route) => route.id === "quick")?.candidates ?? [];
+  assert.equal(bootstrapped.model.mode, "auto");
+  assert.equal(quickCandidates.some((candidate) => candidate.startsWith("gemini/")), true);
+  assert.equal(quickCandidates.some((candidate) => candidate.startsWith("qwen/")), true);
+  assert.equal(quickCandidates.some((candidate) => candidate.startsWith("openrouter/")), true);
+});
+
 test("selectModelCandidatesForPrompt excludes failed models for same-turn failover", () => {
   const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
     connectedProviders: new Set(["gemini", "deepseek", "openai"]),
