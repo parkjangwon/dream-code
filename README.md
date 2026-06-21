@@ -64,10 +64,7 @@ git push origin v0.1.0
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
-`dream-code-*.tgz`, and writes `SHA256SUMS`. To build releases on an OCI VM,
-register that VM as a GitHub Actions self-hosted runner and set the repository
-variable `DREAM_RELEASE_RUNNER` to the runner label, for example
-`dream-code-oci`.
+`dream-code-*.tgz`, and writes `SHA256SUMS`.
 
 Useful installer overrides:
 
