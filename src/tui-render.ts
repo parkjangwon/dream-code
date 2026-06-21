@@ -5,7 +5,6 @@ import { ansi, clearScreen, paint } from "./ansi.js";
 import { resolveEffectivePermissionMode, type DreamConfig, type PermissionMode } from "./config.js";
 import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
 import { describeModelMode } from "./model-routing.js";
-import { renderDreamLogo } from "./tui-logo.js";
 
 export function renderHeader(config: DreamConfig, oneShotYolo: boolean): void {
   const width = Math.max(64, output.columns ?? 80);
@@ -78,17 +77,14 @@ export function renderHeaderPanel(
 ): readonly string[] {
   const width = Math.max(64, terminalWidth);
   const contentWidth = width - 2;
-  const infoWidth = Math.max(20, contentWidth - 13);
-  const logoRows = renderDreamLogo();
+  const infoWidth = Math.max(20, contentWidth);
   const infoRows = [
     paint(`Welcome to Dream Code ${DREAM_VERSION}!`, ansi.accent + ansi.bold),
     paint(truncateText(DREAM_SIGNATURE, infoWidth), ansi.dim),
     infoLine("Directory:", formatWorkspacePath(), infoWidth),
   ] as const;
 
-  return logoRows.map((logoRow, index) => {
-    return panelLine(`${logoRow}   ${infoRows[index] ?? ""}`, contentWidth);
-  });
+  return infoRows.map((infoRow) => panelLine(infoRow, contentWidth));
 }
 
 function formatWorkspacePath(): string {

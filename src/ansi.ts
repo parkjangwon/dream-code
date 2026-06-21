@@ -9,8 +9,6 @@ export const ansi = {
   red: "\u001B[38;5;203m",
   muted: "\u001B[38;5;68m",
   guide: "\u001B[38;5;240m",
-  mascotTop: "\u001B[38;5;230m",
-  mascotBody: "\u001B[38;5;180m",
 } as const;
 
 export function paint(text: string, code: string): string {
