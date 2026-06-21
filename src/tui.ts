@@ -14,6 +14,7 @@ import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { runWithEscInterrupt } from "./tui-interrupt.js";
 import { readInteractivePicker } from "./tui-picker.js";
+import { readInteractiveProviderManager } from "./tui-provider-manager.js";
 import {
   renderHeader,
 } from "./tui-render.js";
@@ -186,6 +187,12 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
     wasCancelled: () => wasCancelled,
     select: async (pickerOptions) => readInteractivePicker({
       ...pickerOptions,
+      redrawHeader: () => {
+        renderHeader(config, options.oneShotYolo);
+      },
+    }),
+    manageProviders: async (providerOptions) => readInteractiveProviderManager({
+      ...providerOptions,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },

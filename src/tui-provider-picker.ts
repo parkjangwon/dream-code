@@ -9,11 +9,13 @@ import {
   type LoginChoice,
 } from "./tui-login-menu.js";
 import type { PickerOptions } from "./tui-picker.js";
+import type { ProviderManagerOptions, ProviderManagerResult } from "./tui-provider-manager-state.js";
 
 export type ProviderQuestioner = {
   readonly question: (prompt: string) => Promise<string>;
   readonly secret?: (prompt: string) => Promise<string>;
   readonly select?: (options: PickerOptions) => Promise<string | undefined>;
+  readonly manageProviders?: (options: ProviderManagerOptions) => Promise<ProviderManagerResult | undefined>;
 };
 
 export async function promptProvider(

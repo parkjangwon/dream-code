@@ -132,6 +132,67 @@ test("switchProvider toggles provider availability", async () => {
   }
 });
 
+test("switchProvider manager saves disabled providers and selects enabled providers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-provider-manager-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    await writeProviderCredential(root, "deepseek", {
+      apiKey: "sk-deepseek",
+      region: "global",
+      baseUrl: "https://api.deepseek.com",
+    });
+
+    const nextConfig = await switchProvider({
+      config: configWithOpenAi(),
+      configRoot: root,
+      args: "",
+      env: { GEMINI_API_KEY: "sk-gemini" },
+      questioner: {
+        question: async () => "",
+        manageProviders: async (options) => {
+          const gemini = options.providers.find((provider) => provider.id === "gemini");
+          const deepseek = options.providers.find((provider) => provider.id === "deepseek");
+          assert.equal(gemini?.source, "env");
+          assert.equal(gemini?.enabled, true);
+          assert.equal(deepseek?.source, "saved");
+          return { selectedProviderId: "deepseek", disabled: ["gemini"] };
+        },
+      },
+    });
+    const saved = await loadConfig(root);
+
+    assert.equal(nextConfig.model.single.provider, "deepseek");
+    assert.equal(nextConfig.providers["gemini"]?.enabled, false);
+    assert.equal(saved.providers["gemini"]?.enabled, false);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("switchProvider manager saves toggles without selecting disabled providers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-provider-manager-disabled-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const nextConfig = await switchProvider({
+      config: configWithOpenAi(),
+      configRoot: root,
+      args: "",
+      env: { GEMINI_API_KEY: "sk-gemini" },
+      questioner: {
+        question: async () => "",
+        manageProviders: async () => ({ selectedProviderId: "gemini", disabled: ["gemini"] }),
+      },
+    });
+
+    assert.equal(nextConfig.model.single.provider, "openai");
+    assert.equal(nextConfig.providers["gemini"]?.enabled, false);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("switchProvider keeps config unchanged for missing provider credentials", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-provider-switch-"));
   const stdout = mock.method(process.stdout, "write", () => true);

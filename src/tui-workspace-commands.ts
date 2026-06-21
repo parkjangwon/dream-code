@@ -22,6 +22,7 @@ import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-f
 import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
+import type { ProviderManagerOptions, ProviderManagerResult } from "./tui-provider-manager-state.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import { renameCurrentSession, showSessionMenu, type SessionRuntime } from "./tui-session-commands.js";
 import type { SkillManagerOptions } from "./tui-skill-manager.js";
@@ -40,6 +41,7 @@ export type Questioner = {
   readonly question: (prompt: string) => Promise<string>;
   readonly secret?: (prompt: string) => Promise<string>;
   readonly select?: (options: PickerOptions) => Promise<string | undefined>;
+  readonly manageProviders?: (options: ProviderManagerOptions) => Promise<ProviderManagerResult | undefined>;
   readonly manageSkills?: (options: SkillManagerOptions) => Promise<readonly string[] | undefined>;
   readonly wasCancelled?: () => boolean;
 };

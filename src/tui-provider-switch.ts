@@ -34,6 +34,9 @@ export async function switchProvider(options: SwitchProviderOptions): Promise<Dr
   if (toggled !== undefined) {
     return toggled;
   }
+  if (args.length === 0 && options.questioner.manageProviders !== undefined) {
+    return await promptProviderManager(options, credentials.providers, env);
+  }
 
   const definition = args.length === 0
     ? await promptConnectedProvider(options.questioner, credentials.providers, env, options.config)
@@ -90,6 +93,48 @@ async function promptConnectedProvider(
   return answer.trim().length === 0 ? undefined : resolveProviderDefinition(answer);
 }
 
+async function promptProviderManager(
+  options: SwitchProviderOptions,
+  providers: Readonly<Record<string, ProviderCredential>>,
+  env: ProviderEnv,
+): Promise<DreamConfig> {
+  const result = await options.questioner.manageProviders?.({
+    providers: listProviderDefinitions().map((definition) => ({
+      id: definition.id,
+      displayName: definition.displayName,
+      source: providerConnectionSource(definition, providers[definition.id], env),
+      enabled: providerIsEnabled(options.config, definition.id),
+      active: options.config.model.single.provider === definition.id,
+      regions: definition.regions.map((region) => region.id).join("/"),
+    })),
+    disabled: disabledProviderIds(options.config),
+  });
+  if (result === undefined) {
+    output.write("provider unchanged\n");
+    return options.config;
+  }
+
+  const availabilityConfig = configWithProviderAvailability(options.config, result.disabled);
+  const definition = result.selectedProviderId === undefined
+    ? undefined
+    : resolveProviderDefinition(result.selectedProviderId);
+  if (definition === undefined || !providerIsEnabled(availabilityConfig, definition.id)) {
+    await saveConfig(options.configRoot, availabilityConfig);
+    output.write("providers saved\n");
+    return availabilityConfig;
+  }
+  if (!isProviderConnected(definition, providers[definition.id], env, availabilityConfig)) {
+    await saveConfig(options.configRoot, availabilityConfig);
+    output.write("providers saved\n");
+    return availabilityConfig;
+  }
+
+  const nextConfig = configWithProvider(availabilityConfig, definition);
+  await saveConfig(options.configRoot, nextConfig);
+  output.write(`provider set: ${definition.id} (${definition.defaultModels.mid})\n`);
+  return nextConfig;
+}
+
 async function maybeToggleProvider(options: SwitchProviderOptions): Promise<DreamConfig | undefined> {
   const [action, provider] = options.args.trim().split(/\s+/u);
   if (action !== "enable" && action !== "disable") {
@@ -115,6 +160,26 @@ async function maybeToggleProvider(options: SwitchProviderOptions): Promise<Drea
 
 function providerMenuLine(definition: ProviderDefinition): string {
   return `${definition.id.padEnd(16)} ${definition.displayName}\n`;
+}
+
+function disabledProviderIds(config: DreamConfig): readonly string[] {
+  return Object.entries(config.providers)
+    .filter(([, setting]) => setting.enabled === false)
+    .map(([provider]) => provider)
+    .sort();
+}
+
+function configWithProviderAvailability(config: DreamConfig, disabled: readonly string[]): DreamConfig {
+  const disabledSet = new Set(disabled);
+  const providers = { ...config.providers };
+  for (const definition of listProviderDefinitions()) {
+    if (disabledSet.has(definition.id)) {
+      providers[definition.id] = { enabled: false };
+    } else if (providers[definition.id]?.enabled === false) {
+      providers[definition.id] = { enabled: true };
+    }
+  }
+  return { ...config, providers };
 }
 
 function configWithProvider(config: DreamConfig, definition: ProviderDefinition): DreamConfig {
