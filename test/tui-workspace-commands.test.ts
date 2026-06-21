@@ -32,6 +32,32 @@ test("runWorkspaceCommand routes /model to model configuration", async () => {
   }
 });
 
+test("runWorkspaceCommand routes /auto to automatic model routing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-auto-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const result = await runWorkspaceCommand(
+      "/auto",
+      defaultConfig(),
+      true,
+      { question: async () => "" },
+      root,
+    );
+    const saved = await loadConfig(root);
+
+    assert.equal(result.config.model.mode, "auto");
+    assert.equal(saved.model.mode, "auto");
+    assert.match(stripAnsi(chunks.join("")), /auto mode:/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runWorkspaceCommand fires postCommand hooks", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-hook-"));
   const outputPath = join(root, "hook-command.txt");

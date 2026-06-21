@@ -9,7 +9,8 @@ import {
   serializeModelConfigToml,
   TomlConfigParseError,
 } from "./config-toml.js";
-import { defaultAutoCategories, modelConfigSchema } from "./model-routing.js";
+import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
+import { modelConfigSchema } from "./model-routing.js";
 import type { ModelConfig } from "./model-routing.js";
 import { providerModelIdForRequest } from "./provider-registry.js";
 
@@ -222,6 +223,7 @@ function defaultModelConfig(): ModelConfig {
         },
       ],
       categories: [...defaultAutoCategories()],
+      agentRoutes: [...defaultAutoAgentRoutes()],
     },
   };
 }
@@ -248,6 +250,10 @@ function normalizeLoadedConfig(config: DreamConfig): DreamConfig {
         categories: (config.model.auto.categories ?? defaultAutoCategories()).map((category) => ({
           ...category,
           candidates: category.candidates.map(normalizeCandidateSpec),
+        })),
+        agentRoutes: (config.model.auto.agentRoutes ?? defaultAutoAgentRoutes()).map((route) => ({
+          ...route,
+          candidates: route.candidates.map(normalizeCandidateSpec),
         })),
       },
     },

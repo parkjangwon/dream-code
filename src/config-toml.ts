@@ -82,6 +82,16 @@ export function serializeModelConfigToml(model: ModelConfig): string {
     );
   }
 
+  for (const route of model.auto.agentRoutes ?? []) {
+    lines.push(
+      "[[model.auto.agentRoutes]]",
+      `agent = ${quote(route.agent)}`,
+      `tier = ${quote(route.tier)}`,
+      `candidates = ${stringArray(route.candidates)}`,
+      "",
+    );
+  }
+
   return `${lines.join("\n").trimEnd()}\n`;
 }
 

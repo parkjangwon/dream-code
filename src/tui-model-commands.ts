@@ -4,7 +4,9 @@ import { ansi, paint } from "./ansi.js";
 import { saveConfig, type DreamConfig } from "./config.js";
 import { loadCredentials } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
+import { bootstrapAutoModelConfig } from "./model-auto-bootstrap.js";
 import {
+  autoAgentRoutes,
   autoCategories,
   describeModelMode,
   formatRoutePreview,
@@ -56,13 +58,18 @@ export async function configureModels(options: ConfigureModelsOptions): Promise<
   return nextConfig;
 }
 
+export async function enableAutoRouting(options: ConfigureModelsOptions): Promise<DreamConfig> {
+  const connectedProviders = await connectedProviderIds(options.configRoot, process.env);
+  const nextConfig = bootstrapAutoModelConfig(options.config, connectedProviders);
+  await saveConfig(options.configRoot, nextConfig);
+  output.write(formatAutoEnabled(nextConfig, connectedProviders.size));
+  return nextConfig;
+}
+
 async function maybeHandleModelModeCommand(options: ConfigureModelsOptions): Promise<DreamConfig | undefined> {
   const args = options.args.trim();
   if (args === "auto") {
-    const nextConfig = { ...options.config, model: { ...options.config.model, mode: "auto" as const } };
-    await saveConfig(options.configRoot, nextConfig);
-    output.write(`${paint("model routing:", ansi.green)} ${describeModelMode(nextConfig.model)}\n`);
-    return nextConfig;
+    return enableAutoRouting(options);
   }
   if (args === "single") {
     const nextConfig = { ...options.config, model: { ...options.config.model, mode: "single" as const } };
@@ -263,7 +270,21 @@ function formatAutoRoutes(config: DreamConfig): string {
       return `${paint(route.id.padEnd(11), ansi.blue)} ${route.tier.padEnd(4)} ${route.candidates.join(" -> ")}`;
     }),
     "",
+    `${paint("Agent Routes", `${ansi.bold}${ansi.accent}`)}`,
+    ...autoAgentRoutes(config.model).map((route) => {
+      return `${paint(route.agent.padEnd(18), ansi.blue)} ${route.tier.padEnd(4)} ${route.candidates.join(" -> ")}`;
+    }),
+    "",
   ].join("\n");
+}
+
+function formatAutoEnabled(config: DreamConfig, connectedProviderCount: number): string {
+  return [
+    `${paint("auto mode:", ansi.green)} ${describeModelMode(config.model)}`,
+    `${paint("providers", ansi.dim)} ${connectedProviderCount} connected · ${paint("strategy", ansi.dim)} models.toml`,
+    connectedProviderCount === 0 ? `${paint("tip", ansi.yellow)} connect a provider with /login for stronger routing.` : "",
+    "",
+  ].filter((line) => line.length > 0).join("\n");
 }
 
 async function connectedProviderIds(root: string, env: ProviderEnv): Promise<ReadonlySet<string>> {

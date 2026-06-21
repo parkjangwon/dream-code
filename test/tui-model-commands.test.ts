@@ -5,6 +5,7 @@ import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
 import { defaultConfig, loadConfig } from "../src/config.js";
+import { writeProviderCredential } from "../src/credentials.js";
 import { configureModels } from "../src/tui-model-commands.js";
 
 test("configureModels sets the active tier from command args", async () => {
@@ -129,6 +130,11 @@ test("configureModels toggles multi-provider auto mode", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-models-auto-"));
   const stdout = mock.method(process.stdout, "write", () => true);
   try {
+    await writeProviderCredential(root, "deepseek", {
+      apiKey: "sk-deepseek",
+      region: "global",
+      baseUrl: "https://api.deepseek.com",
+    });
     const nextConfig = await configureModels({
       config: configWithOpenAi(),
       configRoot: root,
@@ -137,6 +143,8 @@ test("configureModels toggles multi-provider auto mode", async () => {
     });
 
     assert.equal(nextConfig.model.mode, "auto");
+    assert.equal(nextConfig.model.auto.categories?.[0]?.candidates[0]?.startsWith("deepseek/"), true);
+    assert.equal(nextConfig.model.auto.agentRoutes?.some((route) => route.agent === "tech-lead"), true);
     assert.equal((await loadConfig(root)).model.mode, "auto");
   } finally {
     stdout.mock.restore();

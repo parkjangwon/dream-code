@@ -1,7 +1,13 @@
+import { createServer } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentMessages } from "../src/agent-runner.js";
+import { createAgentMessages, runAgentPrompt } from "../src/agent-runner.js";
+import { defaultConfig } from "../src/config.js";
+import { writeProviderCredential } from "../src/credentials.js";
 import type { DreamSkill } from "../src/skills.js";
 
 test("createAgentMessages keeps prompts minimal for token-saving startup", () => {
@@ -99,3 +105,100 @@ test("createAgentMessages injects compact session context", () => {
   assert.match(system, /Session compact/u);
   assert.match(system, /Previous decisions/u);
 });
+
+test("runAgentPrompt retries the next auto-route candidate when a provider fails", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-failover-"));
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body = `${body}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      const parsed: unknown = JSON.parse(body);
+      const model = modelFromRequest(parsed);
+      if (model === "deepseek-v4-flash") {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "planned failure" }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        "data: {\"choices\":[{\"delta\":{\"content\":\"failover ok\"}}]}",
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "deepseek", { apiKey: "sk-deepseek", region: "global", baseUrl });
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+
+    const config = defaultConfig();
+    const chunks: string[] = [];
+    await runAgentPrompt({
+      config: {
+        ...config,
+        model: {
+          ...config.model,
+          mode: "auto",
+          single: {
+            provider: "openai",
+            models: { low: "gpt-5.4-nano", mid: "gpt-5.4-mini", high: "gpt-5.5" },
+            defaultTier: "mid",
+          },
+          auto: {
+            routes: [],
+            categories: [
+              {
+                id: "quick",
+                label: "Quick",
+                tier: "low",
+                match: ["hello"],
+                candidates: ["deepseek/deepseek-v4-flash", "openai/gpt-5.4-mini"],
+              },
+            ],
+            agentRoutes: [],
+            preferConnectedProviders: true,
+          },
+        },
+      },
+      configRoot: root,
+      prompt: "hello",
+      cwd: "/repo",
+      write: (chunk) => {
+        chunks.push(chunk);
+      },
+    });
+
+    const output = chunks.join("");
+    assert.match(output, /model failover/u);
+    assert.match(output, /failover ok/u);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function modelFromRequest(value: unknown): string {
+  if (typeof value !== "object" || value === null || !("model" in value)) {
+    return "";
+  }
+  const model = value.model;
+  return typeof model === "string" ? model : "";
+}
+
+function listen(server: ReturnType<typeof createServer>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        reject(new Error("Could not bind test server"));
+        return;
+      }
+      resolve(`http://127.0.0.1:${address.port}/v1`);
+    });
+  });
+}

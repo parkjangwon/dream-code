@@ -53,8 +53,9 @@ npm uninstall -g dream-code
   streaming, and Esc double-tap interrupt.
 - **Termux-first:** built for Android Termux, with macOS, Linux, and Windows CLI
   support.
-- **Model routing:** use one provider by default, or enable multi-provider
-  routing for cost, speed, and capability tradeoffs.
+- **Auto model routing:** use one provider by default, or switch on `/auto` to
+  route each prompt, agent, and swarm lane across connected providers with
+  fallback chains.
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
   for high-parallel fan-out when speed matters.
 - **Context memory:** compact long sessions, keep checkpoints, and preserve task
@@ -87,6 +88,7 @@ OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 /add-dir      Add a workspace directory
 /agents       Delegate tasks and manage subagents
 /artifact     View saved artifacts
+/auto         Enable automatic model routing
 /btw          Ask a side question
 /compact      Compact current session context
 /copy         Copy the latest assistant response
@@ -137,7 +139,10 @@ Enter       Submit input or choose a menu item
 
 - Minimal TypeScript CLI core with a fast terminal UI
 - Single-provider low/mid/high model tier selection
-- Multi-provider auto model routing and route preview
+- Cursor-style `/auto` mode with connected-provider bootstrap
+- Multi-provider category and agent route chains in `~/.dream/models.toml`
+- Same-turn model failover when a route candidate is unavailable
+- Model route preview and telemetry-aware health filtering
 - Provider login, logout, env detection, and credential storage
 - OpenAI API key and OAuth credential support
 - Sessions with append-only wire logs and a session picker

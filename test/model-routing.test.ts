@@ -5,6 +5,7 @@ import {
   classifyPromptCategory,
   describeModelMode,
   formatRoutePreview,
+  selectModelCandidatesForPrompt,
   selectModelForPrompt,
   selectSingleProviderModel,
 } from "../src/model-routing.js";
@@ -83,7 +84,7 @@ test("selectModelForPrompt routes auto categories across connected providers", (
   assert.equal(selected.provider, "openai");
   assert.equal(selected.model, "gpt-5.5");
   assert.equal(selected.reason, "auto category: Visual");
-  assert.deepEqual(selected.skipped, ["gemini/gemini-3.5-flash"]);
+  assert.deepEqual(selected.skipped, ["gemini/gemini-3.5-flash", "deepseek/deepseek-v4-pro"]);
 });
 
 test("selectModelForPrompt skips disconnected category candidates", () => {
@@ -109,6 +110,29 @@ test("selectModelForPrompt skips unhealthy auto category candidates", () => {
     "gemini/gemini-3.5-flash unhealthy",
     "deepseek/deepseek-v4-flash unhealthy",
   ]);
+});
+
+test("selectModelCandidatesForPrompt prioritizes agent routes and keeps fallbacks", () => {
+  const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Review this patch", undefined, {
+    agentId: "security-reviewer",
+    connectedProviders: new Set(["deepseek", "openai"]),
+  });
+
+  assert.equal(selected[0]?.provider, "deepseek");
+  assert.equal(selected[0]?.model, "deepseek-v4-pro");
+  assert.equal(selected[0]?.reason, "auto agent route: security-reviewer");
+  assert.equal(selected.some((candidate) => candidate.provider === "openai"), true);
+});
+
+test("selectModelCandidatesForPrompt excludes failed models for same-turn failover", () => {
+  const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
+    connectedProviders: new Set(["gemini", "deepseek", "openai"]),
+    excludedModels: new Set(["gemini/gemini-3.5-flash"]),
+  });
+
+  assert.equal(selected[0]?.provider, "deepseek");
+  assert.equal(selected[0]?.model, "deepseek-v4-flash");
+  assert.deepEqual(selected[0]?.skipped, ["gemini/gemini-3.5-flash failed"]);
 });
 
 test("classifyPromptCategory and route preview expose routing decisions", () => {

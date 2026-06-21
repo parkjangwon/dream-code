@@ -3,8 +3,9 @@ import { cwd } from "node:process";
 import { actorRoleForRun } from "./agent-actor.js";
 import { appendActorInboxMessages } from "./agent-inbox-context.js";
 import type { AgentDefinition } from "./agent-library.js";
+import { streamAgentWithFailover } from "./agent-model-stream.js";
 import { createAgentMessages } from "./agent-messages.js";
-import { isAgentToolName, messageChars, optionalSignal } from "./agent-runner-utils.js";
+import { isAgentToolName } from "./agent-runner-utils.js";
 import { registerActor, updateActorStatus } from "./actor-store.js";
 import {
   startAgentRun,
@@ -28,11 +29,9 @@ import {
   MissingProviderConfigError,
   ProviderProtocolError,
   ProviderRequestError,
-  streamChatCompletion,
-  type ChatMessage,
 } from "./llm-provider.js";
-import { loadUnhealthyModelKeys, recordModelTelemetry } from "./model-telemetry.js";
-import { selectModelForPrompt } from "./model-routing.js";
+import { loadUnhealthyModelKeys } from "./model-telemetry.js";
+import { selectModelCandidatesForPrompt, selectModelForPrompt, type SelectedModel } from "./model-routing.js";
 import { formatMemoryContext } from "./memory-store.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
@@ -87,10 +86,12 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
   let finalStatus: Exclude<AgentRunStatus, "queued" | "running"> = "done";
   let finalError: string | undefined;
 
-  const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
+  const selectedModels = selectModelCandidatesForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
     connectedProviders: await connectedProviderIds(configRoot, process.env),
     unhealthyModels: await loadUnhealthyModelKeys(configRoot),
+    ...(options.agent === undefined ? {} : { agentId: options.agent.id }),
   });
+  const primaryModel = firstSelectedModel(selectedModels);
   const settings = await loadSkillSettings(configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot, cwd: activeCwd, prompt: options.prompt });
@@ -111,7 +112,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
         return;
       }
       messages = await appendActorInboxMessages(configRoot, actor.id, messages);
-      const assistantText = await streamAgentOnce(runOptions, selectedModel, messages);
+      const assistantText = await streamAgentWithFailover(runOptions, selectedModels, messages);
       const requests = extractAgentToolRequests(assistantText);
       if (requests.length === 0) {
         return;
@@ -143,13 +144,13 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     if (error instanceof MissingProviderConfigError) {
       finalStatus = "failed";
       finalError = error.message;
-      writeAgentFailure(runOptions, selectedModel, error.message, "warn");
+      writeAgentFailure(runOptions, primaryModel, error.message, "warn");
       return;
     }
     if (error instanceof ProviderRequestError || error instanceof ProviderProtocolError) {
       finalStatus = "failed";
       finalError = error.message;
-      writeAgentFailure(runOptions, selectedModel, error.message, "error");
+      writeAgentFailure(runOptions, primaryModel, error.message, "error");
       return;
     }
     finalStatus = run.signal.aborted ? "cancelled" : "failed";
@@ -171,58 +172,27 @@ async function connectedProviderIds(root: string, env: ProviderEnv): Promise<Rea
 
 function writeAgentFailure(
   options: AgentPromptOptions,
-  selectedModel: ReturnType<typeof selectModelForPrompt>,
+  selectedModel: SelectedModel,
   message: string,
   tone: "warn" | "error",
 ): void {
   createAgentResponseSession({ selectedModel, write: options.write }).fail(message, tone);
 }
 
-async function streamAgentOnce(
-  options: AgentPromptOptions,
-  selectedModel: ReturnType<typeof selectModelForPrompt>,
-  messages: readonly ChatMessage[],
-): Promise<string> {
-  const response = createAgentResponseSession({ selectedModel, write: options.write });
-  let assistantText = "";
-  const startedAt = Date.now();
-  const configRoot = options.configRoot ?? defaultConfigRoot();
-  response.start();
-  const onToken = (token: string): void => {
-    assistantText = `${assistantText}${token}`;
-    response.token(token);
-  };
-  try {
-    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
-    response.finish();
-    await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
-    return assistantText;
-  } catch (error) {
-    response.stop();
-    await recordModelTelemetry(configRoot, {
-      ...modelTelemetryInput(selectedModel, false, startedAt, messages, assistantText),
-      error: error instanceof Error ? error.message : "Unknown provider failure",
-    });
-    throw error;
+function firstSelectedModel(selectedModels: readonly SelectedModel[]): SelectedModel {
+  const selected = selectedModels[0];
+  if (selected !== undefined) {
+    return selected;
   }
-}
-
-function modelTelemetryInput(
-  selectedModel: ReturnType<typeof selectModelForPrompt>,
-  ok: boolean,
-  startedAt: number,
-  messages: readonly ChatMessage[],
-  assistantText: string,
-): Parameters<typeof recordModelTelemetry>[1] {
-  return {
-    provider: selectedModel.provider,
-    model: selectedModel.model,
-    ...(selectedModel.category === undefined ? {} : { category: selectedModel.category }),
-    ok,
-    elapsedMs: Date.now() - startedAt,
-    inputChars: messageChars(messages),
-    outputChars: assistantText.length,
-  };
+  return selectModelForPrompt({
+    mode: "single",
+    single: {
+      provider: "openai",
+      models: { low: "gpt-5.4-nano", mid: "gpt-5.4-mini", high: "gpt-5.5" },
+      defaultTier: "mid",
+    },
+    auto: { routes: [] },
+  }, "fallback");
 }
 
 function tierForAgent(agent: AgentDefinition | undefined): "low" | "mid" | "high" | undefined {

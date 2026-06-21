@@ -8,6 +8,7 @@ export const slashCommands = [
   { name: "/add-dir", summary: "Add a workspace directory", acceptsArgs: true },
   { name: "/agents", summary: "Delegate tasks and manage agents", acceptsArgs: false },
   { name: "/artifact", summary: "View artifacts", acceptsArgs: false },
+  { name: "/auto", summary: "Enable automatic model routing", acceptsArgs: false },
   { name: "/btw", summary: "Ask a side question", acceptsArgs: true },
   { name: "/compact", summary: "Compact current session context", acceptsArgs: false },
   { name: "/copy", summary: "Copy last response", acceptsArgs: true },

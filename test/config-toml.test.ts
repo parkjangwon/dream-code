@@ -18,6 +18,7 @@ test("TOML serializers split main and model config sections", () => {
   assert.match(modelToml, /\[model\.single\.models\]/);
   assert.match(modelToml, /\[\[model\.auto\.routes\]\]/);
   assert.match(modelToml, /\[\[model\.auto\.categories\]\]/);
+  assert.match(modelToml, /\[\[model\.auto\.agentRoutes\]\]/);
 });
 
 test("parseConfigToml reads serialized Dream config", () => {
@@ -37,6 +38,7 @@ test("parseConfigToml reads serialized Dream config", () => {
   assert.equal(parsed.model.single.models.mid, "gpt-4.1");
   assert.equal(parsed.model.auto.routes[0]?.match.includes("grep"), true);
   assert.equal(parsed.model.auto.categories?.[0]?.id, "quick");
+  assert.equal(parsed.model.auto.agentRoutes?.[0]?.agent, "tech-lead");
   assert.equal(parsed.model.auto.preferConnectedProviders, true);
   assert.equal(parsed.team[0]?.name, "Dream Architect");
 });
