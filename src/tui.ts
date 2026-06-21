@@ -4,30 +4,20 @@ import { createInterface, type Interface } from "node:readline/promises";
 import {
   defaultConfigRoot,
   loadConfig,
-  resolveEffectivePermissionMode,
-  togglePersistedYolo,
   type DreamConfig,
 } from "./config.js";
-import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { startSession, type DreamSession } from "./session-store.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
-import { formatStatusDashboard } from "./status-dashboard.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import {
-  formatPermissionMode,
-  printHelp,
   renderHeader,
 } from "./tui-render.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
-import {
-  renameCurrentSession,
-  showSessionMenu,
-  type SessionRuntime,
-} from "./tui-session-commands.js";
+import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import {
@@ -142,43 +132,6 @@ export async function handleInput(
 
   if (text === "?") {
     printShortcutGuide();
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/help") {
-    printHelp();
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/exit" || text === "/quit") {
-    output.write("Good night. Dream Code is ready when you are.\n");
-    return { config, shouldContinue: false };
-  }
-
-  if (text === "/status") {
-    output.write(`${await formatStatusDashboard(options.configRoot ?? defaultConfigRoot(), config, options.oneShotYolo)}\n`);
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/doctor") {
-    output.write(`${summarizeDoctor(await runDoctor())}\n`);
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/yolo") {
-    const nextConfig = await togglePersistedYolo(options.configRoot);
-    const effectiveMode = resolveEffectivePermissionMode(nextConfig, options.oneShotYolo);
-    output.write(`${formatPermissionMode(effectiveMode, options.oneShotYolo)}\n`);
-    return { config: nextConfig, shouldContinue: true };
-  }
-
-  if (text === "/session") {
-    await showSessionMenu(options.configRoot ?? defaultConfigRoot(), sessionRuntime, questioner);
-    return { config, shouldContinue: true };
-  }
-
-  if (text === "/rename" || text.startsWith("/rename ")) {
-    await renameCurrentSession(options.configRoot ?? defaultConfigRoot(), sessionRuntime, text.slice("/rename".length), questioner);
     return { config, shouldContinue: true };
   }
 

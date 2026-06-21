@@ -52,6 +52,7 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/research"), true);
   assert.equal(names.includes("/lsp"), true);
   assert.equal(slashCommands.find((command) => command.name === "/model")?.summary, "Choose active model");
+  assert.equal(slashCommands.find((command) => command.name === "/copy")?.acceptsArgs, true);
 });
 
 test("slash command palette uses arrow keys for selection", () => {

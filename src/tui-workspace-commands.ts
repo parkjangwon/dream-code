@@ -7,8 +7,10 @@ import { createLlmCompactSummarizer } from "./compact-summarizer.js";
 import {
   defaultConfigRoot,
   resolveEffectivePermissionMode,
+  togglePersistedYolo,
   type DreamConfig,
 } from "./config.js";
+import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { completeGoalState, loadGoalState, recordGoalEvidence } from "./goal-state.js";
 import { runGoalJudge, type GoalJudgeTurn } from "./goal-judge.js";
 import { runHookEvent } from "./hooks.js";
@@ -20,11 +22,13 @@ import { configureModels } from "./tui-model-commands.js";
 import type { PickerOptions } from "./tui-picker.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
-import type { SessionRuntime } from "./tui-session-commands.js";
+import { renameCurrentSession, showSessionMenu, type SessionRuntime } from "./tui-session-commands.js";
 import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
+import { formatPermissionMode, printHelp } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
+import { formatStatusDashboard } from "./status-dashboard.js";
 
 export type CommandResult = {
   readonly config: DreamConfig;
@@ -108,6 +112,31 @@ async function runWorkspaceCommandBody(
   }
 
   switch (command.name) {
+    case "/help":
+      printHelp();
+      return { config, shouldContinue: true };
+    case "/exit":
+    case "/quit":
+      output.write("Good night. Dream Code is ready when you are.\n");
+      return { config, shouldContinue: false };
+    case "/status":
+      output.write(`${await formatStatusDashboard(configRoot, config, oneShotYolo)}\n`);
+      return { config, shouldContinue: true };
+    case "/doctor":
+      output.write(`${summarizeDoctor(await runDoctor())}\n`);
+      return { config, shouldContinue: true };
+    case "/yolo": {
+      const nextConfig = await togglePersistedYolo(configRoot);
+      const effectiveMode = resolveEffectivePermissionMode(nextConfig, oneShotYolo);
+      output.write(`${formatPermissionMode(effectiveMode, oneShotYolo)}\n`);
+      return { config: nextConfig, shouldContinue: true };
+    }
+    case "/session":
+      await showSessionMenu(configRoot, sessionRuntime, questioner);
+      return { config, shouldContinue: true };
+    case "/rename":
+      await renameCurrentSession(configRoot, sessionRuntime, command.rest, questioner);
+      return { config, shouldContinue: true };
     case "/provider":
       if (command.rest.trim() === "list") {
         await printProviders(configRoot);
