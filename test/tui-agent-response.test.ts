@@ -43,7 +43,7 @@ test("agent response session renders provider errors as a response block", () =>
   assert.match(output, /│ Missing API key/);
 });
 
-test("agent response session hides concrete model names for auto routes", () => {
+test("agent response session shows auto route and concrete model together", () => {
   const chunks: string[] = [];
   const session = createAgentResponseSession({
     selectedModel: {
@@ -62,8 +62,7 @@ test("agent response session hides concrete model names for auto routes", () => 
   session.finish();
 
   const output = stripAnsi(chunks.join(""));
-  assert.match(output, /AUTO quick · low/u);
-  assert.doesNotMatch(output, /deepseek-v4-flash/u);
+  assert.match(output, /AUTO quick · low → deepseek\/deepseek-v4-flash/u);
 });
 
 test("agent response session animates thinking in place until the first token", () => {
