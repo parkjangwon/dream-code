@@ -19,6 +19,7 @@ export async function runWorkflowCommand(options: UtilityCommandOptions): Promis
   if (script === undefined) {
     output.write(`${paint("workflow not found:", ansi.yellow)} ${paint(scriptPath.trim(), ansi.blue)}\n`);
     output.write(`${paint("usage:", ansi.dim)} /workflow ${paint("or", ansi.dim)} /workflow path/to/workflow.js\n`);
+    output.write(`${paint("tip:", ansi.dim)} workflows run saved JavaScript recipes. For natural-language planning, use /plan <request>.\n`);
     return;
   }
   output.write(`${paint("Workflow", `${ansi.bold}${ansi.accent}`)} ${paint(filePath, ansi.blue)}\n`);

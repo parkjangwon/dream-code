@@ -98,6 +98,8 @@ test("workflow command reports missing files without crashing", async () => {
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /workflow not found/u);
     assert.match(outputText, /usage: \/workflow/u);
+    assert.match(outputText, /saved JavaScript recipes/u);
+    assert.match(outputText, /\/plan <request>/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });
