@@ -8,11 +8,13 @@ import { defaultSkillRoots, loadSkills } from "../src/skills.js";
 import { loadSkillSettings, skillEnabled, toggleSkill } from "../src/skill-settings.js";
 
 test("defaultSkillRoots includes Dream and shared agent skill directories", () => {
-  const roots = defaultSkillRoots("/tmp/home");
+  const roots = defaultSkillRoots("/tmp/home", "/tmp/project");
 
   assert.deepEqual(roots, [
     "/tmp/home/.dream/skills",
     "/tmp/home/.agents/skills",
+    "/tmp/home/.claude/skills",
+    "/tmp/project/.claude/skills",
   ]);
 });
 
@@ -21,23 +23,28 @@ test("loadSkills discovers directory and markdown skills", async () => {
   try {
     const dreamRoot = join(root, ".dream", "skills");
     const agentRoot = join(root, ".agents", "skills");
+    const claudeRoot = join(root, ".claude", "skills");
     await mkdir(join(dreamRoot, "review"), { recursive: true });
     await mkdir(agentRoot, { recursive: true });
+    await mkdir(join(claudeRoot, "plan"), { recursive: true });
     await writeFile(
       join(dreamRoot, "review", "SKILL.md"),
       ["---", "name: review", "description: Review code.", "---", "Find bugs first."].join("\n"),
       "utf8",
     );
     await writeFile(join(agentRoot, "docs.md"), "# Docs\nWrite concise docs.", "utf8");
+    await writeFile(join(claudeRoot, "plan", "SKILL.md"), "# Plan\nClaude-compatible planning.", "utf8");
 
-    const skills = await loadSkills([dreamRoot, agentRoot]);
+    const skills = await loadSkills([dreamRoot, agentRoot, claudeRoot]);
     const review = skills.find((skill) => skill.name === "review");
     const docs = skills.find((skill) => skill.name === "docs");
+    const plan = skills.find((skill) => skill.name === "plan");
 
-    assert.equal(skills.length, 2);
+    assert.equal(skills.length, 3);
     assert.equal(review?.description, "Review code.");
     assert.equal(review?.source, "dream");
     assert.equal(docs?.source, "agents");
+    assert.equal(plan?.source, "claude");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

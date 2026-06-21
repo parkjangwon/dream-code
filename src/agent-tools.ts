@@ -4,6 +4,7 @@ import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
 import { toolRequestSchema } from "./agent-tool-schema.js";
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
+import { saveFileCheckpoint } from "./file-history.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
 import { toolLabel, toolResultLabel } from "./agent-tool-labels.js";
 import {
@@ -55,6 +56,9 @@ export async function runAgentToolRequest(
   if (!toolAllowed(request.tool, policy.allowedTools)) {
     return { request, ok: false, output: `Tool ${request.tool} is not allowed for this agent.` };
   }
+  if (!readOnlyTool(request.tool) && policy.mode === "plan") {
+    return { request, ok: false, output: `Plan mode blocks ${toolLabel(request)}. Switch to ask, auto, or yolo before changing files or running mutating tools.` };
+  }
   if (!readOnlyTool(request.tool) && policy.mode !== "yolo") {
     if (policy.approveTool !== undefined && await policy.approveTool(request)) {
       return runApprovedAgentToolRequest(request, policy);
@@ -93,23 +97,26 @@ async function runApprovedAgentToolRequest(
       case "shell":
         return { request, ...(await runShellCapture(request.command, policy)) };
       case "write": {
+        const checkpoint = await checkpointPathBeforeMutation(request.path, policy);
         const path = await writeWorkspaceFile(request.path, request.content, policy.workspaceRoot);
-        return { request, ok: true, output: `wrote ${path}`, changedPath: path };
+        return { request, ok: true, output: formatMutationOutput(`wrote ${path}`, checkpoint), changedPath: path };
       }
       case "delete": {
+        const checkpoint = await checkpointPathBeforeMutation(request.path, policy);
         const path = await deleteWorkspacePath(request.path, policy.workspaceRoot);
-        return { request, ok: true, output: `deleted ${path}`, changedPath: path };
+        return { request, ok: true, output: formatMutationOutput(`deleted ${path}`, checkpoint), changedPath: path };
       }
       case "mkdir": {
         const path = await mkdirWorkspacePath(request.path, policy.workspaceRoot);
         return { request, ok: true, output: `created directory ${path}`, changedPath: path };
       }
       case "edit": {
+        const checkpoint = await checkpointPathBeforeMutation(request.path, policy);
         const result = await replaceInWorkspaceFile(request.path, request.search, request.replace, policy.workspaceRoot);
         return {
           request,
           ok: result.replaced,
-          output: result.replaced ? `edited ${result.path}` : `no match in ${result.path}`,
+          output: result.replaced ? formatMutationOutput(`edited ${result.path}`, checkpoint) : `no match in ${result.path}`,
           ...(result.replaced ? { changedPath: result.path } : {}),
         };
       }
@@ -247,6 +254,15 @@ function formatSearchResults(results: readonly { readonly path: string; readonly
 
 function normalizePolicy(policyInput: PermissionMode | AgentToolPolicy): AgentToolPolicy {
   return typeof policyInput === "string" ? { mode: policyInput } : policyInput;
+}
+
+async function checkpointPathBeforeMutation(path: string, policy: AgentToolPolicy): Promise<string | undefined> {
+  const checkpoint = await saveFileCheckpoint(path, policy.workspaceRoot, policy.configRoot ?? defaultConfigRoot());
+  return checkpoint?.snapshotPath;
+}
+
+function formatMutationOutput(output: string, checkpoint: string | undefined): string {
+  return checkpoint === undefined ? output : `${output}\ncheckpoint: ${checkpoint}`;
 }
 
 function toolAllowed(tool: AgentToolName, allowedTools: readonly AgentToolName[] | undefined): boolean {

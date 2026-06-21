@@ -96,14 +96,14 @@ function renderCommandPaletteLines(
     Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
   );
   const visible = palette.matches.slice(start, start + maxVisibleCommands);
-  const lines = [paint("Commands", ansi.guide)];
+  const selectedCommand = palette.matches[palette.selectedIndex];
+  const action = selectedCommand?.acceptsArgs === true ? "Enter completes" : "Enter runs";
+  const lines = [formatPaletteHeading("Commands", palette.matches.length, start, visible.length, action)];
 
   for (let index = 0; index < visible.length; index += 1) {
     const command = visible[index];
     if (command !== undefined) {
-      const selected = start + index === palette.selectedIndex ? ">" : " ";
-      const prefix = `${selected} ${command.name.padEnd(12)} `;
-      lines.push(`${prefix}${paint(renderPaletteDescription(command.summary, width - terminalVisibleWidth(prefix)), ansi.dim)}`);
+      lines.push(formatCommandPaletteLine(command, start + index === palette.selectedIndex, width));
     }
   }
 
@@ -119,7 +119,7 @@ function renderSkillPaletteLines(
     Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
   );
   const visible = palette.matches.slice(start, start + maxVisibleCommands);
-  const lines = [paint("Skills", ansi.guide)];
+  const lines = [formatPaletteHeading("Skills", palette.matches.length, start, visible.length, "Enter inserts")];
 
   for (let index = 0; index < visible.length; index += 1) {
     const skill = visible[index];
@@ -129,6 +129,31 @@ function renderSkillPaletteLines(
   }
 
   return lines;
+}
+
+export function formatPaletteHeading(
+  title: string,
+  total: number,
+  start: number,
+  visibleCount: number,
+  action: string,
+): string {
+  const rangeStart = total === 0 ? 0 : start + 1;
+  const rangeEnd = start + visibleCount;
+  return paint(`${title} ${rangeStart}-${rangeEnd}/${total} · ${action} · Esc closes`, ansi.guide);
+}
+
+export function formatCommandPaletteLine(
+  command: { readonly name: string; readonly summary: string; readonly acceptsArgs: boolean },
+  selected: boolean,
+  width: number,
+): string {
+  const marker = selected ? paint(">", ansi.accent) : " ";
+  const commandName = selected ? paint(command.name, ansi.accent) : command.name;
+  const name = padVisible(commandName, 14);
+  const prefix = `${marker} ${name} `;
+  const summary = renderPaletteDescription(command.summary, width - terminalVisibleWidth(prefix));
+  return `${prefix}${paint(summary, ansi.dim)}`;
 }
 
 export function formatSkillPaletteLine(skill: DreamSkill, selected: boolean, width: number): string {

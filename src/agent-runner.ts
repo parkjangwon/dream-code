@@ -40,7 +40,7 @@ import { notifyAgentComplete } from "./notifications.js";
 import { providerIsEnabled } from "./provider-settings.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
-import { loadSkills } from "./skills.js";
+import { defaultSkillRoots, loadSkills } from "./skills.js";
 import { formatCompactContext } from "./session-actions.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
 import { providerConnectionSource } from "./tui-provider-status.js";
@@ -103,7 +103,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   });
   const primaryModel = firstSelectedModel(selectedModels);
   const settings = await loadSkillSettings(configRoot);
-  const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
+  const skills = (await loadSkills(defaultSkillRoots(undefined, activeCwd))).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot, cwd: activeCwd, prompt: options.prompt });
   const workspaceDirs = await loadWorkspaceDirs(configRoot);
   const mcpContext = await formatLiveMcpContext(configRoot, options.signal);

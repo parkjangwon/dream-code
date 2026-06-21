@@ -1,10 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
-import { request } from "undici";
 import { z } from "zod";
 
 import type { ClaudePluginInstallSource } from "./plugin-installer.js";
+import {
+  gitSourceFromMarketplace,
+  readMarketplaceText,
+  resolveMarketplaceSource,
+} from "./plugin-marketplace-source.js";
 
 const marketplaceSourceObjectSchema = z.object({
   source: z.string().min(1).optional(),
@@ -29,6 +33,7 @@ const marketplaceSchema = z.object({
 const marketplaceRecordSchema = z.object({
   name: z.string().min(1),
   url: z.string().min(1),
+  ref: z.string().min(1).optional(),
   addedAt: z.string().min(1),
 });
 
@@ -43,10 +48,11 @@ export type PluginMarketplaceEntry = z.infer<typeof marketplacePluginSchema> & {
 };
 
 const officialMarketplace: PluginMarketplaceRecord = {
-  name: "official",
+  name: "claude-plugins-official",
   url: "https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json",
   addedAt: "builtin",
 };
+const officialMarketplaceAliases: readonly string[] = ["official"];
 
 export function pluginMarketplaceRegistryPath(root: string): string {
   return join(root, "plugins", "marketplaces.json");
@@ -54,16 +60,26 @@ export function pluginMarketplaceRegistryPath(root: string): string {
 
 export async function loadPluginMarketplaces(root: string): Promise<readonly PluginMarketplaceRecord[]> {
   const saved = await loadSavedMarketplaces(root);
-  return [officialMarketplace, ...saved.filter((record) => record.name !== officialMarketplace.name)];
+  return [officialMarketplace, ...saved.filter((record) => !isOfficialMarketplaceName(record.name))];
 }
 
-export async function savePluginMarketplace(root: string, name: string, url: string): Promise<PluginMarketplaceRecord> {
-  const record = { name: normalizeName(name), url, addedAt: new Date().toISOString() };
+export async function savePluginMarketplace(root: string, name: string, url: string, ref?: string): Promise<PluginMarketplaceRecord> {
+  const record = {
+    name: normalizeName(name),
+    url,
+    ...(ref === undefined ? {} : { ref }),
+    addedAt: new Date().toISOString(),
+  };
   const existing = (await loadSavedMarketplaces(root)).filter((item) => item.name !== record.name);
   const next = [...existing, record].sort((left, right) => left.name.localeCompare(right.name));
   await mkdir(join(root, "plugins"), { recursive: true, mode: 0o700 });
   await writeFile(pluginMarketplaceRegistryPath(root), `${JSON.stringify({ version: 1, marketplaces: next }, null, 2)}\n`, "utf8");
   return record;
+}
+
+export async function savePluginMarketplaceSource(root: string, source: string, cwd: string): Promise<PluginMarketplaceRecord> {
+  const record = await resolveMarketplaceSource(source, cwd);
+  return savePluginMarketplace(root, record.name, record.url, record.ref);
 }
 
 export async function searchMarketplacePlugins(root: string, query: string, cwd: string): Promise<readonly PluginMarketplaceEntry[]> {
@@ -80,7 +96,7 @@ export async function resolveMarketplacePlugin(root: string, spec: string, cwd: 
   if (parsed === undefined) {
     return undefined;
   }
-  const marketplace = (await loadPluginMarketplaces(root)).find((record) => record.name === parsed.marketplace);
+  const marketplace = (await loadPluginMarketplaces(root)).find((record) => marketplaceNameMatches(record, parsed.marketplace));
   if (marketplace === undefined) {
     return undefined;
   }
@@ -115,21 +131,13 @@ async function loadMarketplaceEntries(marketplace: PluginMarketplaceRecord, cwd:
 }
 
 async function loadMarketplace(marketplace: PluginMarketplaceRecord, cwd: string): Promise<z.infer<typeof marketplaceSchema>> {
-  const raw = isHttpUrl(marketplace.url) ? await readHttpText(marketplace.url) : await readFile(resolveLocalPath(marketplace.url, cwd), "utf8");
+  const raw = await readMarketplaceText(marketplace, cwd);
   const parsedJson: unknown = JSON.parse(raw);
   const parsed = marketplaceSchema.safeParse(parsedJson);
   if (!parsed.success) {
     throw new PluginMarketplaceError(`Invalid marketplace ${marketplace.name}: ${parsed.error.message}`);
   }
   return parsed.data;
-}
-
-async function readHttpText(url: string): Promise<string> {
-  const response = await request(url, { method: "GET", headersTimeout: 8_000, bodyTimeout: 12_000 });
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new PluginMarketplaceError(`Marketplace request failed: HTTP ${response.statusCode}`);
-  }
-  return response.body.text();
 }
 
 function installSourceForPlugin(
@@ -164,6 +172,10 @@ function installSourceForString(
   const github = githubSourceFromMarketplace(marketplace.url, source);
   if (github !== undefined) {
     return { ...github, label };
+  }
+  const git = gitSourceFromMarketplace(marketplace, source);
+  if (git !== undefined) {
+    return { ...git, label };
   }
   return { location: resolve(dirname(resolveLocalPath(marketplace.url, cwd)), source), label };
 }
@@ -209,6 +221,14 @@ function normalizeSubdir(value: string): string {
 
 function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "") || "marketplace";
+}
+
+function marketplaceNameMatches(record: PluginMarketplaceRecord, name: string): boolean {
+  return record.name === name || (record.name === officialMarketplace.name && isOfficialMarketplaceName(name));
+}
+
+function isOfficialMarketplaceName(name: string): boolean {
+  return name === officialMarketplace.name || officialMarketplaceAliases.includes(name);
 }
 
 function isHttpUrl(value: string): boolean {

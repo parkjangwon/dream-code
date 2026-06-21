@@ -23,7 +23,7 @@ export const jobRowSchema = z.object({
   mode: z.enum(["agent", "workflow", "swarm"]),
   enabled: z.number(),
   model_mode: z.enum(["auto", "single"]),
-  permission_mode: z.enum(["ask", "auto", "yolo"]),
+  permission_mode: z.enum(["ask", "auto", "plan", "yolo"]),
   notify: z.number(),
   output_path: z.string().nullable(),
   last_run_at: z.string().nullable(),
@@ -135,4 +135,3 @@ function schemaSql(): string {
     "create table if not exists cron_runs (id text primary key, job_id text not null, project_id text not null, status text not null, started_at text not null, finished_at text not null, summary text not null, artifact_path text, output_path text, error text)",
   ].join("; ");
 }
-

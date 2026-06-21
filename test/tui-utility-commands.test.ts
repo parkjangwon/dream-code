@@ -8,7 +8,7 @@ import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
 import { checkpointPath } from "../src/memory-store.js";
-import { appendSessionTurn, startSession } from "../src/session-store.js";
+import { appendSessionTurn, listSessions, startSession } from "../src/session-store.js";
 import { compactCurrentSession, copyLastAssistantResponse, formatCompactContext } from "../src/session-actions.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
@@ -29,6 +29,7 @@ test("utility commands show rules, compact, export, and logout state", async () 
     const runtime = { currentId: () => session.id, switchTo: () => undefined };
 
     await runWorkspaceCommand("/rules", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+    await runWorkspaceCommand("/context", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
     await runWorkspaceCommand("/compact", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
     await runWorkspaceCommand("/export", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
     await runWorkspaceCommand("/logout deepseek", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
@@ -36,10 +37,38 @@ test("utility commands show rules, compact, export, and logout state", async () 
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Rules/u);
     assert.match(outputText, /Project rules/u);
+    assert.match(outputText, /Context/u);
+    assert.match(outputText, /plaintext under/u);
     assert.match(outputText, /compacting session context/u);
     assert.match(outputText, /compact failed:/u);
     assert.match(outputText, /exported:/u);
     assert.match(outputText, /logged out: deepseek/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("clear command empties the active session transcript", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-clear-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-clear-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const session = await startSession(root, project);
+    await appendSessionTurn(root, session.id, "user", "Forget this");
+    await appendSessionTurn(root, session.id, "assistant", "Forgotten");
+    const runtime = { currentId: () => session.id, switchTo: () => undefined };
+
+    await runWorkspaceCommand("/clear", defaultConfig(), true, { question: async () => "" }, root, runtime, project);
+
+    const sessionAfter = (await listSessions(root)).find((item) => item.id === session.id);
+    assert.match(stripAnsi(chunks.join("")), /session cleared/u);
+    assert.equal(sessionAfter?.turns.length, 0);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { cwd } from "node:process";
 import { z } from "zod";
@@ -138,6 +138,24 @@ export async function renameSession(root: string, sessionId: string, name: strin
   };
   await writeSessionState(sessionDirFor(root, session.id, session.directory), renamed);
   return renamed;
+}
+
+export async function clearSessionTurns(root: string, sessionId: string): Promise<DreamSession | undefined> {
+  const session = await findSession(root, sessionId);
+  if (session === undefined) {
+    return undefined;
+  }
+
+  const cleared: DreamSession = {
+    ...session,
+    summary: "Session cleared.",
+    updatedAt: new Date().toISOString(),
+    turns: [],
+  };
+  const sessionDir = sessionDirFor(root, session.id, session.directory);
+  await rm(join(sessionDir, "wire.jsonl"), { force: true });
+  await writeSessionState(sessionDir, cleared);
+  return cleared;
 }
 
 export async function listSessions(root = defaultConfigRoot()): Promise<readonly DreamSession[]> {

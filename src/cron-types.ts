@@ -25,7 +25,7 @@ export const cronJobSchema = z.object({
   mode: cronJobModeSchema,
   enabled: z.boolean(),
   modelMode: z.enum(["auto", "single"]),
-  permissionMode: z.enum(["ask", "auto", "yolo"]),
+  permissionMode: z.enum(["ask", "auto", "plan", "yolo"]),
   notify: z.boolean(),
   outputPath: z.string().min(1).optional(),
   lastRunAt: z.string().min(1).optional(),
@@ -71,7 +71,7 @@ export type CronJobInput = {
   readonly mode?: CronJobMode;
   readonly enabled?: boolean;
   readonly modelMode: "auto" | "single";
-  readonly permissionMode: "ask" | "auto" | "yolo";
+  readonly permissionMode: "ask" | "auto" | "plan" | "yolo";
   readonly notify: boolean;
   readonly outputPath?: string | undefined;
   readonly nextRunAt?: string | undefined;

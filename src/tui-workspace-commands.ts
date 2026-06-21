@@ -23,6 +23,7 @@ import { configureModels } from "./tui-model-commands.js";
 import { runNotificationsCommand } from "./tui-notification-command.js";
 import { runCronCommand } from "./tui-cron-command.js";
 import type { PickerOptions } from "./tui-picker.js";
+import { runPermissionCommand } from "./tui-permission-command.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import type { ProviderManagerOptions, ProviderManagerResult } from "./tui-provider-manager-state.js";
 import { switchProvider } from "./tui-provider-switch.js";
@@ -186,6 +187,11 @@ async function runWorkspaceCommandBody(
       };
     case "/notifications": {
       const result = await runNotificationsCommand(config, configRoot, command.rest);
+      output.write(result.output);
+      return { config: result.config, shouldContinue: true };
+    }
+    case "/permission": {
+      const result = await runPermissionCommand(config, configRoot, command.rest, oneShotYolo);
       output.write(result.output);
       return { config: result.config, shouldContinue: true };
     }

@@ -1,8 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { cwd as currentWorkingDirectory } from "node:process";
 import { basename, extname, join } from "node:path";
 
-export type SkillSource = "dream" | "agents";
+export type SkillSource = "dream" | "agents" | "claude";
 
 export type DreamSkill = {
   readonly name: string;
@@ -24,10 +25,12 @@ type SkillMetadata = {
   readonly description?: string;
 };
 
-export function defaultSkillRoots(home = homedir()): readonly string[] {
+export function defaultSkillRoots(home = homedir(), cwd = currentWorkingDirectory()): readonly string[] {
   return [
     join(home, ".dream", "skills"),
     join(home, ".agents", "skills"),
+    join(home, ".claude", "skills"),
+    join(cwd, ".claude", "skills"),
   ];
 }
 
@@ -165,7 +168,14 @@ function stripMarkdownExtension(fileName: string): string {
 }
 
 function sourceFromRoot(root: string): SkillSource {
-  return root.split(/[\\/]/u).includes(".agents") ? "agents" : "dream";
+  const parts = root.split(/[\\/]/u);
+  if (parts.includes(".agents")) {
+    return "agents";
+  }
+  if (parts.includes(".claude")) {
+    return "claude";
+  }
+  return "dream";
 }
 
 function unquoteYamlScalar(value: string): string {

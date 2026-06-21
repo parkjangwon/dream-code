@@ -50,8 +50,11 @@ export function parseMode(raw: string): "agent" | "workflow" | "swarm" {
   return "agent";
 }
 
-export function parsePermissionMode(raw: string | undefined, fallback: "ask" | "auto" | "yolo"): "ask" | "auto" | "yolo" {
-  return raw === "ask" || raw === "auto" || raw === "yolo" ? raw : fallback;
+export function parsePermissionMode(
+  raw: string | undefined,
+  fallback: "ask" | "auto" | "plan" | "yolo",
+): "ask" | "auto" | "plan" | "yolo" {
+  return raw === "ask" || raw === "auto" || raw === "plan" || raw === "yolo" ? raw : fallback;
 }
 
 export function draftName(prompt: string): string {

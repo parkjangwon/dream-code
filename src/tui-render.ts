@@ -27,7 +27,11 @@ export function printHelp(): void {
     "  /model                  choose active model",
     "  /provider               switch connected provider",
     "  /login                  connect a provider account",
+    "  /permission <mode>      set ask, auto, plan, or yolo mode",
     "  /session                open saved sessions",
+    "  /context                show loaded context and plaintext storage notes",
+    "  /clear                  clear the active session transcript",
+    "  /restore <path>         restore latest file checkpoint",
     "  /rename                 rename current session",
     "  !<cmd>                  run a shell command",
     "  /quit                   exit",
@@ -99,6 +103,9 @@ export function permissionModeText(mode: PermissionMode, oneShotYolo: boolean): 
   }
   if (mode === "yolo") {
     return "YOLO ON (saved bypass)";
+  }
+  if (mode === "plan") {
+    return "plan (read-only)";
   }
   return mode;
 }

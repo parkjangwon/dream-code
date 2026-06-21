@@ -32,6 +32,27 @@ test("runWorkspaceCommand routes /model to model configuration", async () => {
   }
 });
 
+test("runWorkspaceCommand saves permission mode changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-permission-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const result = await runWorkspaceCommand(
+      "/permission plan",
+      defaultConfig(),
+      false,
+      { question: async () => "" },
+      root,
+    );
+    const saved = await loadConfig(root);
+
+    assert.equal(result.config.permissions.mode, "plan");
+    assert.equal(saved.permissions.mode, "plan");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runWorkspaceCommand fires postCommand hooks", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-hook-"));
   const outputPath = join(root, "hook-command.txt");

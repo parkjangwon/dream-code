@@ -12,7 +12,7 @@ import {
 import { defaultModelConfig, normalizeLoadedConfig } from "./config-model.js";
 import { modelConfigSchema } from "./model-routing.js";
 
-export const permissionModeSchema = z.enum(["ask", "auto", "yolo"]);
+export const permissionModeSchema = z.enum(["ask", "auto", "plan", "yolo"]);
 export type PermissionMode = z.infer<typeof permissionModeSchema>;
 
 const teamMemberSchema = z.object({

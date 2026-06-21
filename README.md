@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.4)
+Dream Code (v0.1.5)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -90,8 +90,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.5
+git push origin v0.1.5
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -100,7 +100,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.3 sh install.sh
+DREAM_CODE_VERSION=v0.1.5 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -122,10 +122,17 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
   for high-parallel fan-out when speed matters. Use `/swarm --size N` when you
   want to force a specific number of parallel lanes.
+- **Claude Code compatibility:** load `CLAUDE.md`, `CLAUDE.local.md`,
+  `.claude/rules/*.md`, and `.claude/skills`, while keeping existing
+  `AGENTS.md`, `DESIGN.md`, and Dream skills support.
 - **Plugin import:** import Claude Code plugin packages into Dream Code skills,
   agents, command skills, and MCP settings with `/plugin install`.
-- **Context memory:** compact long sessions, keep checkpoints, and preserve task
-  progress without flooding every request.
+- **Plugin marketplaces:** install from the built-in
+  `claude-plugins-official` marketplace, add Claude-style marketplaces with
+  `/plugin marketplace add <source>`, and search plugins before installing.
+- **Context memory:** compact long sessions, keep checkpoints, inspect loaded
+  context with `/context`, and preserve task progress without flooding every
+  request.
 - **Native notifications:** completion and permission-required alerts through
   standard OS notification tools, with hook-friendly command overrides.
 - **Cron automation:** schedule recurring agent work from the TUI, run it from a
@@ -138,7 +145,8 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Workspace control:** let the agent list, search, read, create directories,
   write files, edit files, delete files, run shell commands, and research the
   web. Fresh installs start in YOLO bypass mode; use `/yolo` to toggle back to
-  ask mode when you want approval prompts.
+  ask mode when you want approval prompts. Existing files are checkpointed under
+  `~/.dream/file-history/` before write/edit/delete tools mutate them.
 
 ## Providers
 
@@ -169,6 +177,24 @@ monitor, then merges the lanes into one final synthesis.
 Without `--size`, Dream Code uses adaptive fan-out. With `--size N`, Dream Code
 forces exactly `N` swarm lanes, useful when you want to push a large job hard and
 spend more tokens for faster parallel coverage.
+
+## Claude Plugins
+
+Dream Code can import Claude Code plugins and marketplaces.
+
+```text
+/plugin marketplace
+/plugin search commit
+/plugin install superpowers@claude-plugins-official
+/plugin marketplace add anthropics/claude-code
+/plugin marketplace add ~/plugins/my-marketplace
+/plugin marketplace add internal https://example.com/marketplace.json
+```
+
+The built-in official marketplace is named `claude-plugins-official`; `official`
+is kept as a short alias. Marketplace sources can be local files/directories,
+HTTP JSON URLs, GitHub shorthands like `owner/repo@ref`, or git URLs with
+`#ref`.
 
 ## Cron
 
@@ -236,7 +262,9 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /artifact     View saved artifacts
 /auto         Toggle automatic model routing
 /btw          Ask a side question
+/clear        Clear the active session transcript
 /compact      Compact current session context
+/context      Show loaded context and plaintext storage notes
 /copy         Copy the latest assistant response
 /cron         Manage scheduled agent work
 /doctor       Check local tools
@@ -252,13 +280,15 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /mcp          Show MCP settings and live tools
 /model        Choose model or model routing mode
 /notifications Toggle native completion and permission alerts
+/permission  Set ask, auto, plan, or yolo permission mode
 /plan         Create an implementation plan
 /plugin       Import Claude plugin packages
 /provider     Switch, list, enable, or disable providers
 /rename       Rename current session
 /research     Research with source discipline
+/restore      Restore the latest file checkpoint for a path
 /review       Review current work
-/rules        Show loaded AGENTS.md and DESIGN.md context
+/rules        Show loaded AGENTS.md, CLAUDE.md, and DESIGN.md context
 /session      Open saved sessions
 /skills       Show and toggle installed skills
 /status       Show goal, tasks, and model health
@@ -299,14 +329,20 @@ Enter       Submit input or choose a menu item
 - Sessions with append-only wire logs and a session picker
 - `/rename` for current session naming
 - Automatic and manual `/compact`
-- Project/global rules loading from `AGENTS.md`
+- Project/global rules loading from `AGENTS.md`, `CLAUDE.md`,
+  `CLAUDE.local.md`, and `.claude/rules/*.md`
 - Design-system context loading from `DESIGN.md`
+- `/context`, `/clear`, and `/restore` session/context recovery commands
 - Goal mode with judge-style continuation support
-- Plan mode with project-local `.dream/plans.md`
+- Plan command with project-local `.dream/plans.md`
+- Read-only `plan` permission mode for no-mutation agent runs
 - Task ledger with todo/doing/done/blocked states
-- Skills from `~/.dream/skills` and `~/.agents/skills`
+- Skills from `~/.dream/skills`, `~/.agents/skills`, `~/.claude/skills`, and
+  project `.claude/skills`
 - `@skill` autocomplete and explicit skill activation
 - Claude plugin import for skills, agents, commands, and `.mcp.json`
+- Claude plugin marketplace install from `claude-plugins-official` plus
+  `/plugin marketplace add <source>`
 - Custom agents and running-agent inboxes
 - Dream Swarm fan-out with live monitor
 - Swarm synthesis artifacts and memory absorption
@@ -315,6 +351,7 @@ Enter       Submit input or choose a menu item
 - Workflow-as-code JavaScript recipes with starter generation
 - Daemon-backed cron jobs for recurring prompts, workflows, and swarms
 - Agent file tools for list, search, read, mkdir, write, edit, and delete
+- File history checkpoints before write/edit/delete and `/restore <path>`
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge
@@ -342,6 +379,7 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/session_index.jsonl     session picker index
 ~/.dream/sessions/               session state and wire logs
 ~/.dream/tasks.jsonl             task ledger
+~/.dream/file-history/           plaintext file checkpoints for restore
 ~/.dream/model_telemetry.jsonl   model routing health log
 ~/.dream/dream.db                SQLite store for cron projects, jobs, and runs
 ~/.dream/cron/runs/              cron run Markdown artifacts
@@ -349,6 +387,11 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/plugins/                imported Claude plugin sources and registry
 ~/.dream/workflows/runs/         workflow run traces
 ```
+
+Dream Code stores sessions, memory, imported plugins, skills, MCP settings, and
+file history as plaintext under the Dream config directory. Keep that directory
+out of shared backups or untrusted sync folders if your projects contain
+sensitive code.
 
 Notification settings live in `~/.dream/config.toml`:
 
@@ -372,8 +415,15 @@ Project-local files:
 .dream/workflows/*.js
 .dream/artifacts/
 AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/rules/*.md
+.claude/skills/<name>/SKILL.md
 DESIGN.md
 ```
+
+Set `CLAUDE_CONFIG_DIR` when you want Dream Code to read global Claude memory
+and skills from a non-default Claude config directory.
 
 ## Termux
 

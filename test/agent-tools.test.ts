@@ -89,6 +89,44 @@ test("runAgentToolRequest asks before mutating workspace in ask mode", async () 
   }
 });
 
+test("runAgentToolRequest blocks mutating tools in plan mode", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-plan-"));
+  try {
+    const result = await runAgentToolRequest(
+      { tool: "write", path: "plan.txt", content: "no" },
+      { mode: "plan", workspaceRoot: project },
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.output, /Plan mode/u);
+    await assert.rejects(readFile(join(project, "plan.txt"), "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("runAgentToolRequest checkpoints existing files before mutating them", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-history-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-history-project-"));
+  try {
+    await mkdir(join(project, "src"), { recursive: true });
+    await writeFile(join(project, "src", "index.ts"), "const marker = 'before';\n", "utf8");
+
+    const result = await runAgentToolRequest(
+      { tool: "edit", path: "src/index.ts", search: "before", replace: "after" },
+      { mode: "yolo", workspaceRoot: project, configRoot: root },
+    );
+
+    const historyFiles = await readFile(join(root, "file-history", "index.jsonl"), "utf8");
+    assert.equal(result.ok, true);
+    assert.match(result.output, /checkpoint:/u);
+    assert.match(historyFiles, /src\/index\.ts/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("runAgentToolRequest annotates risky shell commands in yolo mode", async () => {
   const result = await runAgentToolRequest({ tool: "shell", command: "echo git reset --hard" }, "yolo");
 

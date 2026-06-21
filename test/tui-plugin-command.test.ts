@@ -54,6 +54,47 @@ test("runPluginCommand installs a plugin from a saved marketplace", async () => 
   }
 });
 
+test("runPluginCommand adds a marketplace from a Claude Code local directory source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-market-home-"));
+  const sourceRoot = await mkdtemp(join(tmpdir(), "dream-tui-market-source-"));
+  const marketplaceRoot = await mkdtemp(join(tmpdir(), "dream-tui-marketplace-"));
+  try {
+    await writeFixturePlugin(sourceRoot);
+    await mkdir(join(marketplaceRoot, ".claude-plugin"), { recursive: true });
+    await writeFile(join(marketplaceRoot, ".claude-plugin", "marketplace.json"), JSON.stringify({
+      name: "local-market",
+      plugins: [{
+        name: "tiny",
+        description: "Tiny marketplace plugin.",
+        source: sourceRoot,
+      }],
+    }), "utf8");
+
+    const added = await runPluginCommand(root, `marketplace add ${marketplaceRoot}`, process.cwd());
+    const searched = await runPluginCommand(root, "search tiny", process.cwd());
+    const installed = await runPluginCommand(root, "install tiny@local-market", process.cwd());
+
+    assert.match(added, /marketplace added: local-market/u);
+    assert.match(searched, /tiny@local-market Tiny marketplace plugin\./u);
+    assert.match(installed, /plugin installed: Tiny Claude Plugin/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(sourceRoot, { recursive: true, force: true });
+    await rm(marketplaceRoot, { recursive: true, force: true });
+  }
+});
+
+test("runPluginCommand lists the Claude plugins official marketplace by its Claude Code name", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-market-home-"));
+  try {
+    const marketplaces = await runPluginCommand(root, "marketplace", process.cwd());
+
+    assert.match(marketplaces, /claude-plugins-official\s+builtin/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function writeFixturePlugin(pluginRoot: string): Promise<void> {
   await mkdir(join(pluginRoot, ".claude-plugin"), { recursive: true });
   await mkdir(join(pluginRoot, "skills", "tiny"), { recursive: true });

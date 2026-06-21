@@ -5,6 +5,8 @@ import { ansi } from "../src/ansi.js";
 import {
   cursorUpToPromptLineCount,
   displayInputText,
+  formatCommandPaletteLine,
+  formatPaletteHeading,
   formatSkillPaletteLine,
   renderInputText,
   renderPaletteDescription,
@@ -59,6 +61,26 @@ test("renderPaletteDescription truncates long text to the available width", () =
 
   assert.equal(terminalVisibleWidth(rendered) <= 28, true);
   assert.match(rendered, /…/u);
+});
+
+test("palette heading shows match count and selected action", () => {
+  const rendered = formatPaletteHeading("Commands", 12, 0, 8, "Enter completes");
+
+  assert.equal(rendered.includes("Commands 1-8/12"), true);
+  assert.equal(rendered.includes("Enter completes"), true);
+  assert.equal(rendered.includes(ansi.guide), true);
+});
+
+test("command autocomplete lines color the selected marker and command name", () => {
+  const rendered = formatCommandPaletteLine({
+    name: "/plugin",
+    summary: "Manage Claude Code plugins",
+    acceptsArgs: true,
+  }, true, 80);
+
+  assert.equal(rendered.includes(`${ansi.accent}>`), true);
+  assert.equal(rendered.includes(`${ansi.accent}/plugin`), true);
+  assert.equal(terminalVisibleWidth(rendered) <= 80, true);
 });
 
 test("skill autocomplete lines color the selected marker and skill name", () => {
