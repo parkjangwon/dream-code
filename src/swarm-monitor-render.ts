@@ -183,7 +183,7 @@ function statusBar(status: SwarmLaneStatus, frame: number): string {
 }
 
 function activityStrip(frame: number): string {
-  return paint(brailleActivity(frame, 8), ansi.accent);
+  return paint(brailleActivity(frame), ansi.accent);
 }
 
 function formatSynthesis(snapshot: SwarmMonitorSnapshot): string {

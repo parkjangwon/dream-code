@@ -1,16 +1,13 @@
 export type BrailleProgressStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-const activityFrames = ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"] as const;
 
 export function brailleSpinner(frame: number): string {
   return spinnerFrames[positiveModulo(frame, spinnerFrames.length)] ?? spinnerFrames[0];
 }
 
-export function brailleActivity(frame: number, width = 8): string {
-  return Array.from({ length: Math.max(1, width) }, (_item, index) => {
-    return activityFrames[positiveModulo(frame + index, activityFrames.length)] ?? "⠁";
-  }).join("");
+export function brailleActivity(frame: number): string {
+  return ".".repeat(positiveModulo(frame, 4));
 }
 
 export function brailleProgressBar(status: BrailleProgressStatus, frame = 0): string {
