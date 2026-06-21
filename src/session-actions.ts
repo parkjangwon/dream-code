@@ -4,19 +4,26 @@ import { spawn } from "node:child_process";
 
 import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot } from "./config.js";
+import { writeCheckpoint } from "./memory-store.js";
+import { createSessionCompact, type SessionCompactSummarizer } from "./session-compact.js";
 import { listSessions, type DreamSession } from "./session-store.js";
 
 const maxCompactChars = 8_000;
 
-export async function compactCurrentSession(root: string, sessionId: string): Promise<string> {
+export type SessionCompactOptions = {
+  readonly summarizer?: SessionCompactSummarizer;
+};
+
+export async function compactCurrentSession(root: string, sessionId: string, options: SessionCompactOptions = {}): Promise<string> {
   const session = await currentSession(root, sessionId);
   if (session === undefined) {
     return "compact skipped: no active session";
   }
-  const summary = summarizeSession(session);
+  const summary = await createSessionCompact(session, options.summarizer);
   const filePath = join(root, "compacts", `${session.id}.md`);
   await mkdir(join(root, "compacts"), { recursive: true, mode: 0o700 });
   await writeFile(filePath, summary, "utf8");
+  await writeCheckpoint(root, session.directory, session.id, { title: "Session Compact", body: summary });
   return `compact saved: ${filePath}`;
 }
 
@@ -33,12 +40,12 @@ export async function formatCompactContext(root: string, sessionId: string | und
   return ["Session compact:", truncateCompact(compact)].join("\n");
 }
 
-export async function maybeAutoCompactSession(root: string, sessionId: string): Promise<void> {
+export async function maybeAutoCompactSession(root: string, sessionId: string, options: SessionCompactOptions = {}): Promise<void> {
   const session = await currentSession(root, sessionId);
   if (session === undefined || session.turns.length < 40 || session.turns.length % 10 !== 0) {
     return;
   }
-  await compactCurrentSession(root, sessionId);
+  await compactCurrentSession(root, sessionId, options);
 }
 
 export async function exportCurrentSession(root: string, sessionId: string): Promise<string> {
@@ -64,19 +71,14 @@ export async function copyLastAssistantResponse(root: string, sessionId: string,
 }
 
 export function summarizeSession(session: DreamSession): string {
-  const recent = session.turns.slice(-12);
-  const lines = recent.map((turn) => `- ${turn.role}: ${firstLine(turn.content)}`);
   return [
-    `# ${session.name}`,
+    "# Dream Context Compact",
     "",
-    `Directory: ${session.directory}`,
-    `Updated: ${session.updatedAt}`,
-    "",
-    "## Compact Summary",
+    "## Objective",
     session.summary,
     "",
     "## Recent Turns",
-    ...lines,
+    ...session.turns.slice(-12).map((turn) => `- ${turn.role}: ${firstLine(turn.content)}`),
     "",
   ].join("\n");
 }

@@ -29,6 +29,7 @@ import {
   type SessionRuntime,
 } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
+import { buildBottomStatusLines } from "./tui-status-bar.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -79,11 +80,13 @@ async function runInteractiveLoop(
   while (shouldContinue) {
     const configRoot = options.configRoot ?? defaultConfigRoot();
     const skills = await loadEnabledSkills(configRoot);
+    const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
       commands: slashCommands,
       skills,
+      statusLines,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },

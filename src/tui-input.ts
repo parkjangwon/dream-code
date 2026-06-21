@@ -15,6 +15,7 @@ export type InteractiveInputOptions = {
   readonly skills?: readonly DreamSkill[];
   readonly redrawHeader: () => void;
   readonly secret?: boolean;
+  readonly statusLines?: readonly string[];
 };
 
 export type InteractiveInputResult =
@@ -41,7 +42,7 @@ export function readInteractiveInput(
 
     const render = (): void => {
       clearRenderedLines(renderedLines);
-      renderedLines = renderInputView(state, options.prompt, options.secret === true);
+      renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
     };
 
     const finish = (result: InteractiveInputResult): void => {
@@ -89,7 +90,7 @@ export function readInteractiveInput(
             lastCtrlCAt = now;
             clearRenderedLines(renderedLines);
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            renderedLines = renderInputView(state, options.prompt, options.secret === true);
+            renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
           }
           return;
         default:

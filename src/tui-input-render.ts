@@ -13,6 +13,7 @@ export function renderInputView(
   state: InputState,
   prompt: string,
   secret = false,
+  statusLines: readonly string[] = [],
 ): number {
   const width = Math.max(64, output.columns ?? 80);
   const contentWidth = width - 4;
@@ -23,6 +24,7 @@ export function renderInputView(
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
     borderLine("bottom", width),
+    ...statusLines,
     ...renderAuxiliaryLines(state, secret, width),
   ];
   output.write(lines.join("\n"));

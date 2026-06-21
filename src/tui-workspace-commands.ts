@@ -3,6 +3,7 @@ import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 import { runAgentPrompt } from "./agent-runner.js";
 import { stripAnsi } from "./ansi.js";
 import { splitCommand } from "./command-parser.js";
+import { createLlmCompactSummarizer } from "./compact-summarizer.js";
 import {
   defaultConfigRoot,
   resolveEffectivePermissionMode,
@@ -86,7 +87,14 @@ async function runWorkspaceCommandBody(
     await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
     if (sessionRuntime !== undefined) {
       await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
-      await maybeAutoCompactSession(configRoot, sessionRuntime.currentId());
+      await maybeAutoCompactSession(configRoot, sessionRuntime.currentId(), { summarizer: createLlmCompactSummarizer(config, configRoot) })
+        .catch((error: unknown) => {
+          if (error instanceof Error) {
+            output.write(`auto compact skipped: ${error.message}\n`);
+            return;
+          }
+          throw error;
+        });
     }
     await recordGoalEvidence(configRoot, `Answered: ${truncateEvidence(text)}`);
     await judgeGoalAfterTurn(config, configRoot, text, assistantTranscript);

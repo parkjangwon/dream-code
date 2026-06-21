@@ -11,12 +11,8 @@ import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
 import { formatMcpStatus } from "./mcp-config.js";
 import { runResearch } from "./research-tool.js";
-import {
-  compactCurrentSession,
-  copyLastAssistantResponse,
-  exportCurrentSession,
-  formatSessionActionResult,
-} from "./session-actions.js";
+import { copyLastAssistantResponse, exportCurrentSession, formatSessionActionResult } from "./session-actions.js";
+import { runCompactCommand } from "./tui-compact-command.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import type { Questioner } from "./tui-workspace-commands.js";
 import { formatRulesCommand } from "./context-docs.js";
@@ -51,7 +47,7 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       await runSideQuestion(options);
       return true;
     case "/compact":
-      output.write(await formatSessionActionResult(await compactCurrentSession(options.configRoot, currentSessionId(options))));
+      await runCompactCommand({ config: options.config, configRoot: options.configRoot, sessionId: currentSessionId(options) });
       return true;
     case "/copy":
       output.write(await formatSessionActionResult(await copyLastAssistantResponse(options.configRoot, currentSessionId(options), copyOffset(options.rest))));

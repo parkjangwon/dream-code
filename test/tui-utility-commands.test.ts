@@ -7,6 +7,7 @@ import test, { mock } from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
+import { checkpointPath } from "../src/memory-store.js";
 import { appendSessionTurn, startSession } from "../src/session-store.js";
 import { compactCurrentSession, copyLastAssistantResponse, formatCompactContext } from "../src/session-actions.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
@@ -35,7 +36,7 @@ test("utility commands show rules, compact, export, and logout state", async () 
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Rules/u);
     assert.match(outputText, /Project rules/u);
-    assert.match(outputText, /compact saved:/u);
+    assert.match(outputText, /compact failed:/u);
     assert.match(outputText, /exported:/u);
     assert.match(outputText, /logged out: deepseek/u);
   } finally {
@@ -154,12 +155,28 @@ test("formatCompactContext loads the saved session compact", async () => {
     const session = await startSession(root, "/tmp/dream-compact");
     await appendSessionTurn(root, session.id, "user", "Build everything");
     await appendSessionTurn(root, session.id, "assistant", "A compact-worthy answer.");
-    await compactCurrentSession(root, session.id);
+    await compactCurrentSession(root, session.id, {
+      summarizer: async (input) => [
+        "# Dream Context Compact",
+        "",
+        "## Objective",
+        input.title,
+        "",
+        "## Decisions",
+        "- Keep the TUI fast.",
+        "",
+        "## Next Actions",
+        "- Continue implementation.",
+      ].join("\n"),
+    });
 
     const context = await formatCompactContext(root, session.id);
+    const checkpoint = await readFile(checkpointPath(root, "/tmp/dream-compact", session.id), "utf8");
 
     assert.match(context, /Session compact/u);
-    assert.match(context, /Build everything/u);
+    assert.match(context, /Dream Context Compact/u);
+    assert.match(context, /Keep the TUI fast/u);
+    assert.match(checkpoint, /Continue implementation/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
