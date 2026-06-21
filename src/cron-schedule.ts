@@ -58,6 +58,21 @@ export function parseCronDraft(text: string, cwd: string): CronDraft {
     }
   }
 
+  const koreanDailyMatch = normalized.match(
+    /^(?:cron\s+)?\uB9E4\uC77C\s*(?:(\uC544\uCE68|\uC624\uC804|\uC624\uD6C4|\uC800\uB141|\uBC24|\uC0C8\uBCBD)\s*)?(\d{1,2})(?:(?::(\d{2}))|\uC2DC(?:\s*(\d{1,2})\uBD84?)?)\s*(?:\uC5D0)?\s*(.+)$/u,
+  );
+  if (koreanDailyMatch !== null) {
+    const dayPart = koreanDailyMatch[1];
+    const hourRaw = koreanDailyMatch[2];
+    const minuteRaw = koreanDailyMatch[3] ?? koreanDailyMatch[4] ?? "0";
+    const prompt = koreanDailyMatch[5]?.trim() ?? "";
+    const hour = hourRaw === undefined ? undefined : parseKoreanHour(hourRaw, dayPart);
+    const minute = parseBoundedInt(minuteRaw, 0, 59);
+    if (hour !== undefined && minute !== undefined && prompt.length > 0) {
+      return { projectName: projectNameFromCwd(cwd), schedule: `${minute} ${hour} * * *`, prompt };
+    }
+  }
+
   const hourlyMatch = normalized.match(/^(?:cron\s+)?(?:hourly|every hour)\s*(.*)$/iu);
   if (hourlyMatch !== null) {
     const prompt = hourlyMatch[1]?.trim() ?? "";
@@ -152,4 +167,18 @@ function projectNameFromCwd(cwd: string): string {
 function parseBoundedInt(raw: string, min: number, max: number): number | undefined {
   const value = Number.parseInt(raw, 10);
   return Number.isInteger(value) && value >= min && value <= max ? value : undefined;
+}
+
+function parseKoreanHour(raw: string, dayPart: string | undefined): number | undefined {
+  const hour = parseBoundedInt(raw, 0, 23);
+  if (hour === undefined) {
+    return undefined;
+  }
+  if (dayPart === "\uC624\uD6C4" || dayPart === "\uC800\uB141" || dayPart === "\uBC24") {
+    return hour >= 1 && hour <= 11 ? hour + 12 : hour;
+  }
+  if ((dayPart === "\uC624\uC804" || dayPart === "\uC0C8\uBCBD") && hour === 12) {
+    return 0;
+  }
+  return hour;
 }

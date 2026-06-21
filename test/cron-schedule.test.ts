@@ -35,3 +35,10 @@ test("parseCronDraft extracts a daily job draft from natural language", () => {
   assert.equal(draft.prompt, "run tests and summarize failures");
 });
 
+test("parseCronDraft extracts a daily job draft from Korean natural language", () => {
+  const draft = parseCronDraft("매일 아침 06시 40분에 오늘 서울 날씨를 확인해줘.", "/repo/dream-code");
+
+  assert.equal(draft.projectName, "dream-code");
+  assert.equal(draft.schedule, "40 6 * * *");
+  assert.equal(draft.prompt, "오늘 서울 날씨를 확인해줘.");
+});

@@ -26,6 +26,7 @@ import {
   type AgentToolPolicy,
 } from "./agent-tools.js";
 import type { AgentToolRequest } from "./agent-tool-schema.js";
+import { maxToolCyclesForRun } from "./agent-tool-budget.js";
 import {
   MissingProviderConfigError,
   ProviderProtocolError,
@@ -62,8 +63,6 @@ export type AgentPromptOptions = {
 
 export { createAgentMessages } from "./agent-messages.js";
 
-const maxToolCycles = 3;
-
 export async function runAgentPrompt(options: AgentPromptOptions): Promise<string> {
   const configRoot = options.configRoot ?? defaultConfigRoot();
   const activeCwd = options.cwd ?? cwd();
@@ -93,6 +92,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   let finalStatus: Exclude<AgentRunStatus, "queued" | "running"> = "done";
   let finalError: string | undefined;
   let finalAssistantText = "";
+  const maxToolCycles = maxToolCyclesForRun(options);
 
   const credentials = await loadCredentials(configRoot);
   const selectedModels = selectModelCandidatesForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
@@ -147,6 +147,19 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
         { role: "user", content: formatToolResults(results) },
       ];
     }
+    if (run.signal.aborted) {
+      finalStatus = "cancelled";
+      return finalAssistantText;
+    }
+    runOptions.write(`tool loop budget reached after ${maxToolCycles} cycles; asking for a compact checkpoint\n`);
+    messages = [
+      ...messages,
+      {
+        role: "user",
+        content: "Tool loop budget reached. Stop requesting tools and summarize current progress, completed changes, unresolved risks, and the next safest action.",
+      },
+    ];
+    finalAssistantText = await streamAgentWithFailover(runOptions, selectedModels, messages);
     return finalAssistantText;
   } catch (error) {
     if (run.signal.aborted) {
