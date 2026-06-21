@@ -9,6 +9,7 @@ import {
   selectModelForPrompt,
   selectSingleProviderModel,
 } from "../src/model-routing.js";
+import { bootstrapAutoModelConfig } from "../src/model-auto-bootstrap.js";
 
 test("selectSingleProviderModel returns the requested tier model", () => {
   const route = selectSingleProviderModel({
@@ -137,6 +138,24 @@ test("selectModelCandidatesForPrompt routes swarm synthesis through the agent pr
   assert.equal(selected[1]?.provider, "deepseek");
 });
 
+test("bootstrapAutoModelConfig uses live catalog models for connected providers", () => {
+  const bootstrapped = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek"]), {
+    version: 1,
+    providers: {
+      deepseek: {
+        provider: "deepseek",
+        fetchedAt: "2026-06-21T00:00:00.000Z",
+        source: "live",
+        models: ["deepseek-v4-lite", "deepseek-v4-balanced", "deepseek-v4-ultra"],
+      },
+    },
+  });
+
+  assert.equal(bootstrapped.model.mode, "auto");
+  assert.equal(bootstrapped.model.auto.categories?.[0]?.candidates[0], "deepseek/deepseek-v4-lite");
+  assert.equal(bootstrapped.model.auto.agentRoutes?.find((route) => route.agent === "tech-lead")?.candidates[0], "deepseek/deepseek-v4-ultra");
+});
+
 test("selectModelCandidatesForPrompt excludes failed models for same-turn failover", () => {
   const selected = selectModelCandidatesForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
     connectedProviders: new Set(["gemini", "deepseek", "openai"]),
@@ -170,5 +189,25 @@ function defaultAutoConfig(): Parameters<typeof selectModelForPrompt>[0] {
     auto: {
       routes: [],
     },
+  };
+}
+
+function defaultDreamConfigForRouting(): Parameters<typeof bootstrapAutoModelConfig>[0] {
+  return {
+    version: 1,
+    permissions: { mode: "ask" },
+    model: defaultAutoConfig(),
+    tokenSaving: {
+      enabled: true,
+      contextBudgetPercent: 70,
+      preferSummaries: true,
+      useRipgrepFirst: true,
+    },
+    tools: {
+      ripgrep: true,
+      lsp: true,
+      webResearch: true,
+    },
+    team: [],
   };
 }

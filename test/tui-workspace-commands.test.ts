@@ -12,6 +12,7 @@ import { drainInboxMessages } from "../src/inbox-store.js";
 import { apiKeyEnvKeys, listProviderDefinitions } from "../src/provider-registry.js";
 import { loadSkillSettings } from "../src/skill-settings.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
+import { startModelListServer } from "./model-server-fixture.js";
 
 test("runWorkspaceCommand routes /model to model configuration", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-command-"));
@@ -38,6 +39,7 @@ test("runWorkspaceCommand routes /auto to automatic model routing", async () => 
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-auto-"));
   const chunks: string[] = [];
   const restoreEnv = clearEnvKeys(allProviderApiKeyEnvKeys());
+  const server = await startModelListServer(["deepseek-v4-flash", "deepseek-v4-pro"]);
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
@@ -46,7 +48,7 @@ test("runWorkspaceCommand routes /auto to automatic model routing", async () => 
     await writeProviderCredential(root, "deepseek", {
       apiKey: "sk-deepseek",
       region: "global",
-      baseUrl: "https://api.deepseek.com",
+      baseUrl: server.baseUrl,
     });
     const result = await runWorkspaceCommand(
       "/auto",
@@ -63,6 +65,7 @@ test("runWorkspaceCommand routes /auto to automatic model routing", async () => 
   } finally {
     stdout.mock.restore();
     restoreEnv();
+    await server.close();
     await rm(root, { recursive: true, force: true });
   }
 });

@@ -5,6 +5,7 @@ import { saveConfig, type DreamConfig } from "./config.js";
 import { loadCredentials } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
 import { bootstrapAutoModelConfig } from "./model-auto-bootstrap.js";
+import { refreshModelCatalogForProviders, type ModelCatalogRefreshResult } from "./model-discovery.js";
 import { autoAgentRoutes, autoCategories, describeModelMode } from "./model-routing.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { providerConnectionSource } from "./tui-provider-status.js";
@@ -20,9 +21,10 @@ export async function enableAutoRouting(options: EnableAutoRoutingOptions): Prom
     output.write(formatAutoNeedsLogin());
     return options.config;
   }
-  const nextConfig = bootstrapAutoModelConfig(options.config, connectedProviders);
+  const refresh = await refreshModelCatalogForProviders(options.configRoot, connectedProviders, process.env);
+  const nextConfig = bootstrapAutoModelConfig(options.config, connectedProviders, refresh.catalog);
   await saveConfig(options.configRoot, nextConfig);
-  output.write(formatAutoEnabled(nextConfig, connectedProviders.size));
+  output.write(formatAutoEnabled(nextConfig, connectedProviders.size, refresh));
   return nextConfig;
 }
 
@@ -48,10 +50,15 @@ export async function connectedProviderIds(root: string, env: ProviderEnv): Prom
     .map((definition) => definition.id));
 }
 
-function formatAutoEnabled(config: DreamConfig, connectedProviderCount: number): string {
+function formatAutoEnabled(
+  config: DreamConfig,
+  connectedProviderCount: number,
+  refresh: ModelCatalogRefreshResult,
+): string {
   return [
     `${paint("auto mode:", ansi.green)} ${describeModelMode(config.model)}`,
     `${paint("providers", ansi.dim)} ${connectedProviderCount} connected · ${paint("strategy", ansi.dim)} models.toml`,
+    `${paint("catalog", ansi.dim)} ${refresh.liveProviders} live · ${refresh.fallbackProviders} cached/registry`,
     "",
   ].filter((line) => line.length > 0).join("\n");
 }

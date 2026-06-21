@@ -184,6 +184,7 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/hooks.toml              preTool/postTool/postCommand hooks
 ~/.dream/hooks.log.jsonl         recent hook run log
 ~/.dream/credentials.json        provider credentials
+~/.dream/model_catalog.json      cached live provider model lists
 ~/.dream/session_index.jsonl     session picker index
 ~/.dream/sessions/               session state and wire logs
 ~/.dream/tasks.jsonl             task ledger
