@@ -96,6 +96,21 @@ test("selectModelForPrompt skips disconnected category candidates", () => {
   assert.equal(selected.category, "deep");
 });
 
+test("selectModelForPrompt skips unhealthy auto category candidates", () => {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "Explain this repository", undefined, {
+    connectedProviders: new Set(["gemini", "deepseek", "openai"]),
+    unhealthyModels: new Set(["gemini/gemini-3.5-flash", "deepseek/deepseek-v4-flash"]),
+  });
+
+  assert.equal(selected.category, "reader");
+  assert.equal(selected.provider, "openai");
+  assert.equal(selected.model, "gpt-5.4-mini");
+  assert.deepEqual(selected.skipped, [
+    "gemini/gemini-3.5-flash unhealthy",
+    "deepseek/deepseek-v4-flash unhealthy",
+  ]);
+});
+
 test("classifyPromptCategory and route preview expose routing decisions", () => {
   assert.equal(classifyPromptCategory("Write release notes"), "writing");
   assert.match(formatRoutePreview(defaultAutoConfig(), "Explain this repository", {

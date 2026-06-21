@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 
 export type ReadFileResult = {
   readonly path: string;
@@ -18,7 +18,7 @@ export async function readWorkspaceFile(
   inputPath: string,
   maxChars = 8_000,
 ): Promise<ReadFileResult> {
-  const absolutePath = resolve(process.cwd(), inputPath);
+  const absolutePath = resolveWorkspacePath(inputPath);
   const content = await readFile(absolutePath, "utf8");
   const truncated = content.length > maxChars;
 
@@ -31,7 +31,7 @@ export async function readWorkspaceFile(
 }
 
 export async function writeWorkspaceFile(inputPath: string, content: string): Promise<string> {
-  const absolutePath = resolve(process.cwd(), inputPath);
+  const absolutePath = resolveWorkspacePath(inputPath);
   await mkdir(dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, content, "utf8");
   return absolutePath;
@@ -42,7 +42,7 @@ export async function replaceInWorkspaceFile(
   searchText: string,
   replacementText: string,
 ): Promise<EditFileResult> {
-  const absolutePath = resolve(process.cwd(), inputPath);
+  const absolutePath = resolveWorkspacePath(inputPath);
   const content = await readFile(absolutePath, "utf8");
   if (!content.includes(searchText)) {
     return { path: absolutePath, replaced: false };
@@ -63,4 +63,13 @@ export function runShellCommand(command: string): Promise<number> {
       resolve(code ?? 1);
     });
   });
+}
+
+function resolveWorkspacePath(inputPath: string): string {
+  const root = resolve(process.cwd());
+  const absolutePath = resolve(root, inputPath);
+  if (absolutePath !== root && !absolutePath.startsWith(`${root}${sep}`)) {
+    throw new Error(`Path outside workspace blocked: ${inputPath}`);
+  }
+  return absolutePath;
 }

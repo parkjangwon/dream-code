@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -31,15 +31,20 @@ export type ModelTelemetryInput = {
 
 type ModelTelemetryRecord = z.infer<typeof telemetryRecordSchema>;
 
+export type ModelHealthOptions = {
+  readonly window?: number;
+  readonly minCalls?: number;
+  readonly failureRate?: number;
+};
+
 export function modelTelemetryPath(root: string): string {
   return join(root, "model_telemetry.jsonl");
 }
 
 export async function recordModelTelemetry(root: string, input: ModelTelemetryInput): Promise<void> {
   await mkdir(root, { recursive: true, mode: 0o700 });
-  const previous = await readOptional(modelTelemetryPath(root));
   const record = telemetryRecord(input);
-  await writeFile(modelTelemetryPath(root), `${previous ?? ""}${JSON.stringify(record)}\n`, "utf8");
+  await appendFile(modelTelemetryPath(root), `${JSON.stringify(record)}\n`, "utf8");
 }
 
 export async function loadModelTelemetry(root: string): Promise<readonly ModelTelemetryRecord[]> {
@@ -76,6 +81,27 @@ export async function formatModelTelemetrySummary(root: string): Promise<string>
   }
   const ok = records.filter((record) => record.ok).length;
   return `models: ${ok}/${records.length} ok, latest ${latest.provider}/${latest.model}`;
+}
+
+export async function loadUnhealthyModelKeys(
+  root: string,
+  options: ModelHealthOptions = {},
+): Promise<ReadonlySet<string>> {
+  const minCalls = options.minCalls ?? 3;
+  const failureRate = options.failureRate ?? 0.6;
+  const records = (await loadModelTelemetry(root)).slice(-(options.window ?? 40));
+  const groups = new Map<string, { count: number; failed: number }>();
+  for (const record of records) {
+    const key = modelKey(record.provider, record.model);
+    const previous = groups.get(key) ?? { count: 0, failed: 0 };
+    groups.set(key, {
+      count: previous.count + 1,
+      failed: previous.failed + (record.ok ? 0 : 1),
+    });
+  }
+  return new Set([...groups.entries()]
+    .filter((entry) => entry[1].count >= minCalls && entry[1].failed / entry[1].count >= failureRate)
+    .map((entry) => entry[0]));
 }
 
 function telemetryRecord(input: ModelTelemetryInput): ModelTelemetryRecord {
@@ -115,6 +141,10 @@ function summarize(records: readonly ModelTelemetryRecord[]) {
     avgMs: value.elapsedMs / value.count,
     tokens: Math.ceil(value.chars / 4),
   })).sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+}
+
+function modelKey(provider: string, model: string): string {
+  return `${provider}/${model}`;
 }
 
 function parseTelemetryRecord(line: string): ModelTelemetryRecord {

@@ -69,6 +69,7 @@ export type SelectedModel = {
 
 export type SelectModelOptions = {
   readonly connectedProviders?: ReadonlySet<string>;
+  readonly unhealthyModels?: ReadonlySet<string>;
 };
 
 export function selectSingleProviderModel(
@@ -123,7 +124,12 @@ function selectAutoModel(
     return route.match.some((keyword) => normalizedPrompt.includes(keyword.toLowerCase()));
   });
 
-  if (matchedRoute !== undefined && requestedTier === undefined && providerAllowed(matchedRoute.provider, options)) {
+  if (
+    matchedRoute !== undefined
+    && requestedTier === undefined
+    && providerAllowed(matchedRoute.provider, options)
+    && !modelUnhealthy(matchedRoute.provider, matchedRoute.model, options)
+  ) {
     return {
       provider: matchedRoute.provider,
       model: matchedRoute.model,
@@ -229,6 +235,10 @@ function selectCategoryCandidate(route: AutoModelCategoryRoute, options: SelectM
       skipped.push(`${candidate.provider}/${candidate.model}`);
       continue;
     }
+    if (modelUnhealthy(candidate.provider, candidate.model, options)) {
+      skipped.push(`${candidate.provider}/${candidate.model} unhealthy`);
+      continue;
+    }
     return {
       ...candidate,
       category: route.id,
@@ -241,6 +251,10 @@ function selectCategoryCandidate(route: AutoModelCategoryRoute, options: SelectM
 
 function providerAllowed(provider: string, options: SelectModelOptions): boolean {
   return options.connectedProviders === undefined || options.connectedProviders.has(provider);
+}
+
+function modelUnhealthy(provider: string, model: string, options: SelectModelOptions): boolean {
+  return options.unhealthyModels?.has(`${provider}/${model}`) ?? false;
 }
 
 function parseCandidate(spec: string, tier: ModelTier): Omit<SelectedModel, "reason"> | undefined {

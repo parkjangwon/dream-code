@@ -1,6 +1,10 @@
 import { cwd } from "node:process";
 
 import type { AgentDefinition } from "./agent-library.js";
+import {
+  startAgentRun,
+} from "./agent-run-store.js";
+import type { AgentRunKind, AgentRunStatus } from "./agent-run-record.js";
 import { defaultConfigRoot, type DreamConfig } from "./config.js";
 import { formatContextDocsForPrompt, loadContextDocs, type ContextDocs } from "./context-docs.js";
 import { loadCredentials } from "./credentials.js";
@@ -13,6 +17,8 @@ import {
   formatToolResults,
   runAgentToolRequest,
   type AgentToolResult,
+  type AgentToolName,
+  type AgentToolPolicy,
 } from "./agent-tools.js";
 import {
   MissingProviderConfigError,
@@ -21,7 +27,7 @@ import {
   streamChatCompletion,
   type ChatMessage,
 } from "./llm-provider.js";
-import { recordModelTelemetry } from "./model-telemetry.js";
+import { loadUnhealthyModelKeys, recordModelTelemetry } from "./model-telemetry.js";
 import { selectModelForPrompt } from "./model-routing.js";
 import { listProviderDefinitions } from "./provider-registry.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
@@ -38,6 +44,8 @@ export type AgentPromptOptions = {
   readonly agent?: AgentDefinition;
   readonly sessionId?: string;
   readonly signal?: AbortSignal;
+  readonly runKind?: AgentRunKind;
+  readonly runLabel?: string;
   readonly write: (text: string) => void;
 };
 
@@ -45,8 +53,27 @@ const maxToolCycles = 3;
 
 export async function runAgentPrompt(options: AgentPromptOptions): Promise<void> {
   const configRoot = options.configRoot ?? defaultConfigRoot();
+  const run = await startAgentRun(configRoot, {
+    kind: options.runKind ?? "agent",
+    agentId: options.agent?.id ?? "dream",
+    agentName: options.runLabel ?? options.agent?.name ?? "Dream",
+    prompt: options.prompt,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  const runOptions: AgentPromptOptions = {
+    ...options,
+    signal: run.signal,
+    write: (chunk) => {
+      run.write(chunk);
+      options.write(chunk);
+    },
+  };
+  let finalStatus: Exclude<AgentRunStatus, "queued" | "running"> = "done";
+  let finalError: string | undefined;
+
   const selectedModel = selectModelForPrompt(options.config.model, options.prompt, tierForAgent(options.agent), {
     connectedProviders: await connectedProviderIds(configRoot, process.env),
+    unhealthyModels: await loadUnhealthyModelKeys(configRoot),
   });
   const settings = await loadSkillSettings(configRoot);
   const skills = (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
@@ -58,17 +85,26 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
 
   try {
     for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
-      const assistantText = await streamAgentOnce(options, selectedModel, messages);
+      if (run.signal.aborted) {
+        finalStatus = "cancelled";
+        return;
+      }
+      const assistantText = await streamAgentOnce(runOptions, selectedModel, messages);
       const requests = extractAgentToolRequests(assistantText);
       if (requests.length === 0) {
         return;
       }
       const results: AgentToolResult[] = [];
       for (const request of requests) {
+        if (run.signal.aborted) {
+          finalStatus = "cancelled";
+          return;
+        }
         await runHookEvent(configRoot, "preTool", { tool: request.tool });
-        const result = await runAgentToolRequest(request, options.config.permissions.mode);
+        const result = await runAgentToolRequest(request, agentToolPolicy(options, run.signal));
+        run.tool(request.tool, result.changedPath);
         await runHookEvent(configRoot, "postTool", { tool: request.tool, ok: String(result.ok) });
-        options.write(formatToolProgress(result));
+        runOptions.write(formatToolProgress(result));
         results.push(result);
       }
       messages = [
@@ -79,14 +115,23 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<void>
     }
   } catch (error) {
     if (error instanceof MissingProviderConfigError) {
-      writeAgentFailure(options, selectedModel, error.message, "warn");
+      finalStatus = "failed";
+      finalError = error.message;
+      writeAgentFailure(runOptions, selectedModel, error.message, "warn");
       return;
     }
     if (error instanceof ProviderRequestError || error instanceof ProviderProtocolError) {
-      writeAgentFailure(options, selectedModel, error.message, "error");
+      finalStatus = "failed";
+      finalError = error.message;
+      writeAgentFailure(runOptions, selectedModel, error.message, "error");
       return;
     }
+    finalStatus = run.signal.aborted ? "cancelled" : "failed";
+    finalError = error instanceof Error ? error.message : "Unknown agent failure";
     throw error;
+  } finally {
+    const status = run.signal.aborted && finalStatus === "done" ? "cancelled" : finalStatus;
+    await run.finish(status, finalError === undefined ? undefined : { error: finalError });
   }
 }
 
@@ -228,6 +273,30 @@ function tierForAgent(agent: AgentDefinition | undefined): "low" | "mid" | "high
       return agent.model;
     default:
       return undefined;
+  }
+}
+
+function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): AgentToolPolicy {
+  const allowedTools = options.agent === undefined
+    ? undefined
+    : options.agent.tools.filter(isAgentToolName);
+  return {
+    mode: options.config.permissions.mode,
+    signal,
+    ...(allowedTools === undefined || allowedTools.length === 0 ? {} : { allowedTools }),
+  };
+}
+
+function isAgentToolName(value: string): value is AgentToolName {
+  switch (value) {
+    case "read":
+    case "research":
+    case "shell":
+    case "write":
+    case "edit":
+      return true;
+    default:
+      return false;
   }
 }
 

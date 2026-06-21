@@ -17,7 +17,10 @@ export type SwarmPlan = {
 export type SwarmPlanOptions = {
   readonly adaptiveLimit?: number;
   readonly forceAgents?: number;
+  readonly maxConcurrency?: number;
 };
+
+const forcedConcurrencyCap = 16;
 
 const preferredAgentOrder = [
   "tech-lead",
@@ -34,6 +37,7 @@ export function createSwarmPlan(
 ): SwarmPlan {
   const planOptions = normalizePlanOptions(options);
   const selectedAgents = selectSwarmAgents(agents, planOptions);
+  const maxConcurrency = maxRuntimeConcurrency(selectedAgents.length, planOptions);
   return {
     goal,
     lanes: selectedAgents.map((agent, index) => ({
@@ -42,7 +46,7 @@ export function createSwarmPlan(
       agent,
       prompt: lanePrompt(goal, agent, index + 1),
     })),
-    maxConcurrency: Math.max(1, selectedAgents.length),
+    maxConcurrency,
     forced: planOptions.forceAgents !== undefined,
   };
 }
@@ -72,7 +76,7 @@ export function createSwarmSynthesisPrompt(
     "",
     ...laneResults.map((result) => [
       `## ${result.lane.title}`,
-      result.output.trim().length === 0 ? "(no output)" : result.output.trim(),
+      compactLaneOutput(result.output),
       "",
     ].join("\n")),
   ].join("\n");
@@ -134,13 +138,57 @@ function laneFocus(laneNumber: number): string {
   return focuses[(laneNumber - 1) % focuses.length] ?? focuses[0];
 }
 
-function normalizePlanOptions(options: number | SwarmPlanOptions): Required<Pick<SwarmPlanOptions, "adaptiveLimit">> & Pick<SwarmPlanOptions, "forceAgents"> {
+function normalizePlanOptions(options: number | SwarmPlanOptions): Required<Pick<SwarmPlanOptions, "adaptiveLimit">> & Pick<SwarmPlanOptions, "forceAgents" | "maxConcurrency"> {
   if (typeof options === "number") {
     return { adaptiveLimit: options };
   }
   return options.forceAgents === undefined
-    ? { adaptiveLimit: options.adaptiveLimit ?? 8 }
-    : { adaptiveLimit: options.adaptiveLimit ?? options.forceAgents, forceAgents: options.forceAgents };
+    ? { adaptiveLimit: options.adaptiveLimit ?? 8, ...(options.maxConcurrency === undefined ? {} : { maxConcurrency: options.maxConcurrency }) }
+    : {
+      adaptiveLimit: options.adaptiveLimit ?? options.forceAgents,
+      forceAgents: options.forceAgents,
+      ...(options.maxConcurrency === undefined ? {} : { maxConcurrency: options.maxConcurrency }),
+    };
+}
+
+function maxRuntimeConcurrency(
+  laneCount: number,
+  options: Pick<SwarmPlanOptions, "forceAgents" | "maxConcurrency">,
+): number {
+  if (laneCount === 0) {
+    return 1;
+  }
+  if (options.maxConcurrency !== undefined) {
+    return clampConcurrency(options.maxConcurrency, laneCount);
+  }
+  if (options.forceAgents !== undefined) {
+    return clampConcurrency(forcedConcurrencyCap, laneCount);
+  }
+  return clampConcurrency(laneCount, laneCount);
+}
+
+function compactLaneOutput(output: string): string {
+  const trimmed = output.trim();
+  if (trimmed.length === 0) {
+    return "(no output)";
+  }
+  const maxChars = 2_800;
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  const headChars = 1_300;
+  const tailChars = 1_100;
+  return [
+    trimmed.slice(0, headChars).trimEnd(),
+    "",
+    `[truncated ${trimmed.length - headChars - tailChars} chars before synthesis]`,
+    "",
+    trimmed.slice(-tailChars).trimStart(),
+  ].join("\n");
+}
+
+function clampConcurrency(value: number, laneCount: number): number {
+  return Math.max(1, Math.min(Math.floor(value), laneCount));
 }
 
 function isAgentDefinition(value: AgentDefinition | undefined): value is AgentDefinition {

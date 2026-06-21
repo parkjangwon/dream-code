@@ -6,6 +6,7 @@ import type { DreamConfig } from "./config.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
+import { runWithConcurrency } from "./swarm-scheduler.js";
 import {
   createSwarmPlan,
   createSwarmSynthesisAgent,
@@ -103,7 +104,7 @@ export async function runAgentSwarmWithAgents(
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
   monitor.start();
 
-  const laneResults = await Promise.all(plan.lanes.map(async (lane) => {
+  const laneResults = await runWithConcurrency(plan.lanes, plan.maxConcurrency, async (lane) => {
     const startedAt = now();
     monitor.laneStarted(lane.id);
     const output = await runLane(runAgent, lane, (progress) => {
@@ -118,7 +119,7 @@ export async function runAgentSwarmWithAgents(
       monitor.laneDone(lane.id, output.length, output);
     }
     return { lane, output, elapsedMs };
-  }));
+  });
 
   if (abortController.signal.aborted) {
     monitor.synthesisCancelled();
@@ -190,6 +191,8 @@ function defaultSwarmAgentRunner(options: SwarmRunOptions): SwarmAgentRunner {
       prompt: input.prompt,
       agent: input.agent,
       signal: input.signal,
+      runKind: input.kind === "lane" ? "swarm-lane" : "swarm-synthesis",
+      runLabel: input.kind === "lane" ? input.lane.title : input.agent.name,
       write: (chunk) => {
         transcript = `${transcript}${stripAnsi(chunk)}`;
         input.report({ characters: transcript.length, preview: tailPreview(transcript) });

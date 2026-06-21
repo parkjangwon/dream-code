@@ -1,6 +1,7 @@
 import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
+import { formatAgentRuns } from "./agent-run-format.js";
 import {
   agentLocations,
   customAgentTemplate,
@@ -35,7 +36,7 @@ export async function showAgentsMenu(
   cwd = currentWorkingDirectory(),
 ): Promise<void> {
   if (questioner.select === undefined) {
-    output.write(formatAgentsOverview());
+    output.write(await formatAgentsOverview(configRoot));
     return;
   }
 
@@ -58,15 +59,15 @@ export async function showAgentsMenu(
     return;
   }
   if (tab === agentTabs.running) {
-    output.write(formatRunningAgents());
+    output.write(await formatAgentRuns(configRoot));
   }
 }
 
-export function formatAgentsOverview(): string {
+export async function formatAgentsOverview(configRoot: string): Promise<string> {
   return [
     `${paint("Agents", ansi.accent)}  ${paint("Delegate", ansi.dim)}  ${paint("Running", ansi.dim)}  ${paint("Templates", ansi.dim)}`,
     "",
-    formatRunningAgents().trimEnd(),
+    (await formatAgentRuns(configRoot)).trimEnd(),
     "",
     formatTemplateSummary().trimEnd(),
     "",
@@ -198,14 +199,6 @@ function agentChoices(agents: readonly AgentDefinition[]): PickerOptions["choice
     description: `${agent.summary} · ${agent.source} · ${agent.model}`,
     keywords: [agent.id, agent.name, agent.summary, agent.source, agent.model, ...agent.tools],
   }));
-}
-
-function formatRunningAgents(): string {
-  return [
-    `${paint("Running", ansi.accent)}`,
-    paint("No subagents are currently running.", ansi.dim),
-    "",
-  ].join("\n");
 }
 
 function formatTemplateSummary(): string {

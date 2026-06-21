@@ -42,6 +42,13 @@ test("createSwarmPlan can force more lanes than unique agents", () => {
   assert.match(plan.lanes[4]?.prompt ?? "", /UX, developer ergonomics, and polish/u);
 });
 
+test("createSwarmPlan separates forced lane count from safe runtime concurrency", () => {
+  const plan = createSwarmPlan("Push the swarm", agents, { forceAgents: 30 });
+
+  assert.equal(plan.lanes.length, 30);
+  assert.equal(plan.maxConcurrency, 16);
+});
+
 function agent(id: string, name: string, summary: string, model: string): AgentDefinition {
   return {
     id,
