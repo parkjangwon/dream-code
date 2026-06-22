@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.9)
+Dream Code (v0.1.10)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.9
-git push origin v0.1.9
+git tag v0.1.10
+git push origin v0.1.10
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -108,7 +108,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.9 sh install.sh
+DREAM_CODE_VERSION=v0.1.10 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -127,9 +127,10 @@ DREAM_CODE_SOURCE=1 sh install.sh
   it.
 - **Provider cost control:** disable expensive env-detected providers with
   `/provider disable <provider>` and re-enable them when needed.
-- **Agents and swarm:** delegate normal subagent work, or unleash Dream Swarm
-  for high-parallel fan-out when speed matters. Use `/swarm --size N` when you
-  want to force a specific number of parallel lanes.
+- **Agents and swarm:** open the `/agents` board to inspect, peek, reply to, and
+  stop subagent sessions, or unleash Dream Swarm for high-parallel fan-out when
+  speed matters. Use `/swarm --size N` when you want to force a specific number
+  of parallel lanes.
 - **Claude Code compatibility:** load `CLAUDE.md`, `CLAUDE.local.md`,
   `.claude/rules/*.md`, and `.claude/skills`, while keeping existing
   `AGENTS.md`, `DESIGN.md`, and Dream skills support.
@@ -192,6 +193,18 @@ monitor, then merges the lanes into one final synthesis.
 Without `--size`, Dream Code uses adaptive fan-out. With `--size N`, Dream Code
 forces exactly `N` swarm lanes, useful when you want to push a large job hard and
 spend more tokens for faster parallel coverage.
+
+## Agent Board
+
+`/agents` opens a Claude-style agent view with `Running` and `Library` tabs.
+Completed sessions stay out of the default view so the board stays quiet. Use
+the running tab to open, inspect, reply to, or stop active subagent sessions.
+
+```text
+/agents
+/agents @code-reviewer review this branch
+/agents @security-reviewer audit dependency risk
+```
 
 ## Claude Plugins
 

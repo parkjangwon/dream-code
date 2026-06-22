@@ -1,6 +1,7 @@
 export const ansi = {
   reset: "\u001B[0m",
   bold: "\u001B[1m",
+  inverse: "\u001B[7m",
   dim: "\u001B[2m",
   accent: "\u001B[38;5;141m",
   blue: "\u001B[38;5;75m",
@@ -20,5 +21,5 @@ export function clearScreen(): string {
 }
 
 export function stripAnsi(text: string): string {
-  return text.replace(/\u001B\[[0-9;]*m/gu, "");
+  return text.replace(/\u001B\[[0-?]*[ -/]*[@-~]/gu, "").replace(/[\u0008\r]/gu, "");
 }

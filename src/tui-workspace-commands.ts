@@ -22,13 +22,10 @@ import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-f
 import { configureModels } from "./tui-model-commands.js";
 import { runNotificationsCommand } from "./tui-notification-command.js";
 import { runCronCommand } from "./tui-cron-command.js";
-import type { PickerOptions } from "./tui-picker.js";
 import { runPermissionCommand } from "./tui-permission-command.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
-import type { ProviderManagerOptions, ProviderManagerResult } from "./tui-provider-manager-state.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import { renameCurrentSession, showSessionMenu, type SessionRuntime } from "./tui-session-commands.js";
-import type { SkillManagerOptions } from "./tui-skill-manager.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
 import { formatPermissionMode, printHelp } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
@@ -37,20 +34,8 @@ import { formatStatusDashboard } from "./status-dashboard.js";
 import { runPluginCommand } from "./tui-plugin-command.js";
 import { approveAgentTool } from "./tui-tool-approval.js";
 import type { AgentToolRequest } from "./agent-tool-schema.js";
-
-export type CommandResult = {
-  readonly config: DreamConfig;
-  readonly shouldContinue: boolean;
-};
-
-export type Questioner = {
-  readonly question: (prompt: string) => Promise<string>;
-  readonly secret?: (prompt: string) => Promise<string>;
-  readonly select?: (options: PickerOptions) => Promise<string | undefined>;
-  readonly manageProviders?: (options: ProviderManagerOptions) => Promise<ProviderManagerResult | undefined>;
-  readonly manageSkills?: (options: SkillManagerOptions) => Promise<readonly string[] | undefined>;
-  readonly wasCancelled?: () => boolean;
-};
+import type { CommandResult, Questioner } from "./tui-questioner.js";
+export type { CommandResult, Questioner } from "./tui-questioner.js";
 
 export async function runWorkspaceCommand(
   text: string,
@@ -220,7 +205,7 @@ async function runWorkspaceCommandBody(
       await showSkillMenu(configRoot, questioner);
       return { config, shouldContinue: true };
     case "/agents":
-      await showAgentsMenu(config, configRoot, questioner, cwd);
+      await showAgentsMenu(config, configRoot, questioner, cwd, command.rest);
       return { config, shouldContinue: true };
     case "/swarm":
       await runSwarmCommand({

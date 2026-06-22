@@ -12,6 +12,7 @@ import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
+import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { runWithEscInterrupt } from "./tui-interrupt.js";
 import { readInteractivePicker } from "./tui-picker.js";
@@ -205,6 +206,12 @@ function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questi
     }),
     manageSkills: async (skillOptions) => readInteractiveSkillManager({
       ...skillOptions,
+      redrawHeader: () => {
+        renderHeader(config, options.oneShotYolo);
+      },
+    }),
+    manageAgents: async (agentOptions) => readInteractiveAgentView({
+      ...agentOptions,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },

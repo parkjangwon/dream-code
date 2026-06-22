@@ -6,7 +6,7 @@ export type SlashCommand = {
 
 export const slashCommands = [
   { name: "/add-dir", summary: "Add a workspace directory", acceptsArgs: true },
-  { name: "/agents", summary: "Delegate tasks and manage agents", acceptsArgs: false },
+  { name: "/agents", summary: "Delegate tasks and manage agents", acceptsArgs: true },
   { name: "/artifact", summary: "View artifacts", acceptsArgs: false },
   { name: "/auto", summary: "Toggle automatic model routing", acceptsArgs: false },
   { name: "/btw", summary: "Ask a side question", acceptsArgs: true },

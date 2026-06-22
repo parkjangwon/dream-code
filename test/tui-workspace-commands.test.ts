@@ -258,6 +258,78 @@ test("runWorkspaceCommand delegates a task to a selected agent", async () => {
   }
 });
 
+test("runWorkspaceCommand quickly delegates with an agent mention", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-quick-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-quick-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const baseConfig = defaultConfig();
+    const config = {
+      ...baseConfig,
+      model: {
+        ...baseConfig.model,
+        single: {
+          ...baseConfig.model.single,
+          provider: "unknown-provider",
+        },
+      },
+    };
+
+    await runWorkspaceCommand(
+      "/agents @code-reviewer Review this branch",
+      config,
+      true,
+      { question: async () => "" },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(outputText, /Delegating to Code Reviewer/u);
+    assert.match(outputText, /Review this branch/u);
+    assert.match(outputText, /unknown provider/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand opens templates from the agent library tab", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-view-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-view-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const selections = ["code-reviewer", "project"];
+
+    await runWorkspaceCommand(
+      "/agents",
+      defaultConfig(),
+      true,
+      {
+        question: async () => "",
+        manageAgents: async () => ({ kind: "templates" }),
+        select: async () => selections.shift(),
+      },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const created = await readFile(join(projectRoot, ".dream", "agents", "code-reviewer.md"), "utf8");
+    assert.match(created, /Review changes for bugs/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("runWorkspaceCommand queues inbox messages for running agents", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-inbox-"));
   const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-inbox-"));
@@ -270,7 +342,7 @@ test("runWorkspaceCommand queues inbox messages for running agents", async () =>
       task: "Audit the repository",
       runId: "run-security",
     });
-    const selections = ["running", actor.id];
+    const selections = ["running", `running:${actor.id}`, "agent-action:reply"];
 
     await runWorkspaceCommand(
       "/agents",
@@ -287,6 +359,48 @@ test("runWorkspaceCommand queues inbox messages for running agents", async () =>
 
     const messages = await drainInboxMessages(root, actor.id);
     assert.equal(messages[0]?.content, "Check dependency risk too.");
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("runWorkspaceCommand opens a running agent from the agent view", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-agent-open-"));
+  const projectRoot = await mkdtemp(join(tmpdir(), "dream-workspace-project-open-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const actor = await registerActor(root, {
+      id: "actor-open",
+      role: "subagent",
+      name: "Code Reviewer",
+      task: "Review the branch",
+      runId: "run-open",
+    });
+
+    await runWorkspaceCommand(
+      "/agents",
+      defaultConfig(),
+      true,
+      {
+        question: async () => "Please inspect the test failures too.",
+        manageAgents: async (options) => {
+          const row = options.rows.find((candidate) => candidate.actorId === actor.id);
+          if (row === undefined) {
+            throw new Error("Expected running agent row");
+          }
+          return { kind: "open", row };
+        },
+        select: async () => "agent-action:reply",
+      },
+      root,
+      undefined,
+      projectRoot,
+    );
+
+    const messages = await drainInboxMessages(root, actor.id);
+    assert.equal(messages[0]?.content, "Please inspect the test failures too.");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

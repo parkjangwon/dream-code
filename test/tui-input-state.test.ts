@@ -64,8 +64,8 @@ test("slash command palette uses arrow keys for selection", () => {
   const selected = reduceInputState(moved.state, { kind: "enter" });
 
   assert.equal(moved.state.palette?.selectedIndex, 1);
-  assert.equal(selected.effect.kind, "submit");
-  assert.equal(selected.effect.text, "/agents");
+  assert.equal(selected.effect.kind, "none");
+  assert.equal(selected.state.text, "/agents ");
 });
 
 test("argument commands complete into the input instead of submitting", () => {
