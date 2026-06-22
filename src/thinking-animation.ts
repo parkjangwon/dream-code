@@ -1,5 +1,6 @@
 import { ansi, paint } from "./ansi.js";
 import { brailleSpinner } from "./braille-ui.js";
+import { withHiddenCursor } from "./terminal-frame.js";
 
 export type TimerHandle = unknown;
 export type IntervalScheduler = (callback: () => void, intervalMs: number) => TimerHandle;
@@ -53,7 +54,8 @@ export function createThinkingAnimation(options: ThinkingAnimationOptions): Thin
 
 function writeFrame(replace: boolean, frame: number, options: ThinkingAnimationOptions): void {
   const prefix = replace ? clearPreviousLine() : "";
-  options.write(`${prefix}${paint(brailleSpinner(frame), ansi.accent)} ${paint(thinkingLabel(frame), ansi.dim)} ${paint(options.label, ansi.guide)}\n`);
+  const line = `${prefix}${paint(brailleSpinner(frame), ansi.accent)} ${paint(thinkingLabel(frame), ansi.dim)} ${paint(options.label, ansi.guide)}\n`;
+  options.write(replace ? withHiddenCursor(line) : line);
 }
 
 function setTimer(callback: () => void, intervalMs: number): TimerHandle {

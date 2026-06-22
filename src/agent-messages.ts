@@ -16,6 +16,7 @@ export function createAgentMessages(
   memoryContext = "Dream memory: none.",
   workspace = cwd(),
   recentMessages: readonly ChatMessage[] = [],
+  mentionedContext = "Referenced files and directories: none.",
 ): readonly ChatMessage[] {
   return [
     {
@@ -32,6 +33,7 @@ export function createAgentMessages(
         mcpContext,
         memoryContext,
         compactContext,
+        mentionedContext,
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatToolProtocol(),
         formatAgentProfile(agent),
@@ -90,7 +92,7 @@ function formatAgentProfile(agent: AgentDefinition | undefined): string {
 function formatSelectedSkills(prompt: string, skills: readonly DreamSkill[]): string {
   const selected = selectedSkillsForPrompt(prompt, skills);
   if (selected.length === 0) {
-    return "Available Dream Code skills: none active. Use @skill-name to activate one.";
+    return "Available Dream Code skills: none active. Use /skill-name to activate one.";
   }
   return [
     "Available Dream Code skills:",
@@ -102,7 +104,7 @@ function formatSelectedSkills(prompt: string, skills: readonly DreamSkill[]): st
 }
 
 function selectedSkillsForPrompt(prompt: string, skills: readonly DreamSkill[]): readonly DreamSkill[] {
-  const requested = new Set([...prompt.matchAll(/@([a-zA-Z0-9._-]+)/gu)].map((match) => match[1]?.toLowerCase()).filter(isString));
+  const requested = new Set([...prompt.matchAll(/(^|\s)\/([a-zA-Z0-9._-]+)(?=\s|$)/gu)].map((match) => match[2]?.toLowerCase()).filter(isString));
   if (requested.size === 0) {
     return [];
   }

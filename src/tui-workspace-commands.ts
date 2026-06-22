@@ -1,9 +1,6 @@
 import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 
-import { runAgentPrompt } from "./agent-runner.js";
-import { stripAnsi } from "./ansi.js";
 import { splitCommand } from "./command-parser.js";
-import { createLlmCompactSummarizer } from "./compact-summarizer.js";
 import {
   defaultConfigRoot,
   resolveEffectivePermissionMode,
@@ -11,12 +8,9 @@ import {
   type DreamConfig,
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
-import { continueGoalIfNeeded } from "./goal-continuation.js";
-import { recordGoalEvidence } from "./goal-state.js";
 import { runHookEvent } from "./hooks.js";
-import { appendSessionTurn } from "./session-store.js";
-import { maybeAutoCompactSession } from "./session-actions.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
+import { runAgentTextPrompt } from "./tui-agent-prompt-flow.js";
 import { enableAutoRouting } from "./tui-auto-routing-command.js";
 import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-file-commands.js";
 import { configureModels } from "./tui-model-commands.js";
@@ -32,8 +26,7 @@ import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
 import { runPluginCommand } from "./tui-plugin-command.js";
-import { approveAgentTool } from "./tui-tool-approval.js";
-import type { AgentToolRequest } from "./agent-tool-schema.js";
+import { isSkillInvocation } from "./tui-skill-invocation.js";
 import type { CommandResult, Questioner } from "./tui-questioner.js";
 export type { CommandResult, Questioner } from "./tui-questioner.js";
 
@@ -70,46 +63,7 @@ async function runWorkspaceCommandBody(
   }
 
   if (!text.startsWith("/")) {
-    if (sessionRuntime !== undefined) {
-      await appendSessionTurn(configRoot, sessionRuntime.currentId(), "user", text);
-    }
-    let assistantTranscript = "";
-    const sessionId = sessionRuntime?.currentId();
-    const agentPrompt = {
-      config,
-      configRoot,
-      prompt: text,
-      cwd,
-      ...(signal === undefined ? {} : { signal }),
-      approveTool: (request: AgentToolRequest) => approveAgentTool(request, questioner),
-      write: (chunk: string) => {
-        output.write(chunk);
-        assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
-      },
-    };
-    await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
-    if (sessionRuntime !== undefined) {
-      await appendSessionTurn(configRoot, sessionRuntime.currentId(), "assistant", assistantTranscript);
-      await maybeAutoCompactSession(configRoot, sessionRuntime.currentId(), { summarizer: createLlmCompactSummarizer(config, configRoot) })
-        .catch((error: unknown) => {
-          if (error instanceof Error) {
-            output.write(`auto compact skipped: ${error.message}\n`);
-            return;
-          }
-          throw error;
-        });
-    }
-    await recordGoalEvidence(configRoot, `Answered: ${truncateEvidence(text)}`);
-    await continueGoalIfNeeded({
-      config,
-      configRoot,
-      userText: text,
-      assistantTranscript,
-      write: (chunk) => output.write(chunk),
-      cwd,
-      ...(sessionRuntime === undefined ? {} : { sessionRuntime }),
-    });
-    return { config, shouldContinue: true };
+    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
   }
 
   const command = splitCommand(text);
@@ -243,12 +197,10 @@ async function runWorkspaceCommandBody(
       })) {
         return { config, shouldContinue: true };
       }
+      if (await isSkillInvocation(configRoot, cwd, command.name)) {
+        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+      }
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };
   }
-}
-
-function truncateEvidence(text: string): string {
-  const normalized = text.trim().replace(/\s+/gu, " ");
-  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
 }

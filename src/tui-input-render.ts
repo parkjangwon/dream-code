@@ -2,6 +2,8 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import type { DreamSkill } from "./skills.js";
+import type { FileMentionTarget } from "./file-mention-targets.js";
+import { withHiddenCursor } from "./terminal-frame.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 import { inputViewport } from "./tui-input-viewport.js";
 import type { InputState } from "./tui-input-state.js";
@@ -14,12 +16,13 @@ export function renderInputView(
   prompt: string,
   secret = false,
   statusLines: readonly string[] = [],
+  previousLineCount = 0,
 ): number {
   const width = Math.max(64, output.columns ?? 80);
   const contentWidth = width - 4;
   const promptWidth = terminalVisibleWidth(prompt);
   const viewport = inputViewport(state.text, state.cursor, Math.max(0, contentWidth - promptWidth));
-  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills)}`;
+  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills, state.fileMentions)}`;
   const lines = [
     borderLine("top", width),
     boxedLine(promptLine, contentWidth),
@@ -27,8 +30,11 @@ export function renderInputView(
     ...statusLines,
     ...renderAuxiliaryLines(state, secret, width),
   ];
-  output.write(lines.join("\n"));
-  moveCursorToPrompt(lines.length, 2 + promptWidth + viewport.cursorColumn);
+  output.write(withHiddenCursor([
+    clearRenderedLinesSequence(previousLineCount),
+    lines.join("\n"),
+    cursorToPromptSequence(lines.length, 2 + promptWidth + viewport.cursorColumn),
+  ].join("")));
   return lines.length;
 }
 
@@ -37,18 +43,26 @@ export function clearRenderedLines(count: number): void {
     return;
   }
 
-  output.write("\r");
-  output.write("\u001B[1A\r");
+  output.write(withHiddenCursor(clearRenderedLinesSequence(count)));
+}
+
+function clearRenderedLinesSequence(count: number): string {
+  if (count === 0) {
+    return "";
+  }
+
+  let sequence = "\r\u001B[1A\r";
   for (let index = 0; index < count; index += 1) {
-    output.write("\u001B[2K");
+    sequence = `${sequence}\u001B[2K`;
     if (index < count - 1) {
-      output.write("\u001B[1B\r");
+      sequence = `${sequence}\u001B[1B\r`;
     }
   }
 
   if (count > 1) {
-    output.write(`\u001B[${count - 1}A\r`);
+    sequence = `${sequence}\u001B[${count - 1}A\r`;
   }
+  return sequence;
 }
 
 function renderAuxiliaryLines(
@@ -80,8 +94,8 @@ function renderPaletteLines(state: InputState, width: number): readonly string[]
   switch (state.palette.kind) {
     case "command":
       return renderCommandPaletteLines(state.palette, width);
-    case "skill":
-      return renderSkillPaletteLines(state.palette, width);
+    case "file":
+      return renderFilePaletteLines(state.palette, width);
     default:
       return assertNever(state.palette);
   }
@@ -110,8 +124,8 @@ function renderCommandPaletteLines(
   return lines;
 }
 
-function renderSkillPaletteLines(
-  palette: NonNullable<InputState["palette"]> & { readonly kind: "skill" },
+function renderFilePaletteLines(
+  palette: NonNullable<InputState["palette"]> & { readonly kind: "file" },
   width: number,
 ): readonly string[] {
   const start = Math.max(
@@ -119,12 +133,12 @@ function renderSkillPaletteLines(
     Math.min(palette.selectedIndex, palette.matches.length - maxVisibleCommands),
   );
   const visible = palette.matches.slice(start, start + maxVisibleCommands);
-  const lines = [formatPaletteHeading("Skills", palette.matches.length, start, visible.length, "Enter inserts")];
+  const lines = [formatPaletteHeading("Files", palette.matches.length, start, visible.length, "Enter inserts")];
 
   for (let index = 0; index < visible.length; index += 1) {
-    const skill = visible[index];
-    if (skill !== undefined) {
-      lines.push(formatSkillPaletteLine(skill, start + index === palette.selectedIndex, width));
+    const target = visible[index];
+    if (target !== undefined) {
+      lines.push(formatFilePaletteLine(target, start + index === palette.selectedIndex, width));
     }
   }
 
@@ -156,24 +170,28 @@ export function formatCommandPaletteLine(
   return `${prefix}${paint(summary, ansi.dim)}`;
 }
 
-export function formatSkillPaletteLine(skill: DreamSkill, selected: boolean, width: number): string {
+export function formatFilePaletteLine(target: FileMentionTarget, selected: boolean, width: number): string {
   const marker = selected ? paint(">", ansi.accent) : " ";
-  const name = padVisible(paint(`@${renderPaletteDescription(skill.name, 18)}`, ansi.blue), 20);
-  const source = padVisible(paint(skill.source, ansi.muted), 8);
-  const prefix = `${marker} ${name} ${source} `;
-  const description = renderPaletteDescription(skill.description, width - terminalVisibleWidth(prefix));
+  const mentionText = renderPaletteDescription(`@${target.path}`, 42);
+  const mention = selected ? paint(mentionText, ansi.accent) : mentionText;
+  const path = padVisible(mention, 44);
+  const kind = padVisible(paint(target.kind, ansi.muted), 10);
+  const prefix = `${marker} ${path} ${kind} `;
+  const description = renderPaletteDescription(target.description, width - terminalVisibleWidth(prefix));
   return `${prefix}${paint(description, ansi.dim)}`;
 }
 
-function moveCursorToPrompt(lineCount: number, columns: number): void {
+function cursorToPromptSequence(lineCount: number, columns: number): string {
   const linesToPrompt = cursorUpToPromptLineCount(lineCount);
+  let sequence = "";
   if (linesToPrompt > 0) {
-    output.write(`\u001B[${linesToPrompt}A`);
+    sequence = `${sequence}\u001B[${linesToPrompt}A`;
   }
-  output.write("\r");
+  sequence = `${sequence}\r`;
   if (columns > 0) {
-    output.write(`\u001B[${columns}C`);
+    sequence = `${sequence}\u001B[${columns}C`;
   }
+  return sequence;
 }
 
 function borderLine(position: "top" | "bottom", width: number): string {
@@ -207,16 +225,29 @@ export function renderInputText(
   text: string,
   secret: boolean,
   skills: readonly DreamSkill[] = [],
+  fileMentions: readonly FileMentionTarget[] = [],
 ): string {
-  return secret ? displayInputText(text, true) : highlightSkillMentions(text, skills);
+  return secret ? displayInputText(text, true) : highlightFileMentions(text, fileMentions, skills);
 }
 
-function highlightSkillMentions(text: string, skills: readonly DreamSkill[]): string {
-  const skillNames = new Set(skills.map((skill) => skill.name.toLowerCase()));
-  return text.replace(/(^|\s)(@[a-zA-Z0-9._-]+)/gu, (_, prefix: string, mention: string) => {
-    const skillName = mention.slice(1).toLowerCase();
-    return skillNames.has(skillName) ? `${prefix}${paint(mention, ansi.blue)}` : `${prefix}${mention}`;
+function highlightFileMentions(
+  text: string,
+  fileMentions: readonly FileMentionTarget[],
+  _skills: readonly DreamSkill[],
+): string {
+  const paths = new Set(fileMentions.map((target) => target.path.toLowerCase()));
+  return text.replace(/(^|\s)(@[^\s]+)/gu, (_, prefix: string, mention: string) => {
+    const path = mentionPath(mention);
+    return path !== undefined && paths.has(path.toLowerCase())
+      ? `${prefix}${paint(mention, ansi.blue)}`
+      : `${prefix}${mention}`;
   });
+}
+
+function mentionPath(mention: string): string | undefined {
+  const token = mention.slice(1).replace(/[),.;\]}]+$/u, "");
+  const path = token.replace(/#\d+(?:-\d+)?$/u, "");
+  return path.length === 0 ? undefined : path;
 }
 
 export function renderPaletteDescription(text: string, width: number): string {

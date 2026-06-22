@@ -75,7 +75,7 @@ export function printCronUsage(): void {
     "Usage:",
     "  dream cron list",
     "  dream cron add \"every day at 09:00 run tests\"",
-    "  dream cron add --name nightly --mode swarm \"0 2 * * * /swarm --size 8 audit project\"",
+    "  dream cron add --name nightly --mode swarm \"0 2 * * * /swarm --deep audit project\"",
     "  dream cron run <job>",
     "  dream cron pause <job>",
     "  dream cron resume <job>",

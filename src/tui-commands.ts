@@ -41,7 +41,7 @@ export const slashCommands = [
   { name: "/session", summary: "Open saved sessions", acceptsArgs: false },
   { name: "/skills", summary: "Show installed skills", acceptsArgs: false },
   { name: "/status", summary: "Show goal, tasks, and model health", acceptsArgs: false },
-  { name: "/swarm", summary: "Explode a goal across parallel agents", acceptsArgs: true },
+  { name: "/swarm", summary: "Explode a goal across parallel lanes", acceptsArgs: true },
   { name: "/tasks", summary: "Show or add tasks", acceptsArgs: true },
   { name: "/verify", summary: "Plan verification checks", acceptsArgs: true },
   { name: "/workday", summary: "Show edit-test-review readiness", acceptsArgs: true },

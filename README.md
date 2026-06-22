@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.10)
+Dream Code (v0.1.11)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.10
-git push origin v0.1.10
+git tag v0.1.11
+git push origin v0.1.11
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -108,14 +108,14 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.10 sh install.sh
+DREAM_CODE_VERSION=v0.1.11 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
 ## Core Features
 
-- **Fast TUI:** slash commands, history, menus, skill autocomplete, smooth
-  streaming, and Esc double-tap interrupt.
+- **Fast TUI:** slash commands, slash skill autocomplete, `@` file mentions,
+  history, menus, smooth streaming, and Esc double-tap interrupt.
 - **Autonomous by default:** Dream Code favors completion over clarification,
   uses research when a concept is unclear, and verifies before reporting
   success.
@@ -129,8 +129,9 @@ DREAM_CODE_SOURCE=1 sh install.sh
   `/provider disable <provider>` and re-enable them when needed.
 - **Agents and swarm:** open the `/agents` board to inspect, peek, reply to, and
   stop subagent sessions, or unleash Dream Swarm for high-parallel fan-out when
-  speed matters. Use `/swarm --size N` when you want to force a specific number
-  of parallel lanes.
+  speed matters. Use `/swarm --deep` for adaptive coverage, `/swarm --overdrive`
+  for adversarial high-pressure review, or `/swarm --lanes N` when you want to
+  force a specific number of parallel lanes.
 - **Claude Code compatibility:** load `CLAUDE.md`, `CLAUDE.local.md`,
   `.claude/rules/*.md`, and `.claude/skills`, while keeping existing
   `AGENTS.md`, `DESIGN.md`, and Dream skills support.
@@ -187,12 +188,20 @@ monitor, then merges the lanes into one final synthesis.
 
 ```text
 /swarm analyze this project
-/swarm --size 10 run a security review
+/swarm --deep run a security review
+/swarm --overdrive pressure-test the release
+/swarm --lanes 10 run a broad compatibility audit
+/swarm --lanes 25 --overdrive wake the whole dream
 ```
 
-Without `--size`, Dream Code uses adaptive fan-out. With `--size N`, Dream Code
-forces exactly `N` swarm lanes, useful when you want to push a large job hard and
-spend more tokens for faster parallel coverage.
+Without options, Dream Code uses a standard adaptive fan-out and picks
+task-specific lanes from the goal. Use `--light`, `--standard`, `--deep`, or
+`--max` to increase coverage while still letting Dream choose the best lane mix.
+Use `--overdrive` for a sharper 10-lane adversarial pass with failure, security,
+regression, performance, integration, and final-judge lanes. Use `--lanes N`
+only when you want exactly `N` lanes; combining it with `--overdrive` is the
+hidden high-lane path for intentionally noisy stress runs. The older `--size N`
+spelling still works as a deprecated alias for cron and existing scripts.
 
 ## Agent Board
 
@@ -258,7 +267,7 @@ Inside the TUI:
 ```text
 /cron
 /cron every day at 09:00 run tests and summarize failures
-/cron every day at 02:00 /swarm --size 8 audit this project
+/cron every day at 02:00 /swarm --deep audit this project
 /cron 0 8 * * * /workflow .dream/workflows/morning.js
 /cron run nightly
 /cron pause nightly
@@ -272,7 +281,7 @@ From the shell:
 ```sh
 dream cron list
 dream cron add --name nightly "every day at 09:00 run tests"
-dream cron add --name swarm-audit --mode swarm "0 2 * * * /swarm --size 8 audit this project"
+dream cron add --name swarm-audit --mode swarm "0 2 * * * /swarm --deep audit this project"
 dream cron add --output .dream/cron-results/test-summary.md "every day at 09:00 run tests"
 dream cron pause nightly
 dream cron resume nightly
@@ -355,8 +364,8 @@ Up/Down     Browse command history or menus
 Left/Right  Move cursor
 Ctrl+A/E    Move to start/end
 Ctrl+U/K    Clear before/after cursor
-/           Open slash command menu
-@           Open skill autocomplete
+/           Open command and skill menu
+@           Mention files and directories
 Esc Esc     Interrupt a running agent
 Enter       Submit input or choose a menu item
 ```
@@ -385,7 +394,8 @@ Enter       Submit input or choose a menu item
 - Task ledger with todo/doing/done/blocked states
 - Skills from `~/.dream/skills`, `~/.agents/skills`, `~/.claude/skills`, and
   project `.claude/skills`
-- `@skill` autocomplete and explicit skill activation
+- `/skill` autocomplete and explicit skill activation
+- `@file` and `@directory/` mentions for explicit context
 - Claude plugin import for skills, agents, commands, and `.mcp.json`
 - Claude plugin marketplace install from `claude-plugins-official` plus
   `/plugin marketplace add <source>` and `/plugin marketplace remove <name>`

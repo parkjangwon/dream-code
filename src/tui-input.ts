@@ -7,12 +7,14 @@ import { clearRenderedLines, renderInputText, renderInputView } from "./tui-inpu
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
+import type { FileMentionTarget } from "./file-mention-targets.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
   readonly history: readonly string[];
   readonly commands: readonly SlashCommand[];
   readonly skills?: readonly DreamSkill[];
+  readonly fileMentions?: readonly FileMentionTarget[];
   readonly redrawHeader: () => void;
   readonly secret?: boolean;
   readonly statusLines?: readonly string[];
@@ -38,21 +40,21 @@ export function readInteractiveInput(
   return new Promise((resolve) => {
     let state = createInputState(options.history, options.commands, options.skills ?? [], {
       cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
+      fileMentions: options.fileMentions ?? [],
     });
     let renderedLines = 0;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
 
     const render = (): void => {
-      clearRenderedLines(renderedLines);
-      renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
+      renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedLines);
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
       clearRenderedLines(renderedLines);
       cleanup();
       if (result.kind === "submit") {
-        output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [])}\n`);
+        output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [], options.fileMentions ?? [])}\n`);
       } else if (echoCancel) {
         output.write("^C\n");
       }

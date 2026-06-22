@@ -40,7 +40,7 @@ test("createAgentMessages injects only explicitly requested skill bodies", () =>
     },
   ];
 
-  const messages = createAgentMessages("Use @review on this diff", skills);
+  const messages = createAgentMessages("/review on this diff", skills);
   const system = messages[0]?.content ?? "";
 
   assert.match(system, /Available Dream Code skills/u);
@@ -60,7 +60,7 @@ test("createAgentMessages ignores unknown skill mentions", () => {
     },
   ];
 
-  const messages = createAgentMessages("Use @missing on this diff", skills);
+  const messages = createAgentMessages("/missing on this diff", skills);
   const system = messages[0]?.content ?? "";
 
   assert.match(system, /none active/u);
@@ -91,6 +91,26 @@ test("createAgentMessages includes additional workspace directories", () => {
 
   assert.match(system, /Additional workspace directories/u);
   assert.match(system, /\/repo\/shared/u);
+});
+
+test("createAgentMessages injects mentioned file context", () => {
+  const messages = createAgentMessages(
+    "Explain @src/auth.ts",
+    [],
+    undefined,
+    undefined,
+    [],
+    "MCP servers: none configured.",
+    "Session compact: none.",
+    "Dream memory: none.",
+    "/repo",
+    [],
+    "Referenced files and directories:\n# @src/auth.ts (/repo/src/auth.ts)\nexport const ok = true;",
+  );
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /Referenced files and directories/u);
+  assert.match(system, /export const ok = true/u);
 });
 
 test("createAgentMessages injects compact session context", () => {

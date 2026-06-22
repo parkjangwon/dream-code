@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
 import { ansi } from "../src/ansi.js";
@@ -6,17 +6,37 @@ import {
   cursorUpToPromptLineCount,
   displayInputText,
   formatCommandPaletteLine,
+  formatFilePaletteLine,
   formatPaletteHeading,
-  formatSkillPaletteLine,
+  renderInputView,
   renderInputText,
   renderPaletteDescription,
   shouldShowInlineShortcutGuide,
 } from "../src/tui-input-render.js";
 import { terminalVisibleWidth } from "../src/terminal-width.js";
+import { createInputState } from "../src/tui-input-state.js";
 
 test("boxed input cursor lands on the prompt row instead of the top border", () => {
   assert.equal(cursorUpToPromptLineCount(4), 2);
   assert.equal(cursorUpToPromptLineCount(11), 9);
+});
+
+test("renderInputView batches redraw into one cursor-hidden frame", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    renderInputView(createInputState([], []), "> ", false, [], 3);
+
+    assert.equal(chunks.length, 1);
+    assert.equal(chunks[0]?.startsWith("\u001B[?25l"), true);
+    assert.equal(chunks[0]?.includes("\u001B[1A\r\u001B[2K"), true);
+    assert.equal(chunks[0]?.endsWith("\u001B[?25h"), true);
+  } finally {
+    stdout.mock.restore();
+  }
 });
 
 test("inline shortcut guide is derived from a literal question mark input", () => {
@@ -30,21 +50,15 @@ test("displayInputText masks secret input without changing cursor width", () => 
   assert.equal(displayInputText("secret", false), "secret");
 });
 
-test("renderInputText highlights skill mentions inside the prompt input", () => {
-  const rendered = renderInputText("@cso review email@example.com @missing", false, [
-    {
-      name: "cso",
-      description: "Chief Security Officer security audit.",
-      body: "",
-      path: "/tmp/cso/SKILL.md",
-      source: "agents",
-    },
+test("renderInputText highlights known file mentions inside the prompt input", () => {
+  const rendered = renderInputText("@src/auth.ts review email@example.com @missing", false, [], [
+    { path: "src/auth.ts", kind: "file", description: "auth.ts" },
   ]);
 
-  assert.equal(rendered.includes(`${ansi.blue}@cso`), true);
+  assert.equal(rendered.includes(`${ansi.blue}@src/auth.ts`), true);
   assert.equal(rendered.includes(`${ansi.blue}@example`), false);
   assert.equal(rendered.includes(`${ansi.blue}@missing`), false);
-  assert.equal(terminalVisibleWidth(rendered), terminalVisibleWidth("@cso review email@example.com @missing"));
+  assert.equal(terminalVisibleWidth(rendered), terminalVisibleWidth("@src/auth.ts review email@example.com @missing"));
 });
 
 test("renderInputText keeps secret input masked without mention highlighting", () => {
@@ -83,17 +97,28 @@ test("command autocomplete lines color the selected marker and command name", ()
   assert.equal(terminalVisibleWidth(rendered) <= 80, true);
 });
 
-test("skill autocomplete lines color the selected marker and skill name", () => {
-  const rendered = formatSkillPaletteLine({
-    name: "cso",
-    description: "Chief Security Officer security audit.",
-    body: "",
-    path: "/tmp/cso/SKILL.md",
-    source: "agents",
+test("slash skill autocomplete lines render as command entries", () => {
+  const rendered = formatCommandPaletteLine({
+    name: "/cso",
+    summary: "Skill · Chief Security Officer security audit.",
+    acceptsArgs: true,
   }, true, 80);
 
   assert.equal(rendered.includes(`${ansi.accent}>`), true);
-  assert.equal(rendered.includes(`${ansi.blue}@cso`), true);
-  assert.equal(rendered.includes(`${ansi.muted}agents`), true);
+  assert.equal(rendered.includes(`${ansi.accent}/cso`), true);
+  assert.equal(rendered.includes("Skill"), true);
+  assert.equal(terminalVisibleWidth(rendered) <= 80, true);
+});
+
+test("file autocomplete lines color selected path and kind", () => {
+  const rendered = formatFilePaletteLine({
+    path: "src/components/Button.tsx",
+    kind: "file",
+    description: "Button.tsx",
+  }, true, 80);
+
+  assert.equal(rendered.includes(`${ansi.accent}>`), true);
+  assert.equal(rendered.includes(`${ansi.accent}@src/components/Button.tsx`), true);
+  assert.equal(rendered.includes(`${ansi.muted}file`), true);
   assert.equal(terminalVisibleWidth(rendered) <= 80, true);
 });

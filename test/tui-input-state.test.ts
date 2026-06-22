@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { slashCommands } from "../src/tui-commands.js";
 import { createInputState, reduceInputState } from "../src/tui-input-state.js";
 import type { DreamSkill } from "../src/skills.js";
+import type { FileMentionTarget } from "../src/file-mention-targets.js";
 
 const testSkills: readonly DreamSkill[] = [
   {
@@ -20,6 +21,11 @@ const testSkills: readonly DreamSkill[] = [
     path: "/tmp/docs.md",
     source: "dream",
   },
+];
+
+const testFileMentions: readonly FileMentionTarget[] = [
+  { path: "src/auth.ts", kind: "file", description: "auth.ts" },
+  { path: "src/components/", kind: "directory", description: "directory listing" },
 ];
 
 test("slash input opens a command palette and enter submits the selected command", () => {
@@ -80,27 +86,42 @@ test("argument commands complete into the input instead of submitting", () => {
   assert.equal(completed.state.palette, undefined);
 });
 
-test("at sign opens skill autocomplete and inserts selected skill", () => {
+test("slash palette includes skills and inserts selected skill command", () => {
   const opened = reduceInputState(createInputState([], slashCommands, testSkills), {
     kind: "insert",
-    value: "@",
+    value: "/cso",
   });
   const selected = reduceInputState(opened.state, { kind: "enter" });
 
-  assert.equal(opened.state.palette?.kind, "skill");
-  assert.equal(opened.state.palette?.matches.length, 2);
+  assert.equal(opened.state.palette?.kind, "command");
+  assert.equal(opened.state.palette?.matches[0]?.name, "/cso");
   assert.equal(selected.effect.kind, "none");
-  assert.equal(selected.state.text, "@cso ");
+  assert.equal(selected.state.text, "/cso ");
 });
 
-test("skill autocomplete filters by typed query", () => {
+test("slash skill autocomplete filters by skill name", () => {
   const opened = reduceInputState(createInputState([], slashCommands, testSkills), {
     kind: "insert",
-    value: "@do",
+    value: "/docs",
   });
 
-  assert.equal(opened.state.palette?.kind, "skill");
-  assert.equal(opened.state.palette?.matches[0]?.name, "docs");
+  assert.equal(opened.state.palette?.kind, "command");
+  assert.equal(opened.state.palette?.matches[0]?.name, "/docs");
+});
+
+test("at sign autocompletes file path mentions", () => {
+  const opened = reduceInputState(createInputState([], slashCommands, testSkills, {
+    fileMentions: testFileMentions,
+  }), {
+    kind: "insert",
+    value: "@src/auth",
+  });
+  const selected = reduceInputState(opened.state, { kind: "enter" });
+
+  assert.equal(opened.state.palette?.kind, "file");
+  assert.equal(opened.state.palette?.matches[0]?.path, "src/auth.ts");
+  assert.equal(selected.effect.kind, "none");
+  assert.equal(selected.state.text, "@src/auth.ts ");
 });
 
 test("history navigation restores older commands and returns to the draft", () => {

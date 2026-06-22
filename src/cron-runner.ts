@@ -9,6 +9,7 @@ import { createCronRun, listCronProjects, loadDueCronJobs, updateCronJob } from 
 import { saveCronArtifact } from "./cron-artifacts.js";
 import type { CronJob, CronProject } from "./cron-types.js";
 import { notifyCronComplete } from "./notifications.js";
+import { parseSwarmArgs, type SwarmArgs } from "./swarm-args.js";
 import { runAgentSwarm } from "./swarm-runner.js";
 import { runWorkflowScript, type WorkflowRunEvent } from "./workflow-engine.js";
 
@@ -139,7 +140,8 @@ async function executeCronJob(
       },
       replaceMonitor: false,
       synthesisMode: "auto",
-      ...(swarmArgs.forceAgents === undefined ? {} : { forceAgents: swarmArgs.forceAgents }),
+      ...(swarmArgs.forceLanes === undefined ? {} : { forceLanes: swarmArgs.forceLanes }),
+      ...(swarmArgs.intensity === undefined ? {} : { intensity: swarmArgs.intensity }),
     });
     return summary.synthesis;
   }
@@ -213,23 +215,13 @@ function workspaceOutputPath(cwd: string, path: string): string | undefined {
   return rel.startsWith("..") || isAbsolute(rel) ? undefined : filePath;
 }
 
-function parseSwarmPrompt(prompt: string): { readonly goal: string; readonly forceAgents?: number } {
+function parseSwarmPrompt(prompt: string): SwarmArgs {
   const text = prompt.replace(/^\/swarm\s*/u, "").trim();
-  const sizeMatch = text.match(/(?:^|\s)--size\s+(\d+)(?=\s|$)/u);
-  const forceAgents = parseAgentCount(sizeMatch?.[1]);
-  const goal = text.replace(/(?:^|\s)--size\s+\d+(?=\s|$)/u, " ").trim();
-  if (goal.length === 0) {
+  const parsed = parseSwarmArgs(text);
+  if (parsed.goal.length === 0) {
     throw new Error("Swarm cron jobs need a goal.");
   }
-  return forceAgents === undefined ? { goal } : { goal, forceAgents };
-}
-
-function parseAgentCount(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : undefined;
+  return parsed;
 }
 
 function renderWorkflowCronResult(

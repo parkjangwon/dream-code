@@ -41,7 +41,7 @@ export function formatSkillList(
   const contentWidth = Math.max(72, Math.min(width, 140));
   const lines = [
     `${paint("Skills", ansi.accent)} ${paint(`${skills.length} installed · ${enabledCount} enabled`, ansi.dim)}\n`,
-    `${paint("type @ to insert · /skills to manage", ansi.guide)}\n`,
+    `${paint("type / to insert · /skills to manage", ansi.guide)}\n`,
     `${paint("─".repeat(contentWidth), ansi.guide)}\n`,
     `${paint("state", ansi.dim)}  ${paint("skill", ansi.dim).padEnd(30)} ${paint("source", ansi.dim).padEnd(12)} ${paint("description", ansi.dim)}\n`,
   ];
@@ -56,7 +56,7 @@ export function formatSkillList(
 function formatSkillRow(skill: DreamSkill, disabledSet: ReadonlySet<string>, width: number): string {
   const enabled = !disabledSet.has(skill.name);
   const state = enabled ? paint("on ", ansi.green) : paint("off", ansi.yellow);
-  const name = padVisible(paint(`@${truncateVisible(skill.name, 24)}`, ansi.blue), 28);
+  const name = padVisible(paint(`/${truncateVisible(skill.name, 24)}`, ansi.blue), 28);
   const source = padVisible(paint(skill.source, ansi.dim), 10);
   const prefix = `  ${state}  ${name} ${source} `;
   const description = truncateVisible(skill.description, width - terminalVisibleWidth(prefix));

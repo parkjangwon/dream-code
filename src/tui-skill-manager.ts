@@ -141,7 +141,7 @@ function renderSkillManagerView(state: SkillManagerState): number {
     lines.push(paint(scrollHint(start, visible.length), ansi.guide));
   }
   lines.push(paint("─".repeat(contentWidth), ansi.guide));
-  lines.push(paint("Disabled skills are hidden from @ autocomplete after saving.", ansi.guide));
+  lines.push(paint("Disabled skills are hidden from / autocomplete after saving.", ansi.guide));
   output.write(lines.join("\n"));
   moveCursorToSearchLine(lines.length, state.query);
   return lines.length;

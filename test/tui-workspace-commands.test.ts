@@ -105,7 +105,7 @@ test("runWorkspaceCommand lists installed skills", async () => {
 
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Skills/u);
-    assert.match(outputText, /@.*review/u);
+    assert.match(outputText, /\/.*review/u);
     assert.match(outputText, /Review code\./u);
   } finally {
     stdout.mock.restore();
@@ -430,7 +430,7 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
     };
 
     await runWorkspaceCommand(
-      "/swarm --size 3 Build the swarm runtime",
+      "/swarm --lanes 3 Build the swarm runtime",
       config,
       true,
       { question: async () => "" },
@@ -441,8 +441,8 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
 
     const outputText = stripAnsi(chunks.join(""));
     assert.match(outputText, /Dream Swarm/u);
-    assert.match(outputText, /3 parallel agents/u);
-    assert.match(outputText, /forced overdrive/u);
+    assert.match(outputText, /3 parallel lanes/u);
+    assert.match(outputText, /exact-lane overdrive/u);
     assert.match(outputText, /Swarm Synthesis/u);
   } finally {
     stdout.mock.restore();

@@ -17,7 +17,7 @@ test("runWorkspaceCommand saves a swarm artifact after fan-out", async () => {
     const config = configWithUnknownProvider();
 
     await runWorkspaceCommand(
-      "/swarm --size 2 Build the artifact trail",
+      "/swarm --lanes 2 Build the artifact trail",
       config,
       true,
       { question: async () => "" },

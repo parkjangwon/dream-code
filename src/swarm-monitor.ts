@@ -15,6 +15,7 @@ import {
   wrapIndex,
 } from "./swarm-monitor-state.js";
 import type { SwarmLane } from "./swarm-plan.js";
+import { withHiddenCursor } from "./terminal-frame.js";
 
 export type SwarmMonitor = {
   readonly start: () => void;
@@ -82,7 +83,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       synthesisFinishedAt,
     });
     if (options.replaceInPlace === true) {
-      options.write(`${clearPreviousSnapshot(renderedLineCount)}${snapshot}`);
+      options.write(withHiddenCursor(`${clearPreviousSnapshot(renderedLineCount)}${snapshot}`));
       renderedLineCount = countLines(snapshot);
       return;
     }
@@ -144,9 +145,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
     moveSelection,
     openDetail,
     escape,
-    abort: () => {
-      options.onAbort?.();
-    },
+    abort: () => options.onAbort?.(),
   });
   const stop = (): void => {
     if (animationTimer !== undefined) {

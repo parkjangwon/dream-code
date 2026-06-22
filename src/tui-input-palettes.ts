@@ -1,5 +1,6 @@
 import type { DreamSkill } from "./skills.js";
 import type { SlashCommand } from "./tui-commands.js";
+import type { FileMentionTarget } from "./file-mention-targets.js";
 
 export type CommandPaletteState = {
   readonly kind: "command";
@@ -7,30 +8,33 @@ export type CommandPaletteState = {
   readonly selectedIndex: number;
 };
 
-export type SkillPaletteState = {
-  readonly kind: "skill";
-  readonly matches: readonly DreamSkill[];
+export type FilePaletteState = {
+  readonly kind: "file";
+  readonly matches: readonly FileMentionTarget[];
   readonly selectedIndex: number;
   readonly tokenStart: number;
 };
 
-export type PaletteState = CommandPaletteState | SkillPaletteState;
+export type PaletteState = CommandPaletteState | FilePaletteState;
 
 export function paletteFor(
   text: string,
   commands: readonly SlashCommand[],
   skills: readonly DreamSkill[],
+  fileMentions: readonly FileMentionTarget[] = [],
   cursor = text.length,
 ): PaletteState | undefined {
-  const skillPalette = skillPaletteFor(text, skills, cursor);
-  if (skillPalette !== undefined) {
-    return skillPalette;
+  const mentionPalette = mentionPaletteFor(text, fileMentions, cursor);
+  if (mentionPalette !== undefined) {
+    return mentionPalette;
   }
 
   if (!text.startsWith("/") || /\s/u.test(text)) {
     return undefined;
   }
-  const matches = commands.filter((command) => command.name.startsWith(text));
+  const matches = [...commands, ...skillSlashCommands(skills)]
+    .filter((command) => command.name.startsWith(text))
+    .sort((left, right) => left.name.localeCompare(right.name));
   return matches.length === 0 ? undefined : { kind: "command", matches, selectedIndex: 0 };
 }
 
@@ -48,32 +52,48 @@ export function selectedPaletteCommand(palette: PaletteState | undefined): Slash
   return palette?.kind === "command" ? palette.matches[palette.selectedIndex] : undefined;
 }
 
-export function selectedPaletteSkill(palette: PaletteState | undefined): DreamSkill | undefined {
-  return palette?.kind === "skill" ? palette.matches[palette.selectedIndex] : undefined;
+export function selectedPaletteMentionReplacement(palette: PaletteState | undefined): string | undefined {
+  if (palette?.kind === "file") {
+    const file = palette.matches[palette.selectedIndex];
+    return file === undefined ? undefined : `@${file.path} `;
+  }
+  return undefined;
 }
 
-function skillPaletteFor(
+function mentionPaletteFor(
   text: string,
-  skills: readonly DreamSkill[],
+  fileMentions: readonly FileMentionTarget[],
   cursor: number,
-): SkillPaletteState | undefined {
+): FilePaletteState | undefined {
   const tokenStart = text.lastIndexOf("@", cursor - 1);
   if (tokenStart < 0 || tokenStart > cursor) {
     return undefined;
   }
 
   const token = text.slice(tokenStart, cursor);
-  if (!/^@[a-zA-Z0-9._-]*$/u.test(token)) {
+  if (!/^@[a-zA-Z0-9._~/-]*$/u.test(token)) {
     return undefined;
   }
 
   const query = token.slice(1).toLowerCase();
-  const matches = skills.filter((skill) => skillMatchesQuery(skill, query));
-  return matches.length === 0 ? undefined : { kind: "skill", matches, selectedIndex: 0, tokenStart };
+  const fileMatches = fileMentions.filter((target) => fileMentionMatchesQuery(target, query)).slice(0, 50);
+  return filePalette(fileMatches, tokenStart);
 }
 
-function skillMatchesQuery(skill: DreamSkill, query: string): boolean {
+function filePalette(matches: readonly FileMentionTarget[], tokenStart: number): FilePaletteState | undefined {
+  return matches.length === 0 ? undefined : { kind: "file", matches, selectedIndex: 0, tokenStart };
+}
+
+function fileMentionMatchesQuery(target: FileMentionTarget, query: string): boolean {
   return query.length === 0
-    || skill.name.includes(query)
-    || skill.description.toLowerCase().includes(query);
+    || target.path.toLowerCase().includes(query)
+    || target.description.toLowerCase().includes(query);
+}
+
+function skillSlashCommands(skills: readonly DreamSkill[]): readonly SlashCommand[] {
+  return skills.map((skill) => ({
+    name: `/${skill.name}`,
+    summary: `Skill · ${skill.description}`,
+    acceptsArgs: true,
+  }));
 }

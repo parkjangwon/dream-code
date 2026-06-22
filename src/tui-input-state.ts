@@ -1,10 +1,11 @@
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
+import type { FileMentionTarget } from "./file-mention-targets.js";
 import {
   movePalette as moveCompletionPalette,
   paletteFor,
   selectedPaletteCommand,
-  selectedPaletteSkill,
+  selectedPaletteMentionReplacement,
   type PaletteState,
 } from "./tui-input-palettes.js";
 
@@ -16,6 +17,7 @@ export type InputState = {
   readonly historyIndex: number | undefined;
   readonly commands: readonly SlashCommand[];
   readonly skills: readonly DreamSkill[];
+  readonly fileMentions: readonly FileMentionTarget[];
   readonly palette: PaletteState | undefined;
   readonly cancelOnEmptyBackspace: boolean;
 };
@@ -52,7 +54,7 @@ export function createInputState(
   history: readonly string[],
   commands: readonly SlashCommand[],
   skills: readonly DreamSkill[] = [],
-  options: { readonly cancelOnEmptyBackspace?: boolean } = {},
+  options: { readonly cancelOnEmptyBackspace?: boolean; readonly fileMentions?: readonly FileMentionTarget[] } = {},
 ): InputState {
   return {
     text: "",
@@ -62,6 +64,7 @@ export function createInputState(
     historyIndex: undefined,
     commands,
     skills,
+    fileMentions: options.fileMentions ?? [],
     palette: undefined,
     cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
   };
@@ -152,7 +155,7 @@ function withTextAndCursor(state: InputState, text: string, cursor: number): Inp
       cursor,
       draft: text,
       historyIndex: undefined,
-      palette: paletteFor(text, state.commands, state.skills, cursor),
+      palette: paletteFor(text, state.commands, state.skills, state.fileMentions, cursor),
     },
     effect: { kind: "none" },
   };
@@ -176,15 +179,15 @@ function acceptInput(state: InputState): InputUpdate {
     return { state, effect: { kind: "submit", text: selectedCommand.name } };
   }
 
-  const selectedSkill = selectedPaletteSkill(state.palette);
-  if (selectedSkill !== undefined && state.palette?.kind === "skill") {
-    const replacement = `@${selectedSkill.name} `;
-    const text = `${state.text.slice(0, state.palette.tokenStart)}${replacement}${state.text.slice(state.cursor)}`;
+  const palette = state.palette;
+  const replacement = selectedPaletteMentionReplacement(palette);
+  if (replacement !== undefined && palette?.kind === "file") {
+    const text = `${state.text.slice(0, palette.tokenStart)}${replacement}${state.text.slice(state.cursor)}`;
     return {
       state: {
         ...state,
         text,
-        cursor: state.palette.tokenStart + replacement.length,
+        cursor: palette.tokenStart + replacement.length,
         draft: text,
         historyIndex: undefined,
         palette: undefined,
@@ -233,7 +236,7 @@ function moveHistory(state: InputState, direction: "up" | "down"): InputUpdate {
       text: state.draft,
       cursor: state.draft.length,
       historyIndex: undefined,
-      palette: paletteFor(state.draft, state.commands, state.skills),
+      palette: paletteFor(state.draft, state.commands, state.skills, state.fileMentions),
     },
     effect: { kind: "none" },
   };

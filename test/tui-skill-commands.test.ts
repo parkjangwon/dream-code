@@ -19,6 +19,6 @@ test("formatSkillList renders a compact non-wrapping skills table", () => {
   const output = formatSkillList(skills, [], 88);
 
   assert.match(output, /installed/u);
-  assert.match(output, /@i-want-go-home/u);
+  assert.match(output, /\/i-want-go-home/u);
   assert.equal(output.split("\n").every((line) => terminalVisibleWidth(line) <= 88), true);
 });

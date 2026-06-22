@@ -3,6 +3,7 @@ import { cwd as currentWorkingDirectory, stdout as output } from "node:process";
 import type { DreamConfig } from "./config.js";
 import { ansi, paint } from "./ansi.js";
 import { notifySwarmComplete } from "./notifications.js";
+import { parseSwarmArgs, type SwarmArgs } from "./swarm-args.js";
 import { saveSwarmArtifact } from "./swarm-artifacts.js";
 import { runAgentSwarm } from "./swarm-runner.js";
 
@@ -19,19 +20,17 @@ export type RunSwarmCommandOptions = {
   readonly sessionId?: string;
 };
 
-type SwarmArgs = {
-  readonly goal: string;
-  readonly forceAgents?: number;
-};
-
 export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<void> {
   const parsed = parseSwarmArgs(options.args);
   const goal = parsed.goal.length > 0
     ? parsed.goal
     : (await options.questioner.question("Swarm goal: ")).trim();
   if (goal.length === 0) {
-    output.write("usage: /swarm [--size count] <goal>\n");
+    output.write("usage: /swarm [--light|--standard|--deep|--max|--overdrive] [--lanes count] <goal>\n");
     return;
+  }
+  if (parsed.deprecatedSize !== undefined) {
+    output.write(`${paint("--size is deprecated.", ansi.yellow)} Use ${paint("--deep/--max", ansi.blue)} for adaptive planning or ${paint(`--lanes ${parsed.deprecatedSize}`, ansi.blue)} to force an exact lane count.\n`);
   }
 
   const replaceMonitor = output.isTTY === true;
@@ -51,15 +50,6 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
   await notifySwarmComplete(options.config, goal, summary.laneResults.length);
 }
 
-export function parseSwarmArgs(args: string): SwarmArgs {
-  const forceMatch = args.match(/(?:^|\s)--size\s+(\d+)(?=\s|$)/u);
-  const forceAgents = parseAgentCount(forceMatch?.[1]);
-  const goal = args
-    .replace(/(?:^|\s)--size\s+\d+(?=\s|$)/u, " ")
-    .trim();
-  return forceAgents === undefined ? { goal } : { goal, forceAgents };
-}
-
 function swarmRunOptions(
   baseOptions: {
     readonly config: DreamConfig;
@@ -71,22 +61,14 @@ function swarmRunOptions(
   },
   parsed: SwarmArgs,
 ): Parameters<typeof runAgentSwarm>[0] {
-  if (parsed.forceAgents !== undefined) {
+  if (parsed.forceLanes !== undefined || parsed.intensity !== undefined) {
     return {
       ...baseOptions,
-      forceAgents: parsed.forceAgents,
+      ...(parsed.forceLanes === undefined ? {} : { forceLanes: parsed.forceLanes }),
+      ...(parsed.intensity === undefined ? {} : { intensity: parsed.intensity }),
     };
   }
   return baseOptions;
 }
 
-function parseAgentCount(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  return Math.min(100, Math.max(1, parsed));
-}
+export { parseSwarmArgs } from "./swarm-args.js";

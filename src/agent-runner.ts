@@ -17,6 +17,7 @@ import { loadCredentials } from "./credentials.js";
 import { runHookEvent } from "./hooks.js";
 import type { ProviderEnv } from "./llm-provider.js";
 import { formatLiveMcpContext } from "./mcp-context.js";
+import { formatMentionedReferencesForPrompt, loadMentionedReferences } from "./file-mention-context.js";
 import {
   extractAgentToolRequests,
   formatToolProgress,
@@ -107,6 +108,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   const skills = (await loadSkills(defaultSkillRoots(undefined, activeCwd))).filter((skill) => skillEnabled(settings, skill.name));
   const contextDocs = await loadContextDocs({ configRoot, cwd: activeCwd, prompt: options.prompt });
   const workspaceDirs = await loadWorkspaceDirs(configRoot);
+  const mentionedContext = formatMentionedReferencesForPrompt(await loadMentionedReferences(options.prompt, { cwd: activeCwd, workspaceDirs }));
   const mcpContext = await formatLiveMcpContext(configRoot, options.signal);
   const compactContext = await formatCompactContext(configRoot, options.sessionId);
   const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId, options.prompt);
@@ -114,7 +116,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   let messages = await appendActorInboxMessages(
     configRoot,
     actor.id,
-    createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd, recentMessages),
+    createAgentMessages(options.prompt, skills, options.agent, contextDocs, workspaceDirs, mcpContext, compactContext, memoryContext, activeCwd, recentMessages, mentionedContext),
   );
 
   try {

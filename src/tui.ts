@@ -25,6 +25,7 @@ import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
+import { discoverFileMentionTargets } from "./file-mention-targets.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -78,11 +79,13 @@ async function runInteractiveLoop(
     const configRoot = options.configRoot ?? defaultConfigRoot();
     const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const skills = await loadEnabledSkills(configRoot);
+    const fileMentions = await discoverFileMentionTargets(process.cwd());
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
       commands: slashCommands,
       skills,
+      fileMentions,
       statusLines,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);

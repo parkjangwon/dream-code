@@ -19,6 +19,7 @@ import {
   createSwarmSynthesisPrompt,
   type SwarmLane,
 } from "./swarm-plan.js";
+import type { SwarmIntensity } from "./swarm-intensity.js";
 
 export type SwarmRunProgress = {
   readonly characters: number;
@@ -61,7 +62,9 @@ export type SwarmRunOptions = {
   readonly configRoot: string;
   readonly cwd: string;
   readonly goal: string;
+  readonly forceLanes?: number;
   readonly forceAgents?: number;
+  readonly intensity?: SwarmIntensity;
   readonly write: (text: string) => void;
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
@@ -109,7 +112,7 @@ export async function runAgentSwarmWithAgents(
     ...monitorNowOption(options.now),
     ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   });
-  options.write(formatSwarmHeader(plan.lanes.length, plan.forced));
+  options.write(formatSwarmHeader(plan.lanes.length, plan.forced, plan.intensity));
   monitor.start();
 
   const laneResults = await runWithConcurrency(plan.lanes, plan.maxConcurrency, async (lane) => {
@@ -155,7 +158,7 @@ export async function runAgentSwarmWithAgents(
     monitor.synthesisDone();
   }
   monitor.stop();
-  options.write(formatSwarmSynthesis(synthesis, now() - swarmStartedAt));
+  options.write(formatSwarmSynthesis(synthesis, now() - swarmStartedAt, laneOutputCharacters(laneResults)));
   const summary = { goal: options.goal, laneResults, synthesis };
   await absorbSwarmMemory(options, summary);
   return summary;
@@ -176,8 +179,11 @@ async function runLane(
       signal,
       report,
     }), signal, laneCancelledOutput);
-  } catch (error) {
-    return `Lane failed: ${errorMessage(error)}`;
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return `Lane failed: ${error.message}`;
+    }
+    return "Lane failed: Unknown swarm failure";
   }
 }
 
@@ -195,8 +201,11 @@ async function runSynthesis(
       signal,
       report: () => undefined,
     }), signal, synthesisCancelledOutput);
-  } catch (error) {
-    return `Synthesis failed: ${errorMessage(error)}`;
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return `Synthesis failed: ${error.message}`;
+    }
+    return "Synthesis failed: Unknown swarm failure";
   }
 }
 
@@ -206,9 +215,14 @@ async function absorbSwarmMemory(options: SwarmRunOptions, summary: SwarmRunSumm
   }
   try {
     await writeSwarmMemory(options.configRoot, options.cwd, options.sessionId, summary);
-  } catch (error) {
-    options.write(`${paint("swarm memory skipped:", ansi.yellow)} ${errorMessage(error)}\n`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown swarm failure";
+    options.write(`${paint("swarm memory skipped:", ansi.yellow)} ${message}\n`);
   }
+}
+
+function laneOutputCharacters(laneResults: readonly SwarmLaneResult[]): number {
+  return laneResults.reduce((total, result) => total + result.output.length, 0);
 }
 
 function createSwarmAbortController(externalSignal: AbortSignal | undefined): AbortController {
@@ -239,14 +253,14 @@ function runWithAbort(task: Promise<string>, signal: AbortSignal, cancelledOutpu
   });
 }
 
-function swarmPlanOptions(options: SwarmRunOptions): { readonly forceAgents?: number } {
-  return options.forceAgents === undefined ? {} : { forceAgents: options.forceAgents };
+function swarmPlanOptions(options: SwarmRunOptions): { readonly forceLanes?: number; readonly forceAgents?: number; readonly intensity?: SwarmIntensity } {
+  return {
+    ...(options.forceLanes === undefined ? {} : { forceLanes: options.forceLanes }),
+    ...(options.forceAgents === undefined ? {} : { forceAgents: options.forceAgents }),
+    ...(options.intensity === undefined ? {} : { intensity: options.intensity }),
+  };
 }
 
 function monitorNowOption(now: (() => number) | undefined): { readonly now?: () => number } {
   return now === undefined ? {} : { now };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown swarm failure";
 }

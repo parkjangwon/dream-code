@@ -50,9 +50,9 @@ test("runAgentSwarmWithAgents starts fan-out lanes in parallel before synthesis"
   assert.equal(summary.laneResults.length, 3);
   assert.equal(summary.synthesis, "merged result");
   assert.deepEqual(calls.slice(0, 3), [
+    "lane:security-reviewer",
     "lane:tech-lead",
     "lane:code-reviewer",
-    "lane:security-reviewer",
   ]);
   assert.equal(calls[3], "synthesis:swarm-synthesizer");
 });
@@ -91,10 +91,10 @@ test("runAgentSwarmWithAgents renders live monitor progress", async () => {
   assert.match(output, /merging parallel outputs/u);
   assert.match(output, /token mixing radar online/u);
   assert.match(output, /Swarm Synthesis/u);
-  assert.match(chunks.join(""), /\u001B\[38;5;240m✓ Swarm complete/u);
+  assert.match(output, /✓ Done \d/u);
 });
 
-test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time", async () => {
+test("runAgentSwarmWithAgents renders total swarm done stats once", async () => {
   const chunks: string[] = [];
   let clock = 1_000;
   await runAgentSwarmWithAgents({
@@ -121,9 +121,9 @@ test("runAgentSwarmWithAgents rewrites synthesis done time to total swarm time",
   });
 
   const output = stripAnsi(chunks.join(""));
-  assert.match(output, /✓ Done 56\.0s · ~1000 tokens/u);
+  assert.match(output, /✓ Done 56\.0s · ~5 tokens/u);
   assert.doesNotMatch(output, /✓ Done 26\.0s/u);
-  assert.match(chunks.join(""), /\u001B\[38;5;141m\u001B\[1m✓ Done 56\.0s/u);
+  assert.equal((output.match(/✓ Done/gu) ?? []).length, 1);
 });
 
 test("runAgentSwarmWithAgents synthesizes large swarms by default", async () => {
