@@ -9,6 +9,7 @@ import { formatAgentRuns } from "../src/agent-run-format.js";
 import { listAgentRuns, startAgentRun } from "../src/agent-run-store.js";
 import { registerActor } from "../src/actor-store.js";
 import { sendInboxMessage } from "../src/inbox-store.js";
+import { formatAgentsOverview } from "../src/tui-agent-commands.js";
 
 test("agent run store persists state, output, and wire events", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-"));
@@ -75,6 +76,27 @@ test("formatAgentRuns shows active and completed runs", async () => {
     await run.finish("cancelled", { error: "stopped" });
     const completed = stripAnsi(await formatAgentRuns(root));
     assert.match(completed, /STOPPED/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("formatAgentsOverview hides completed recent runs from the running section", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-active-"));
+  try {
+    const run = await startAgentRun(root, {
+      id: "run-completed",
+      kind: "swarm-lane",
+      agentId: "code-reviewer",
+      agentName: "Code Reviewer",
+      prompt: "review completed work",
+    });
+    await run.finish("done");
+
+    const running = stripAnsi(await formatAgentsOverview(root));
+    assert.match(running, /0 active/u);
+    assert.doesNotMatch(running, /DONE/u);
+    assert.doesNotMatch(running, /Code Reviewer/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

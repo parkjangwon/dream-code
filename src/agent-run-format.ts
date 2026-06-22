@@ -4,23 +4,38 @@ import { listAgentRuns } from "./agent-run-store.js";
 import { listActors } from "./actor-store.js";
 import { listPendingInboxMessages } from "./inbox-store.js";
 
-export async function formatAgentRuns(root: string): Promise<string> {
+export type AgentRunFormatOptions = {
+  readonly scope?: "all" | "active";
+};
+
+export async function formatAgentRuns(root: string, options: AgentRunFormatOptions = {}): Promise<string> {
   const runs = await listAgentRuns(root);
   const inboxCounts = await pendingInboxCountsByRun(root);
-  if (runs.length === 0) {
+  const activeRuns = runs.filter(isActiveRun);
+  const visibleRuns = options.scope === "active" ? activeRuns : runs;
+  if (visibleRuns.length === 0) {
     return [
-      paint("Running", ansi.accent),
+      options.scope === "active"
+        ? `${paint("Running", ansi.accent)} ${paint("0 active", ansi.bold)}`
+        : paint("Running", ansi.accent),
       paint("No subagents are currently running.", ansi.dim),
       "",
     ].join("\n");
   }
 
-  const activeCount = runs.filter((run) => run.status === "running" || run.status === "queued").length;
+  const activeCount = activeRuns.length;
+  const heading = options.scope === "active"
+    ? `${paint("Running", ansi.accent)} ${paint(`${activeCount} active`, ansi.bold)}`
+    : `${paint("Running", ansi.accent)} ${paint(`${activeCount} active`, ansi.bold)} ${paint("·", ansi.guide)} ${runs.length} recent`;
   return [
-    `${paint("Running", ansi.accent)} ${paint(`${activeCount} active`, ansi.bold)} ${paint("·", ansi.guide)} ${runs.length} recent`,
-    ...runs.map((run) => formatRunLine(run, inboxCounts.get(run.id) ?? 0)),
+    heading,
+    ...visibleRuns.map((run) => formatRunLine(run, inboxCounts.get(run.id) ?? 0)),
     "",
   ].join("\n");
+}
+
+function isActiveRun(run: AgentRunRecord): boolean {
+  return run.status === "running" || run.status === "queued";
 }
 
 async function pendingInboxCountsByRun(root: string): Promise<ReadonlyMap<string, number>> {

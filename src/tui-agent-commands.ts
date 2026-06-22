@@ -69,7 +69,7 @@ export async function formatAgentsOverview(configRoot: string): Promise<string> 
   return [
     `${paint("Agents", ansi.accent)}  ${paint("Delegate", ansi.dim)}  ${paint("Running", ansi.dim)}  ${paint("Templates", ansi.dim)}`,
     "",
-    (await formatAgentRuns(configRoot)).trimEnd(),
+    (await formatAgentRuns(configRoot, { scope: "active" })).trimEnd(),
     "",
     formatTemplateSummary().trimEnd(),
     "",
@@ -133,7 +133,7 @@ async function showTemplatesMenu(
 async function showRunningAgentsMenu(configRoot: string, questioner: AgentQuestioner): Promise<void> {
   const actors = (await listActors(configRoot)).filter((actor) => actor.status === "running" || actor.status === "queued" || actor.status === "idle");
   if (questioner.select === undefined || actors.length === 0) {
-    output.write(await formatAgentRuns(configRoot));
+    output.write(await formatAgentRuns(configRoot, { scope: "active" }));
     return;
   }
   const actorId = await questioner.select({
@@ -147,7 +147,7 @@ async function showRunningAgentsMenu(configRoot: string, questioner: AgentQuesti
   });
   const actor = actors.find((candidate) => candidate.id === actorId);
   if (actor === undefined) {
-    output.write(await formatAgentRuns(configRoot));
+    output.write(await formatAgentRuns(configRoot, { scope: "active" }));
     return;
   }
   const message = (await questioner.question(`Message to ${actor.name}: `)).trim();
