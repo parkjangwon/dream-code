@@ -49,6 +49,8 @@ test("runAgentPrompt sends recent session turns to the provider", async () => {
 
     const messages = receivedMessages[0] ?? [];
     assert.deepEqual(messages.map((message) => message.role), ["system", "user", "user"]);
+    assert.match(messages[0]?.content ?? "", /Model routing context/u);
+    assert.match(messages[0]?.content ?? "", /full transcript/u);
     assert.match(messages[1]?.content ?? "", /<session-context>/u);
     assert.match(messages[1]?.content ?? "", /Remember the release flow/u);
     assert.match(messages[1]?.content ?? "", /I will test, tag, and verify/u);

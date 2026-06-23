@@ -30,15 +30,33 @@ function inferModelTier(model: string): ModelTier {
   if (matchesAny(normalized, ["nano", "lite", "flash", "small", "fast", "highspeed", "20b"])) {
     return "low";
   }
-  if (matchesAny(normalized, ["pro", "max", "ultra", "opus", "xhigh", "codex", "480b", "405b", "120b"])) {
+  if (matchesAny(normalized, ["pro", "max", "ultra", "opus", "xhigh", "codex", "glm-5", "gpt-5", "480b", "405b", "120b"])) {
     return "high";
   }
   return "mid";
 }
 
-function modelStrengthScore(model: string): number {
+export function modelStrengthScore(model: string): number {
   const normalized = model.toLowerCase();
   let score = 0;
+  if (normalized.includes("fugu-ultra")) {
+    score += 400;
+  }
+  if (normalized.includes("gpt-5.5")) {
+    score += 360;
+  } else if (normalized.includes("gpt-5.4")) {
+    score += 300;
+  } else if (normalized.includes("gpt-5")) {
+    score += 260;
+  }
+  if (normalized.includes("glm-5.2")) {
+    score += 320;
+  } else if (normalized.includes("glm-5")) {
+    score += 280;
+  }
+  if (normalized.includes("deepseek-v4-pro")) {
+    score += 170;
+  }
   if (matchesAny(normalized, ["pro", "max", "ultra", "opus", "xhigh", "codex"])) {
     score += 100;
   }

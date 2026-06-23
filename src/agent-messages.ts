@@ -17,6 +17,7 @@ export function createAgentMessages(
   workspace = cwd(),
   recentMessages: readonly ChatMessage[] = [],
   mentionedContext = "Referenced files and directories: none.",
+  routingContext = "Model routing context: route not selected yet.",
 ): readonly ChatMessage[] {
   return [
     {
@@ -34,6 +35,7 @@ export function createAgentMessages(
         memoryContext,
         compactContext,
         mentionedContext,
+        routingContext,
         formatContextDocsForPrompt(contextDocs ?? { rules: [], design: [] }),
         formatToolProtocol(),
         formatAgentProfile(agent),

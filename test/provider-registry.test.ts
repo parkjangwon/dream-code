@@ -62,6 +62,7 @@ test("provider defaults track official coding model tiers", () => {
   const qwen = required(resolveProviderDefinition("qwen"));
   const cerebras = required(resolveProviderDefinition("cerebras"));
   const together = required(resolveProviderDefinition("together"));
+  const openrouter = required(resolveProviderDefinition("openrouter"));
 
   assert.deepEqual(openai.defaultModels, {
     low: "gpt-5.4-mini",
@@ -74,6 +75,24 @@ test("provider defaults track official coding model tiers", () => {
   assert.equal(qwen.defaultModels.high, "qwen3.7-max");
   assert.equal(cerebras.defaultModels.high, "zai-glm-4.7");
   assert.equal(together.defaultModels.high, "zai-org/GLM-5.2");
+  assert.deepEqual(openrouter.defaultModels, {
+    low: "deepseek/deepseek-v4-flash",
+    mid: "z-ai/glm-5.2",
+    high: "z-ai/glm-5.2",
+  });
+});
+
+test("Sakana Fugu is available as an OpenAI-compatible orchestration provider", () => {
+  const sakana = required(resolveProviderDefinition("sakana"));
+
+  assert.equal(sakana.protocol, "chat-completions");
+  assert.deepEqual(sakana.defaultModels, {
+    low: "fugu",
+    mid: "fugu",
+    high: "fugu-ultra",
+  });
+  assert.deepEqual(apiKeyEnvKeys(sakana).slice(0, 2), ["DREAM_SAKANA_API_KEY", "SAKANA_API_KEY"]);
+  assert.equal(regionForProvider(sakana, "console")?.baseUrl, "");
 });
 
 test("providerModelIdForRequest normalizes existing OpenCode Go config model IDs", () => {

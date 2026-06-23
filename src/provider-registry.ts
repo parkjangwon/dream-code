@@ -87,6 +87,22 @@ const openAiModels = [
   "gpt-5.1-codex-mini",
 ] as const;
 
+const openRouterModels = [
+  "deepseek/deepseek-v4-flash",
+  "deepseek/deepseek-v4-flash:free",
+  "deepseek/deepseek-v3.2",
+  "z-ai/glm-5.2",
+  "z-ai/glm-5",
+  "openai/gpt-5.4-mini",
+  "openai/gpt-5.5",
+] as const;
+
+const sakanaModels = [
+  "fugu",
+  "fugu-ultra",
+  "fugu-ultra-20260615",
+] as const;
+
 export const providerDefinitions = [
   define("openai", "OpenAI", "chat-completions", "authorization", ["OPENAI_API_KEY"], [
     region("global", "Global", "https://api.openai.com/v1"),
@@ -121,7 +137,10 @@ export const providerDefinitions = [
   ], "payg", models("mimo-v2.5", "mimo-v2.5-pro", "mimo-v2.5-pro"), ["api-key"], "https://mimo.mi.com/docs/en-US/api/chat/openai-api"),
   define("openrouter", "OpenRouter", "chat-completions", "authorization", ["OPENROUTER_API_KEY"], [
     region("global", "Global", "https://openrouter.ai/api/v1"),
-  ], "global", models("openai/gpt-5.4-mini", "openai/gpt-5.5", "openai/gpt-5.5"), ["api-key"], "https://openrouter.ai/docs/quickstart"),
+  ], "global", models("deepseek/deepseek-v4-flash", "z-ai/glm-5.2", "z-ai/glm-5.2"), ["api-key"], "https://openrouter.ai/docs/quickstart", openRouterModels),
+  define("sakana", "Sakana Fugu", "chat-completions", "authorization", ["SAKANA_API_KEY"], [
+    region("console", "Console endpoint", ""),
+  ], "console", models("fugu", "fugu", "fugu-ultra"), ["api-key"], "https://sakana.ai/fugu/", sakanaModels),
   define("groq", "Groq", "chat-completions", "authorization", ["GROQ_API_KEY"], [
     region("global", "Global", "https://api.groq.com/openai/v1"),
   ], "global", models("llama-3.3-70b-versatile", "openai/gpt-oss-20b", "openai/gpt-oss-120b"), ["api-key"], "https://console.groq.com/docs/models"),

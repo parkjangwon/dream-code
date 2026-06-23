@@ -5,9 +5,11 @@ import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentMessages, runAgentPrompt } from "../src/agent-runner.js";
+import { createAgentMessages, formatModelRoutingContext, runAgentPrompt } from "../src/agent-runner.js";
+import { bootstrapAutoModelConfig } from "../src/model-auto-bootstrap.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
+import { startSession } from "../src/session-store.js";
 import type { DreamSkill } from "../src/skills.js";
 
 test("createAgentMessages keeps prompts minimal for token-saving startup", () => {
@@ -20,6 +22,46 @@ test("createAgentMessages keeps prompts minimal for token-saving startup", () =>
   assert.match(messages[0]?.content ?? "", /prefer completion over clarification/u);
   assert.match(messages[0]?.content ?? "", /use research before asking the user/u);
   assert.match(messages[0]?.content ?? "", /verify before claiming success/u);
+  assert.match(messages[0]?.content ?? "", /Model routing context/u);
+});
+
+test("createAgentMessages exposes sticky and fallback routing context", () => {
+  const routingContext = formatModelRoutingContext([
+    {
+      provider: "openrouter",
+      model: "z-ai/glm-5.2",
+      tier: "high",
+      category: "deep",
+      reason: "auto sticky session model",
+    },
+    {
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+      tier: "high",
+      category: "deep",
+      reason: "auto complexity escalation: Deep",
+    },
+  ]);
+  const messages = createAgentMessages(
+    "Continue the implementation",
+    [],
+    undefined,
+    undefined,
+    [],
+    "MCP servers: none configured.",
+    "Session compact: prior plan.",
+    "Dream memory: none.",
+    "/repo",
+    [],
+    "Referenced files and directories: none.",
+    routingContext,
+  );
+  const system = messages[0]?.content ?? "";
+
+  assert.match(system, /shared authoritative context/u);
+  assert.match(system, /openrouter\/z-ai\/glm-5\.2/u);
+  assert.match(system, /auto sticky session model/u);
+  assert.match(system, /fallbacks: deepseek\/deepseek-v4-pro/u);
 });
 
 test("createAgentMessages injects only explicitly requested skill bodies", () => {
@@ -255,6 +297,58 @@ test("runAgentPrompt can collect tokens without rendering response chrome", asyn
     });
 
     assert.equal(chunks.join(""), "");
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runAgentPrompt keeps the previous hard model for related session follow-up", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-sticky-routing-"));
+  const requestedModels: string[] = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body = `${body}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      requestedModels.push(modelFromRequest(JSON.parse(body)));
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}",
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "deepseek", { apiKey: "sk-deepseek", region: "global", baseUrl });
+    await writeProviderCredential(root, "openrouter", { apiKey: "sk-openrouter", region: "global", baseUrl });
+    const config = bootstrapAutoModelConfig(defaultConfig(), new Set(["deepseek", "openrouter"]));
+    const session = await startSession(root, "/repo");
+
+    await runAgentPrompt({
+      config,
+      configRoot: root,
+      prompt: "Use rg to inspect files, then design the architecture migration algorithm",
+      cwd: "/repo",
+      sessionId: session.id,
+      renderResponse: false,
+      write: () => {},
+    });
+    await runAgentPrompt({
+      config,
+      configRoot: root,
+      prompt: "Continue the implementation and update the tests",
+      cwd: "/repo",
+      sessionId: session.id,
+      renderResponse: false,
+      write: () => {},
+    });
+
+    assert.deepEqual(requestedModels, ["z-ai/glm-5.2", "z-ai/glm-5.2"]);
   } finally {
     server.close();
     await rm(root, { recursive: true, force: true });

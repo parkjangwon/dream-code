@@ -90,13 +90,149 @@ test("selectModelForPrompt routes auto categories across connected providers", (
 });
 
 test("selectModelForPrompt skips disconnected category candidates", () => {
-  const selected = selectModelForPrompt(defaultAutoConfig(), "Implement a backend refactor", undefined, {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "Implement a backend endpoint", undefined, {
     connectedProviders: new Set(["openai"]),
   });
 
   assert.equal(selected.provider, "openai");
-  assert.equal(selected.model, "gpt-5.5");
+  assert.equal(selected.model, "gpt-5.4-mini");
+  assert.equal(selected.category, "coding");
+});
+
+test("selectModelForPrompt routes tool and file work to cheap fast models", () => {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "Use rg to find files, read the output, then write the patch", undefined, {
+    connectedProviders: new Set(["deepseek", "openai"]),
+  });
+
+  assert.equal(selected.category, "tool");
+  assert.equal(selected.tier, "low");
+  assert.equal(selected.provider, "deepseek");
+  assert.equal(selected.model, "deepseek-v4-flash");
+});
+
+test("selectModelForPrompt keeps deep reasoning on high quality models", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["sakana"])).model;
+  const selected = selectModelForPrompt(config, "Design the architecture for a complex migration algorithm", undefined, {
+    connectedProviders: new Set(["sakana"]),
+  });
+
+  assert.equal(selected.category, "ultrabrain");
+  assert.equal(selected.tier, "high");
+  assert.equal(selected.provider, "sakana");
+  assert.equal(selected.model, "fugu-ultra");
+});
+
+test("selectModelForPrompt uses OpenRouter submodels by task difficulty", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["openrouter"])).model;
+  const easy = selectModelForPrompt(config, "Find files with rg and summarize command output", undefined, {
+    connectedProviders: new Set(["openrouter"]),
+  });
+  const hard = selectModelForPrompt(config, "Design a complex algorithm and architecture for long-horizon coding", undefined, {
+    connectedProviders: new Set(["openrouter"]),
+  });
+
+  assert.equal(easy.provider, "openrouter");
+  assert.equal(easy.model, "deepseek/deepseek-v4-flash");
+  assert.equal(hard.provider, "openrouter");
+  assert.equal(hard.model, "z-ai/glm-5.2");
+});
+
+test("selectModelForPrompt ranks actual models inside a cheap provider set", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek", "openrouter"])).model;
+  const easy = selectModelForPrompt(config, "Read files and find command output", undefined, {
+    connectedProviders: new Set(["deepseek", "openrouter"]),
+  });
+  const hard = selectModelForPrompt(config, "Plan a complex architecture migration algorithm", undefined, {
+    connectedProviders: new Set(["deepseek", "openrouter"]),
+  });
+
+  assert.equal(easy.provider, "deepseek");
+  assert.equal(easy.model, "deepseek-v4-flash");
+  assert.equal(hard.provider, "openrouter");
+  assert.equal(hard.model, "z-ai/glm-5.2");
+});
+
+test("selectModelForPrompt does not let tool keywords mask architecture reasoning", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek", "openrouter"])).model;
+  const selected = selectModelForPrompt(config, "Use rg to inspect files, then design the architecture migration algorithm", undefined, {
+    connectedProviders: new Set(["deepseek", "openrouter"]),
+  });
+
+  assert.equal(selected.category, "ultrabrain");
+  assert.equal(selected.tier, "high");
+  assert.equal(selected.provider, "openrouter");
+  assert.equal(selected.model, "z-ai/glm-5.2");
+});
+
+test("selectModelForPrompt escalates complex coding from cheap executor to stronger reasoning", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek", "openrouter"])).model;
+  const selected = selectModelForPrompt(
+    config,
+    "Implement pagination across API, storage, CLI, tests, backward compatibility, concurrency, error handling, and rollout safety",
+    undefined,
+    { connectedProviders: new Set(["deepseek", "openrouter"]) },
+  );
+
+  assert.equal(selected.tier, "high");
   assert.equal(selected.category, "deep");
+  assert.equal(selected.provider, "openrouter");
+  assert.equal(selected.model, "z-ai/glm-5.2");
+  assert.equal(selected.reason, "auto complexity escalation: Deep");
+});
+
+test("selectModelForPrompt keeps sticky session model for related follow-up work", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek", "openrouter"])).model;
+  const selected = selectModelForPrompt(config, "Continue the implementation and update the tests", undefined, {
+    connectedProviders: new Set(["deepseek", "openrouter"]),
+    stickyModel: {
+      provider: "openrouter",
+      model: "z-ai/glm-5.2",
+      tier: "high",
+      category: "deep",
+    },
+  });
+
+  assert.equal(selected.provider, "openrouter");
+  assert.equal(selected.model, "z-ai/glm-5.2");
+  assert.equal(selected.tier, "high");
+  assert.equal(selected.category, "deep");
+  assert.equal(selected.reason, "auto sticky session model");
+});
+
+test("selectModelForPrompt drops sticky model when prompt becomes materially easier", () => {
+  const config = bootstrapAutoModelConfig(defaultDreamConfigForRouting(), new Set(["deepseek", "openrouter"])).model;
+  const selected = selectModelForPrompt(config, "Use rg to find the file and summarize the command output", undefined, {
+    connectedProviders: new Set(["deepseek", "openrouter"]),
+    stickyModel: {
+      provider: "openrouter",
+      model: "z-ai/glm-5.2",
+      tier: "high",
+      category: "deep",
+    },
+  });
+
+  assert.equal(selected.category, "tool");
+  assert.equal(selected.tier, "low");
+  assert.equal(selected.provider, "deepseek");
+  assert.equal(selected.model, "deepseek-v4-flash");
+});
+
+test("selectModelForPrompt does not keep same-tier sticky model for unrelated work", () => {
+  const selected = selectModelForPrompt(defaultAutoConfig(), "Write release notes for the new version", undefined, {
+    connectedProviders: new Set(["deepseek", "openai"]),
+    stickyModel: {
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      tier: "low",
+      category: "tool",
+    },
+  });
+
+  assert.equal(selected.category, "writing");
+  assert.equal(selected.tier, "low");
+  assert.equal(selected.reason, "auto category: Writing");
+  assert.equal(selected.provider, "openai");
+  assert.equal(selected.model, "gpt-5.4-mini");
 });
 
 test("selectModelForPrompt skips unhealthy auto category candidates", () => {
@@ -146,8 +282,8 @@ test("selectModelForPrompt routes Korean project analysis to a deep model", () =
 
   assert.equal(selected.category, "deep");
   assert.equal(selected.tier, "high");
-  assert.equal(selected.provider, "deepseek");
-  assert.equal(selected.model, "deepseek-v4-pro");
+  assert.equal(selected.provider, "openai");
+  assert.equal(selected.model, "gpt-5.5");
 });
 
 test("bootstrapAutoModelConfig uses live catalog models for connected providers", () => {

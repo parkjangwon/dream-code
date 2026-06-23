@@ -8,25 +8,38 @@ export function defaultAutoCategories(): readonly AutoModelCategoryRoute[] {
       "gemini/gemini-3.5-flash",
       "groq/llama-3.3-70b-versatile",
     ]),
+    categoryRoute("ultrabrain", "Ultrabrain", "high", ["architecture", "algorithm", "migration", "threat model", "distributed", "\uC544\uD0A4\uD14D\uCC98", "\uC54C\uACE0\uB9AC\uC998", "\uC124\uACC4"], [
+      "openai/gpt-5.5",
+      "deepseek/deepseek-v4-pro",
+      "openai/gpt-5.4",
+    ]),
+    categoryRoute("tool", "Tool I/O", "low", ["tool", "tool call", "command", "shell", "terminal", "stdout", "stderr", "rg", "grep", "find files", "file search", "read file", "write file", "apply patch", "\uD234", "\uBA85\uB839", "\uD30C\uC77C \uCC3E", "\uD30C\uC77C \uC77D", "\uD30C\uC77C \uC4F0", "\uAC80\uC0C9"], [
+      "deepseek/deepseek-v4-flash",
+      "openai/gpt-5.4-mini",
+      "gemini/gemini-3.1-flash-lite",
+      "groq/llama-3.3-70b-versatile",
+    ]),
     categoryRoute("reader", "Reader", "low", ["explain", "summarize", "what is", "how does", "\uC124\uBA85", "\uC694\uC57D"], [
       "gemini/gemini-3.5-flash",
       "deepseek/deepseek-v4-flash",
       "openai/gpt-5.4-mini",
     ]),
-    categoryRoute("visual", "Visual", "mid", ["ui", "ux", "css", "react", "html", "layout", "style", "design", "\uD654\uBA74", "\uB514\uC790\uC778", "\uB808\uC774\uC544\uC6C3"], [
+    categoryRoute("visual", "Visual", "mid", ["ui", "ux", "css", "react", "html", "layout", "style", "\uD654\uBA74", "\uB514\uC790\uC778", "\uB808\uC774\uC544\uC6C3"], [
       "gemini/gemini-3.5-flash",
       "openai/gpt-5.5",
       "deepseek/deepseek-v4-pro",
     ]),
-    categoryRoute("deep", "Deep", "high", ["implement", "debug", "refactor", "fix", "test", "backend", "typescript", "analyze", "repository", "codebase", "repo", "project analysis", "\uAD6C\uD604", "\uC218\uC815", "\uB9AC\uD329\uD130", "\uB514\uBC84\uADF8", "\uBD84\uC11D", "\uD504\uB85C\uC81D\uD2B8 \uBD84\uC11D", "\uCF54\uB4DC \uBD84\uC11D", "\uAD6C\uC870 \uBD84\uC11D", "\uB808\uD3EC \uBD84\uC11D", "\uC800\uC7A5\uC18C \uBD84\uC11D"], [
-      "deepseek/deepseek-v4-pro",
-      "openai/gpt-5.5",
+    categoryRoute("coding", "Coding", "low", ["implement", "code", "coding", "fix", "test", "backend", "frontend", "typescript", "javascript", "python", "rust", "golang", "write code", "\uCF54\uB529", "\uAD6C\uD604", "\uC218\uC815", "\uD14C\uC2A4\uD2B8"], [
+      "deepseek/deepseek-v4-flash",
       "opencode-go/kimi-k2.7-code",
+      "kimi/kimi-k2.7-code",
+      "z-ai/glm-5.2",
+      "openai/gpt-5.4-mini",
     ]),
-    categoryRoute("ultrabrain", "Ultrabrain", "high", ["architecture", "algorithm", "migration", "threat model", "distributed", "\uC544\uD0A4\uD14D\uCC98", "\uC54C\uACE0\uB9AC\uC998", "\uC124\uACC4"], [
+    categoryRoute("deep", "Deep", "high", ["debug", "refactor", "analyze", "repository", "codebase", "repo", "project analysis", "root cause", "regression", "investigate", "\uB9AC\uD329\uD130", "\uB514\uBC84\uADF8", "\uBD84\uC11D", "\uD504\uB85C\uC81D\uD2B8 \uBD84\uC11D", "\uCF54\uB4DC \uBD84\uC11D", "\uAD6C\uC870 \uBD84\uC11D", "\uB808\uD3EC \uBD84\uC11D", "\uC800\uC7A5\uC18C \uBD84\uC11D"], [
       "openai/gpt-5.5",
       "deepseek/deepseek-v4-pro",
-      "openai/gpt-5.4",
+      "opencode-go/kimi-k2.7-code",
     ]),
     categoryRoute("writing", "Writing", "low", ["readme", "docs", "documentation", "release notes", "changelog", "\uBB38\uC11C", "\uAE00"], [
       "gemini/gemini-3.5-flash",
@@ -50,7 +63,7 @@ export function defaultAutoAgentRoutes(): readonly AutoModelAgentRoute[] {
   return [
     agentRoute("tech-lead", "high", ["openai/gpt-5.5", "deepseek/deepseek-v4-pro", "openai/gpt-5.4"]),
     agentRoute("security-reviewer", "high", ["deepseek/deepseek-v4-pro", "openai/gpt-5.5", "openai/gpt-5.4"]),
-    agentRoute("code-reviewer", "mid", ["deepseek/deepseek-v4-pro", "openai/gpt-5.4", "gemini/gemini-3.5-flash"]),
+    agentRoute("code-reviewer", "mid", ["opencode-go/kimi-k2.7-code", "deepseek/deepseek-v4-pro", "openai/gpt-5.4", "gemini/gemini-3.5-flash"]),
     agentRoute("code-simplifier", "low", ["deepseek/deepseek-v4-flash", "openai/gpt-5.4-mini", "gemini/gemini-3.5-flash"]),
     agentRoute("ux-reviewer", "mid", ["gemini/gemini-3.5-flash", "openai/gpt-5.5", "deepseek/deepseek-v4-pro"]),
     agentRoute("swarm-synthesizer", "high", ["openai/gpt-5.5", "deepseek/deepseek-v4-pro", "opencode-go/kimi-k2.7-code"]),

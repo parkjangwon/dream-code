@@ -17,6 +17,7 @@ type AgentModelStreamOptions = {
   readonly signal?: AbortSignal;
   readonly renderResponse?: boolean;
   readonly write: (text: string) => void;
+  readonly onSelectedModel?: (selectedModel: SelectedModel) => Promise<void> | void;
 };
 
 export async function streamAgentWithFailover(
@@ -65,6 +66,7 @@ async function streamAgentOnce(
     await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
     response.finish();
     await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
+    await options.onSelectedModel?.(selectedModel);
     return assistantText;
   } catch (error) {
     response.stop();
@@ -90,6 +92,7 @@ async function streamAgentSilently(
   try {
     await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
     await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
+    await options.onSelectedModel?.(selectedModel);
     return assistantText;
   } catch (error) {
     await recordModelTelemetry(configRoot, {

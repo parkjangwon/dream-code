@@ -11,8 +11,10 @@ export const modelTierSchema = z.enum(["low", "mid", "high"]);
 export type ModelTier = z.infer<typeof modelTierSchema>;
 export const autoModelCategorySchema = z.enum([
   "quick",
+  "tool",
   "reader",
   "visual",
+  "coding",
   "deep",
   "ultrabrain",
   "writing",
@@ -90,6 +92,7 @@ export type SelectModelOptions = {
   readonly excludedModels?: ReadonlySet<string>;
   readonly modelAvailable?: (provider: string, model: string) => boolean;
   readonly agentId?: string;
+  readonly stickyModel?: Pick<SelectedModel, "provider" | "model" | "tier" | "category" | "agent">;
 };
 
 export function selectSingleProviderModel(

@@ -1,6 +1,6 @@
 import type { DreamConfig } from "./config.js";
 import { catalogModelsForProvider, type ModelCatalog } from "./model-catalog.js";
-import { bestModelForTier } from "./model-profile.js";
+import { bestModelForTier, modelStrengthScore } from "./model-profile.js";
 import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
 import type { AutoModelAgentRoute, AutoModelCategoryRoute, ModelTier } from "./model-routing.js";
 import { listProviderDefinitions, type ProviderDefinition } from "./provider-registry.js";
@@ -68,7 +68,8 @@ function routeCandidates(
     return connectedIds.has(providerFromCandidate(candidate)) && candidateExistsInCatalog(candidate, catalog);
   });
   const tierDefaults = connectedDefinitions.map((definition) => `${definition.id}/${modelForDefinitionTier(definition, tier, catalog)}`);
-  return unique([...preferredConnected, ...tierDefaults]);
+  const candidates = unique([...preferredConnected, ...tierDefaults]);
+  return tier === "high" ? [...candidates].sort((left, right) => modelStrengthScore(right) - modelStrengthScore(left)) : candidates;
 }
 
 function providerFromCandidate(candidate: string): string {

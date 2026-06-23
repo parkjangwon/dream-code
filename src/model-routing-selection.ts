@@ -1,4 +1,5 @@
 import { defaultAutoAgentRoutes, defaultAutoCategories } from "./model-routing-defaults.js";
+import { categoryPriority, shouldEscalateForComplexity, shouldKeepStickyModel } from "./model-routing-difficulty.js";
 import type {
   AutoModelAgentRoute,
   AutoModelCategory,
@@ -46,12 +47,17 @@ export function selectAutoCandidates(
 
 export function classifyPromptCategoryImpl(prompt: string, config?: ModelConfig): AutoModelCategory {
   const normalized = prompt.toLowerCase();
+  let selected: AutoModelCategory | undefined;
+  let selectedPriority = Number.NEGATIVE_INFINITY;
   for (const route of config === undefined ? defaultAutoCategories() : autoCategoriesImpl(config)) {
-    if (route.match.some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-      return route.id;
+    const matched = route.match.some((keyword) => normalized.includes(keyword.toLowerCase()));
+    const priority = categoryPriority(route.id);
+    if (matched && priority > selectedPriority) {
+      selected = route.id;
+      selectedPriority = priority;
     }
   }
-  return "quick";
+  return selected ?? "quick";
 }
 
 export function autoCategoriesImpl(config: ModelConfig): readonly AutoModelCategoryRoute[] {
@@ -97,9 +103,17 @@ function prioritizedAutoCandidates(
   }
 
   const category = classifyPromptCategoryImpl(prompt, config);
-  const categoryRoute = autoCategoriesImpl(config).find((route) => route.id === category);
+  const categoryRoute = escalatedCategoryRoute(config, prompt, category) ?? autoCategoriesImpl(config).find((route) => route.id === category);
   if (categoryRoute !== undefined) {
-    selected.push(...selectCategoryCandidates(categoryRoute, requestedTier, options, skipped));
+    const targetTier = requestedTier ?? categoryRoute.tier;
+    selected.push(...selectStickyCandidate(prompt, category, options, targetTier, skipped));
+    selected.push(...selectCategoryCandidates(
+      categoryRoute,
+      requestedTier,
+      options,
+      skipped,
+      categoryRoute.id === category ? `auto category: ${categoryRoute.label}` : `auto complexity escalation: ${categoryRoute.label}`,
+    ));
   }
 
   return selected;
@@ -110,13 +124,49 @@ function selectCategoryCandidates(
   requestedTier: ModelTier | undefined,
   options: SelectModelOptions,
   skipped: string[],
+  reason = `auto category: ${route.label}`,
 ): readonly SelectedModel[] {
   return selectCandidateChain(route.candidates, requestedTier ?? route.tier, options, skipped)
     .map((candidate) => ({
       ...candidate,
       category: route.id,
-      reason: `auto category: ${route.label}`,
+      reason,
     }));
+}
+
+function selectStickyCandidate(
+  prompt: string,
+  category: AutoModelCategory,
+  options: SelectModelOptions,
+  targetTier: ModelTier,
+  skipped: string[],
+): readonly SelectedModel[] {
+  const sticky = options.stickyModel;
+  if (sticky === undefined || !shouldKeepStickyModel(prompt, category, sticky.tier, targetTier, sticky.category)) {
+    return [];
+  }
+  if (!candidateAllowed(sticky.provider, sticky.model, options, skipped)) {
+    return [];
+  }
+  return [{
+    provider: sticky.provider,
+    model: sticky.model,
+    tier: sticky.tier,
+    reason: "auto sticky session model",
+    ...(sticky.category === undefined ? {} : { category: sticky.category }),
+    ...(sticky.agent === undefined ? {} : { agent: sticky.agent }),
+  }];
+}
+
+function escalatedCategoryRoute(
+  config: ModelConfig,
+  prompt: string,
+  category: AutoModelCategory,
+): AutoModelCategoryRoute | undefined {
+  if (!shouldEscalateForComplexity(prompt, category)) {
+    return undefined;
+  }
+  return autoCategoriesImpl(config).find((route) => route.id === "deep");
 }
 
 function selectCandidateChain(

@@ -24,6 +24,8 @@ test("parseModelList reads OpenAI-compatible model responses", () => {
 test("inferModelProfile classifies lightweight and strong model names", () => {
   assert.equal(inferModelProfile("vendor/model-flash").tier, "low");
   assert.equal(inferModelProfile("vendor/model-pro").tier, "high");
+  assert.equal(inferModelProfile("openrouter/z-ai/glm-5.2").tier, "high");
+  assert.equal(inferModelProfile("sakana/fugu-ultra").tier, "high");
   assert.equal(inferModelProfile("vendor/model-balanced").tier, "mid");
 });
 
