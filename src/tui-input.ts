@@ -3,6 +3,7 @@ import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
+import { renderFixedPromptInputView } from "./tui-anchored-input-render.js";
 import {
   agentViewLines,
   type AgentViewOptions,
@@ -32,6 +33,7 @@ export type InteractiveInputOptions = {
   readonly statusLines?: readonly string[];
   readonly cancelOnEmptyBackspace?: boolean;
   readonly agentView?: AgentViewOptions;
+  readonly anchored?: boolean;
 };
 
 export type InteractiveInputResult =
@@ -66,7 +68,7 @@ export function readInteractiveInput(
     const previousRawMode = input.isRaw;
 
     const render = (): void => {
-      renderedLines = renderInputView(state, options.prompt, options.secret === true, renderedStatusLines(), renderedLines);
+      renderedLines = renderInputFrame(renderedLines);
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
@@ -81,10 +83,24 @@ export function readInteractiveInput(
     };
 
     const renderedStatusLines = (): readonly string[] => {
-      if (agentViewState === undefined) {
+      if (options.anchored === true || !agentViewFocused || agentViewState === undefined) {
         return options.statusLines ?? [];
       }
-      return [...(options.statusLines ?? []), "", ...agentViewLines(agentViewState)];
+      return [...(options.statusLines ?? []), "", ...agentViewLines(agentViewState, Math.max(80, output.columns ?? 80), inlineAgentViewMaxLines())];
+    };
+
+    const renderedAboveLines = (): readonly string[] => {
+      if (options.anchored !== true || !agentViewFocused || agentViewState === undefined) {
+        return [];
+      }
+      return ["", ...agentViewLines(agentViewState, Math.max(80, output.columns ?? 80), inlineAgentViewMaxLines())];
+    };
+
+    const renderInputFrame = (previousLineCount = 0): number => {
+      if (options.anchored === true) {
+        return renderFixedPromptInputView(state, options.prompt, options.secret === true, renderedStatusLines(), renderedAboveLines(), previousLineCount);
+      }
+      return renderInputView(state, options.prompt, options.secret === true, renderedStatusLines(), previousLineCount);
     };
 
     const onKeypress = (value: string | undefined, key: Key): void => {
@@ -97,6 +113,7 @@ export function readInteractiveInput(
         }
         if (shouldReturnFromAgentView(agentViewState, key)) {
           agentViewFocused = false;
+          agentViewState = undefined;
           render();
           return;
         }
@@ -108,6 +125,7 @@ export function readInteractiveInput(
         }
         if (agentUpdate.result.kind === "close") {
           agentViewFocused = false;
+          agentViewState = undefined;
           render();
           return;
         }
@@ -159,7 +177,7 @@ export function readInteractiveInput(
             lastCtrlCAt = now;
             clearRenderedLines(renderedLines);
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            renderedLines = renderInputView(state, options.prompt, options.secret === true, renderedStatusLines());
+            renderedLines = renderInputFrame();
           }
           return;
         default:
@@ -179,6 +197,10 @@ export function readInteractiveInput(
     input.on("keypress", onKeypress);
     render();
   });
+}
+
+function inlineAgentViewMaxLines(): number {
+  return Math.max(6, Math.min(10, Math.floor((output.rows ?? 24) / 2)));
 }
 
 export function actionForKey(value: string | undefined, key: Key): InputAction | undefined {

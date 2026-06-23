@@ -19,6 +19,19 @@ export function formatDeactivateRunningInputRegion(): string {
   return "\u001B[r";
 }
 
+export function formatPrepareRunningInputRedraw(
+  rows: number | undefined,
+  previousLineCount: number,
+  nextLineCount: number,
+): string {
+  const clearLineCount = Math.max(previousLineCount, nextLineCount);
+  return [
+    formatDeactivateRunningInputRegion(),
+    formatClearRunningInput(rows, clearLineCount),
+    formatActivateRunningInputRegion(rows, nextLineCount),
+  ].join("");
+}
+
 export function formatClearRunningInput(rows: number | undefined, inputLineCount: number): string {
   if (rows === undefined || inputLineCount === 0) {
     return "\r\u001B[2K";

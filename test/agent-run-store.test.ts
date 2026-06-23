@@ -229,6 +229,23 @@ test("agentViewLines renders a Claude-style library tab", () => {
   assert.match(view, /code-reviewer\s+·\s+inherit/u);
 });
 
+test("agentViewLines can clamp long inline library panels", () => {
+  const lines = agentViewLines({
+    agents: [
+      { id: "reviewer", name: "Reviewer", summary: "Review changes.", model: "inherit", tools: ["read"], prompt: "Review.", source: "built-in" },
+      { id: "security", name: "Security", summary: "Review security.", model: "inherit", tools: ["read"], prompt: "Secure.", source: "built-in" },
+      { id: "ux", name: "UX", summary: "Review UX.", model: "inherit", tools: ["read"], prompt: "UX.", source: "built-in" },
+    ],
+    rows: [],
+    selectedIndex: 0,
+    tab: "library",
+  }, 100, 8);
+
+  assert.equal(lines.length, 8);
+  assert.match(stripAnsi(lines.join("\n")), /…/u);
+  assert.match(stripAnsi(lines[lines.length - 1] ?? ""), /Esc to close/u);
+});
+
 test("renderAgentView returns the cursor to the clear anchor after tall tabs", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {

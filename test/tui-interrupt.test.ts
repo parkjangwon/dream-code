@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { formatGuardedRunningOutput, nextEscInterruptState } from "../src/tui-interrupt.js";
+import { formatPrepareRunningInputRedraw } from "../src/tui-interrupt-format.js";
 import { registerActor } from "../src/actor-store.js";
 import { drainInboxMessages } from "../src/inbox-store.js";
 import { slashCommands } from "../src/tui-commands.js";
@@ -78,6 +79,15 @@ test("formatGuardedRunningOutput writes above the anchored input component when 
 
   assert.match(rendered, /^\u001B\[19;1H/u);
   assert.match(rendered, /Tool read src\/tui\.ts\n/u);
+});
+
+test("formatPrepareRunningInputRedraw clears the taller previous bottom area before shrinking", () => {
+  const rendered = formatPrepareRunningInputRedraw(24, 8, 3);
+
+  assert.equal(rendered.startsWith("\u001B[r"), true);
+  assert.match(rendered, /\u001B\[17;1H\r\u001B\[2K/u);
+  assert.match(rendered, /\u001B\[24;1H\r\u001B\[2K/u);
+  assert.equal(rendered.endsWith("\u001B[1;21r\u001B[21;1H"), true);
 });
 
 test("queueSteeringMessage sends to the current running main actor inbox", async () => {

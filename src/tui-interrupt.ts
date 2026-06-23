@@ -3,12 +3,12 @@ import { emitKeypressEvents, type Key } from "node:readline";
 
 import { ansi } from "./ansi.js";
 import { actionForKey, type InteractiveInputOptions } from "./tui-input.js";
+import { anchoredInputViewLines, renderFixedPromptInputView } from "./tui-anchored-input-render.js";
 import { agentViewLines, type AgentViewOptions, type AgentViewResult } from "./tui-agent-view.js";
 import { createAgentViewState, hasActiveAgentRows, shouldFocusAgentViewFromInput, shouldReturnFromAgentView, updateAgentView, type AgentViewState } from "./tui-agent-view-state.js";
-import { inputViewLines, renderAnchoredInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputState } from "./tui-input-state.js";
 import { dispatchRunningCommand, type RunningOutputWriter, type RunningStatusWriter } from "./tui-interrupt-dispatch.js";
-import { formatActivateRunningInputRegion, formatClearRunningInput, formatDeactivateRunningInputRegion, formatGuardedRunningOutput, interruptHint } from "./tui-interrupt-format.js";
+import { formatClearRunningInput, formatDeactivateRunningInputRegion, formatGuardedRunningOutput, formatPrepareRunningInputRedraw, interruptHint } from "./tui-interrupt-format.js";
 import { parseRunningCommand, type RunningCommand } from "./tui-running-command.js";
 
 export type EscInterruptState = {
@@ -69,39 +69,36 @@ export async function runWithEscInterrupt<T>(
     renderInputWithRegion();
   };
   const renderedStatusLines = (): readonly string[] => {
-    if (agentViewState === undefined) {
-      return statusLines;
+    return statusLines;
+  };
+  const renderedAboveLines = (): readonly string[] => {
+    if (!agentViewFocused || agentViewState === undefined) {
+      return [];
     }
-    return [...statusLines, "", ...agentViewLines(agentViewState)];
+    return ["", ...agentViewLines(agentViewState, Math.max(80, output.columns ?? 80), inlineAgentViewMaxLines())];
   };
   const renderInput = (): void => {
-    renderedInputLines = renderAnchoredInputView(
-      inputState,
-      options.input?.prompt ?? "> ",
-      options.input?.secret === true,
-      renderedStatusLines(),
-      renderedInputLines,
-    );
+    renderInputWithRegion();
   };
   const renderInputWithRegion = (): void => {
     const previousLineCount = renderedInputLines;
-    renderedInputLines = inputViewLines(
+    const nextLineCount = anchoredInputViewLines(
       inputState,
       options.input?.prompt ?? "> ",
       options.input?.secret === true,
       renderedStatusLines(),
+      renderedAboveLines(),
     ).length;
-    activateRegion();
-    renderedInputLines = renderAnchoredInputView(
+    writeInternal(formatPrepareRunningInputRedraw(output.rows, previousLineCount, nextLineCount));
+    renderedInputLines = nextLineCount;
+    renderedInputLines = renderFixedPromptInputView(
       inputState,
       options.input?.prompt ?? "> ",
       options.input?.secret === true,
       renderedStatusLines(),
-      previousLineCount,
+      renderedAboveLines(),
+      0,
     );
-  };
-  const activateRegion = (): void => {
-    writeInternal(formatActivateRunningInputRegion(output.rows, renderedInputLines));
   };
   const deactivateRegion = (): void => {
     writeInternal(formatDeactivateRunningInputRegion());
@@ -115,6 +112,7 @@ export async function runWithEscInterrupt<T>(
     if (agentViewFocused && agentViewState !== undefined) {
       if (shouldReturnFromAgentView(agentViewState, key)) {
         agentViewFocused = false;
+        agentViewState = undefined;
         renderInputWithRegion();
         return;
       }
@@ -126,6 +124,7 @@ export async function runWithEscInterrupt<T>(
       }
       if (agentUpdate.result.kind === "close") {
         agentViewFocused = false;
+        agentViewState = undefined;
         renderInputWithRegion();
         return;
       }
@@ -137,6 +136,7 @@ export async function runWithEscInterrupt<T>(
         })
         .finally(() => {
           agentViewFocused = false;
+          agentViewState = undefined;
           renderInputWithRegion();
         });
       return;
@@ -243,6 +243,10 @@ export async function runWithEscInterrupt<T>(
     input.setRawMode(previousRawMode);
     input.pause();
   }
+}
+
+function inlineAgentViewMaxLines(): number {
+  return Math.max(6, Math.min(10, Math.floor((output.rows ?? 24) / 2)));
 }
 
 export function nextEscInterruptState(

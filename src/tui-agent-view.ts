@@ -72,15 +72,16 @@ export function renderAgentView(state: AgentViewState): number {
   return lines.length;
 }
 
-export function agentViewLines(state: AgentViewState, width = 100): readonly string[] {
+export function agentViewLines(state: AgentViewState, width = 100, maxLines?: number): readonly string[] {
   const rule = paint("─".repeat(Math.min(width, 120)), ansi.guide);
-  return [
+  const lines = [
     tabLine(state.tab),
     rule,
     ...tabBodyLines(state, width),
     "",
     paint("←/→ to switch · ↑/↓ to navigate · Enter to open · Esc to close", ansi.guide),
   ];
+  return maxLines === undefined ? lines : clampLines(lines, maxLines);
 }
 
 function tabLine(tab: AgentViewTab): string {
@@ -138,6 +139,21 @@ function customAgentLines(agents: readonly AgentDefinition[]): readonly string[]
     return [paint("No agents found. Create specialized subagents that Dream can delegate to.", ansi.dim)];
   }
   return agents.map((agent) => `  ${paint(agent.name, ansi.bold)} ${paint("·", ansi.guide)} ${agent.summary}`);
+}
+
+function clampLines(lines: readonly string[], maxLines: number): readonly string[] {
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+  const lastLine = lines[lines.length - 1];
+  if (lastLine === undefined || maxLines < 3) {
+    return lines.slice(0, Math.max(0, maxLines));
+  }
+  return [
+    ...lines.slice(0, maxLines - 2),
+    paint("…", ansi.dim),
+    lastLine,
+  ];
 }
 
 function moveCursorToClearAnchor(lineCount: number): void {

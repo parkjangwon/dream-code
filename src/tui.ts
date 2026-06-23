@@ -69,6 +69,7 @@ async function runInteractiveLoop(
     },
   };
   let shouldContinue = true;
+  let anchorNextInput = false;
   while (shouldContinue) {
     const configRoot = options.configRoot ?? defaultConfigRoot();
     const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
@@ -76,6 +77,7 @@ async function runInteractiveLoop(
     const fileMentions = await discoverFileMentionTargets(process.cwd());
     const agentView = await loadAgentViewOptions(configRoot, process.cwd());
     const questioner = interactiveQuestioner(config, options);
+    const redrawHeader = () => renderHeader(config, options.oneShotYolo);
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
@@ -84,9 +86,8 @@ async function runInteractiveLoop(
       fileMentions,
       statusLines,
       agentView,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
+      anchored: anchorNextInput,
+      redrawHeader,
     });
     if (answer.kind === "cancel") {
       await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
@@ -94,16 +95,19 @@ async function runInteractiveLoop(
     }
     if (answer.kind === "agentView") {
       await handleAgentViewResult(answer.result, configRoot, questioner, process.cwd());
+      anchorNextInput = true;
       continue;
     }
     history = appendHistory(history, answer.text);
-    const result = shouldUseEscInterrupt(answer.text)
+    const useEscInterrupt = shouldUseEscInterrupt(answer.text);
+    if (useEscInterrupt) {
+      anchorNextInput = true;
+    }
+    const result = useEscInterrupt
       ? await runWithEscInterrupt(
         (signal, write) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal, write),
         {
-          input: { prompt: "> ", history, commands: slashCommands, skills, fileMentions, statusLines, agentView, redrawHeader: () => {
-            renderHeader(config, options.oneShotYolo);
-          } },
+          input: { prompt: "> ", history, commands: slashCommands, skills, fileMentions, statusLines, agentView, redrawHeader },
           loadAgentView: () => loadAgentViewOptions(configRoot, process.cwd()),
           onAgentViewResult: (result, _write, setStatusLines) => {
             setStatusLines(runningAgentViewResultLines(result));
