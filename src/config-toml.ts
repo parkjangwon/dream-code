@@ -39,6 +39,9 @@ export function serializeMainConfigToml(config: DreamConfig): string {
     `lsp = ${config.tools.lsp}`,
     `webResearch = ${config.tools.webResearch}`,
     "",
+    "[tools.shell]",
+    `allowedExecutables = ${stringArray(config.tools.shell.allowedExecutables)}`,
+    "",
   ];
 
   for (const [provider, setting] of Object.entries(config.providers).sort(([left], [right]) => left.localeCompare(right))) {

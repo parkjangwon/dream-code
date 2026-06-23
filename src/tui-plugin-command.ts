@@ -11,6 +11,7 @@ import {
 } from "./plugin-marketplace.js";
 import { loadPluginRecords, type PluginRecord } from "./plugin-registry.js";
 import { uninstallPlugin, type PluginUninstallResult } from "./plugin-uninstaller.js";
+import { formatPluginTrustSummary } from "./trust-summary.js";
 
 export async function runPluginCommand(configRoot: string, args: string, cwd: string): Promise<string> {
   const trimmed = args.trim();
@@ -69,6 +70,7 @@ export async function runPluginCommand(configRoot: string, args: string, cwd: st
     `plugin installed: ${record.name}`,
     `path ${result.pluginRoot}`,
     `imported ${record.skills} skill(s), ${record.agents} agent(s), ${record.commands} command(s), ${record.mcpServers} MCP server(s)`,
+    formatPluginTrustSummary(record),
     "Use /skills, /agents, and /mcp to review imported capabilities.",
     "",
   ].join("\n");
@@ -91,7 +93,7 @@ function formatPluginList(records: readonly PluginRecord[]): string {
   }
   const lines = records.map((record) => {
     const version = record.version === undefined ? "" : ` ${record.version}`;
-    return `${record.name}${version} · ${record.skills} skills · ${record.agents} agents · ${record.commands} commands · ${record.mcpServers} MCP`;
+    return `${record.name}${version} · ${record.skills} skills · ${record.agents} agents · ${record.commands} commands · ${record.mcpServers} MCP · trust: ${record.trust.commandSurfaces} command, ${record.trust.mcpCommands.length} MCP command`;
   });
   return ["Plugins", ...lines, ""].join("\n");
 }

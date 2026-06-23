@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { readClaudePluginManifest } from "./plugin-manifest.js";
 import { importClaudeMcpConfig } from "./plugin-mcp-import.js";
 import { type PluginRecord, savePluginRecord } from "./plugin-registry.js";
+import { summarizePluginTrust } from "./plugin-trust.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,6 +52,7 @@ export async function installResolvedClaudePlugin(
     const agents = await importAgents(installedSourceRoot, configRoot, pluginId);
     const commands = await importCommands(installedSourceRoot, configRoot, pluginId, manifest.name);
     const mcpServers = await importClaudeMcpConfig(installedSourceRoot, configRoot, pluginId);
+    const mcpTrust = await summarizePluginTrust(installedSourceRoot);
     const installedAt = new Date().toISOString();
     const record: PluginRecord = {
       id: pluginId,
@@ -63,6 +65,10 @@ export async function installResolvedClaudePlugin(
       agents,
       commands,
       mcpServers,
+      trust: {
+        commandSurfaces: commands,
+        mcpCommands: mcpTrust.mcpCommands,
+      },
     };
     await savePluginRecord(configRoot, record);
     return { record, pluginRoot };

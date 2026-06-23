@@ -80,6 +80,13 @@ export async function restoreLatestFileCheckpoint(
   return absolutePath;
 }
 
+export async function restoreFileCheckpoint(checkpoint: FileCheckpoint): Promise<string> {
+  const absolutePath = resolveWorkspacePath(checkpoint.path, checkpoint.workspaceRoot);
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await copyFile(checkpoint.snapshotPath, absolutePath);
+  return absolutePath;
+}
+
 async function readCheckpointRecords(checkpointRoot: string): Promise<readonly FileCheckpointRecord[]> {
   let entries = [];
   try {

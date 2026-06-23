@@ -49,8 +49,8 @@ for (const filePath of typeScriptFiles("src")) {
     fail(`${filePath}: shell:true is forbidden; use src/shell-command.ts argv execution`);
   }
   const pureLoc = text.split(/\r?\n/u).filter((line) => !/^\s*$/u.test(line) && !/^\s*\/\//u.test(line)).length;
-  if (pureLoc > 300) {
-    fail(`${filePath}: ${pureLoc} pure LOC exceeds the 300-line runtime ceiling`);
+  if (pureLoc > 250) {
+    fail(`${filePath}: ${pureLoc} pure LOC exceeds the 250-line runtime ceiling`);
   }
 }
 

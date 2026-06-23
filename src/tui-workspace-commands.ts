@@ -59,7 +59,7 @@ async function runWorkspaceCommandBody(
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
   if (text.startsWith("!")) {
-    await maybeRunShell(text.slice(1).trim(), mode, questioner);
+    await maybeRunShell(text.slice(1).trim(), mode, questioner, config.tools.shell.allowedExecutables);
     return { config, shouldContinue: true };
   }
 
@@ -195,7 +195,7 @@ async function runWorkspaceCommandBody(
       await maybeEditFile(command.rest, mode, questioner);
       return { config, shouldContinue: true };
     case "/shell":
-      await maybeRunShell(command.rest, mode, questioner);
+      await maybeRunShell(command.rest, mode, questioner, config.tools.shell.allowedExecutables);
       return { config, shouldContinue: true };
     default:
       if (await runUtilityCommand({

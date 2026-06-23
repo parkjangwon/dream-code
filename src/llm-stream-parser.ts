@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+import { parseNativeToolCall } from "./provider-native-tools.js";
 import type { ProviderProtocol } from "./provider-registry.js";
 
 export type StreamDataEvent =
   | { readonly kind: "content"; readonly content: string }
+  | { readonly kind: "tool_call"; readonly request: import("./agent-tool-schema.js").AgentToolRequest }
   | { readonly kind: "done" }
   | { readonly kind: "skip" };
 
@@ -11,6 +13,12 @@ const chatChunkSchema = z.object({
   choices: z.array(z.object({
     delta: z.object({
       content: z.string().nullable().optional(),
+      tool_calls: z.array(z.object({
+        function: z.object({
+          name: z.string().optional(),
+          arguments: z.string().optional(),
+        }).passthrough().optional(),
+      }).passthrough()).optional(),
     }).passthrough(),
   }).passthrough()),
 }).passthrough();
@@ -18,6 +26,11 @@ const chatChunkSchema = z.object({
 const responsesChunkSchema = z.object({
   type: z.string().optional(),
   delta: z.string().optional(),
+  item: z.object({
+    type: z.string().optional(),
+    name: z.string().optional(),
+    arguments: z.string().optional(),
+  }).passthrough().optional(),
 }).passthrough();
 
 export class ProviderProtocolError extends Error {
@@ -69,7 +82,12 @@ export function parseOpenAiStreamLine(line: string): StreamDataEvent {
     throw new ProviderProtocolError(parsedChunk.error.message);
   }
 
-  const content = parsedChunk.data.choices[0]?.delta.content;
+  const delta = parsedChunk.data.choices[0]?.delta;
+  const nativeCall = firstNativeToolCall(delta?.tool_calls);
+  if (nativeCall !== undefined) {
+    return nativeCall;
+  }
+  const content = delta?.content;
   return content === undefined || content === null || content.length === 0
     ? { kind: "skip" }
     : { kind: "content", content };
@@ -95,7 +113,37 @@ export function parseOpenAiResponsesLine(line: string): StreamDataEvent {
       ? { kind: "skip" }
       : { kind: "content", content: delta };
   }
+  if (parsedChunk.data.type === "response.output_item.done" && parsedChunk.data.item?.type === "function_call") {
+    const request = parsedChunk.data.item.name === undefined
+      ? undefined
+      : parseNativeToolCall(parsedChunk.data.item.name, parsedChunk.data.item.arguments);
+    return request === undefined ? { kind: "skip" } : { kind: "tool_call", request };
+  }
   return { kind: "skip" };
+}
+
+function firstNativeToolCall(calls: readonly unknown[] | undefined): StreamDataEvent | undefined {
+  const call = calls?.map(readNativeCall).find((candidate) => candidate.name !== undefined);
+  const name = call?.name;
+  if (name === undefined) {
+    return undefined;
+  }
+  const request = parseNativeToolCall(name, call?.arguments);
+  return request === undefined ? undefined : { kind: "tool_call", request };
+}
+
+function readNativeCall(value: unknown): { readonly name?: string; readonly arguments?: string } {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const fn = value["function"];
+  if (!isRecord(fn)) {
+    return {};
+  }
+  return {
+    ...(typeof fn["name"] === "string" ? { name: fn["name"] } : {}),
+    ...(typeof fn["arguments"] === "string" ? { arguments: fn["arguments"] } : {}),
+  };
 }
 
 function parseSseData(
@@ -131,6 +179,10 @@ function chunkToText(chunk: unknown): string {
     return Buffer.from(chunk).toString("utf8");
   }
   throw new ProviderProtocolError(`unexpected stream chunk type: ${typeof chunk}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function assertNever(value: never): never {

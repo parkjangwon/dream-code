@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { stripAnsi } from "./ansi.js";
@@ -6,10 +6,18 @@ import {
   agentRunsRoot,
   parseAgentRunRecord,
   type AgentRunHandle,
+  type AgentRunCheckpoint,
   type AgentRunRecord,
   type AgentRunStatus,
   type StartAgentRunInput,
 } from "./agent-run-record.js";
+import { readAgentRunState, readPersistedAgentRuns } from "./agent-run-persisted.js";
+import { mergeRunCheckpoints, normalizeRunToolEvent } from "./agent-run-tool-events.js";
+import {
+  formatAgentRunDiff as formatRunDiff,
+  formatAgentRunResumeContext as formatRunResumeContext,
+  revertAgentRunChanges as revertRunChanges,
+} from "./agent-run-history.js";
 
 type ActiveRun = {
   readonly root: string;
@@ -51,6 +59,9 @@ export async function startAgentRun(root: string, input: StartAgentRunInput): Pr
     outputChars: 0,
     toolCalls: 0,
     writePaths: [],
+    changedFiles: [],
+    checkpoints: [],
+    toolEvents: [],
     transcriptPath,
     outputPath,
   };
@@ -102,20 +113,31 @@ export async function startAgentRun(root: string, input: StartAgentRunInput): Pr
         await appendWire({ at, type: "chunk", text: plain });
       });
     },
-    tool: (label, changedPath) => {
+    tool: (label, eventOrChangedPath, checkpoint) => {
       const at = touch();
+      const event = normalizeRunToolEvent(label, at, eventOrChangedPath, checkpoint);
+      const changedPath = event.changedPath;
       const writePaths = changedPath === undefined || record.writePaths.includes(changedPath)
         ? record.writePaths
         : [...record.writePaths, changedPath];
+      const changedFiles = changedPath === undefined || record.changedFiles.includes(changedPath)
+        ? record.changedFiles
+        : [...record.changedFiles, changedPath];
+      const checkpoints = mergeRunCheckpoints(record.checkpoints, event.checkpoints);
       setRecord({
         ...record,
         updatedAt: at,
         lastActivity: at,
+        lastToolAt: at,
         toolCalls: record.toolCalls + 1,
         writePaths,
+        changedFiles,
+        checkpoints,
+        toolEvents: [...record.toolEvents, event],
       });
       enqueue(async () => {
         await appendWire({ at, type: "tool", label });
+        await persistState();
       });
     },
     finish: async (status, options) => {
@@ -159,7 +181,7 @@ export async function listAgentRuns(root: string, limit = 20): Promise<readonly 
     .filter((run) => run.root === root)
     .map((run) => run.snapshot());
   const activeIds = new Set(active.map((run) => run.id));
-  const persisted = (await readPersistedRuns(root))
+  const persisted = (await readPersistedAgentRuns(root))
     .filter((run) => !activeIds.has(run.id));
   return [...active, ...persisted]
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -175,31 +197,31 @@ export function abortAgentRun(id: string): boolean {
   return true;
 }
 
-async function readPersistedRuns(root: string): Promise<readonly AgentRunRecord[]> {
-  let entries: readonly string[];
-  try {
-    entries = await readdir(agentRunsRoot(root));
-  } catch (error) {
-    if (isErrnoException(error) && error.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-
-  const records = await Promise.all(entries.map((entry) => readState(join(agentRunsRoot(root), entry, "state.json"))));
-  return records.filter(isAgentRunRecord);
+export async function formatAgentRunDiff(root: string, runId: string): Promise<string> {
+  return formatRunDiff(root, runId);
 }
 
-async function readState(filePath: string): Promise<AgentRunRecord | undefined> {
-  try {
-    const parsedJson: unknown = JSON.parse(await readFile(filePath, "utf8"));
-    return parseAgentRunRecord(parsedJson);
-  } catch (error) {
-    if (error instanceof SyntaxError || (isErrnoException(error) && error.code === "ENOENT")) {
-      return undefined;
-    }
-    throw error;
+export async function formatAgentRunResumeContext(root: string, runId: string): Promise<string> {
+  return formatRunResumeContext(root, runId);
+}
+
+export async function revertAgentRunChanges(root: string, runId: string): Promise<{ readonly revertedPaths: readonly string[] }> {
+  return revertRunChanges(root, runId);
+}
+
+async function readAgentRun(root: string, runId: string): Promise<AgentRunRecord | undefined> {
+  const active = activeRuns.get(runId);
+  if (active?.root === root) {
+    return active.snapshot();
   }
+  return readAgentRunState(root, runId);
+}
+
+export async function readAgentRunRecord(root: string, runId: string): Promise<AgentRunRecord | undefined> {
+  if (runId === "latest") {
+    return (await listAgentRuns(root, 1))[0];
+  }
+  return readAgentRun(root, runId);
 }
 
 function runId(agentId: string): string {
@@ -210,16 +232,4 @@ function runId(agentId: string): string {
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9_-]+/gu, "-").replace(/^-|-$/gu, "") || "agent";
-}
-
-function isAgentRunRecord(value: AgentRunRecord | undefined): value is AgentRunRecord {
-  return value !== undefined;
-}
-
-type ErrnoException = Error & {
-  readonly code: string;
-};
-
-function isErrnoException(error: unknown): error is ErrnoException {
-  return error instanceof Error && "code" in error && typeof error.code === "string";
 }

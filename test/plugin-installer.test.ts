@@ -20,6 +20,8 @@ test("installClaudePlugin imports Claude plugin capabilities", async () => {
     assert.equal(result.record.agents, 1);
     assert.equal(result.record.commands, 1);
     assert.equal(result.record.mcpServers, 1);
+    assert.equal(result.record.trust.commandSurfaces, 1);
+    assert.deepEqual(result.record.trust.mcpCommands, ["node server.js"]);
     assert.match(await readFile(join(root, "skills", "claude-power-pack-review", "SKILL.md"), "utf8"), /Review code/u);
     assert.match(await readFile(join(root, "agents", "claude-power-pack-security.md"), "utf8"), /Security reviewer/u);
     assert.match(await readFile(join(root, "skills", "claude-power-pack-command-audit", "SKILL.md"), "utf8"), /Claude Command/u);

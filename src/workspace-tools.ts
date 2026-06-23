@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 
-import { runInheritedCommand } from "./shell-command.js";
+import { runInheritedCommand, type ShellCommandPolicy } from "./shell-command.js";
 
 export type ReadFileResult = {
   readonly path: string;
@@ -134,8 +134,8 @@ export async function replaceInWorkspaceFile(
   return { path: absolutePath, replaced: true, replacements: options.replaceAll === true ? replacements : 1 };
 }
 
-export function runShellCommand(command: string): Promise<number> {
-  return runInheritedCommand(command);
+export function runShellCommand(command: string, policy: Pick<ShellCommandPolicy, "allowedExecutables"> = {}): Promise<number> {
+  return runInheritedCommand(command, policy);
 }
 
 export function resolveWorkspacePath(inputPath: string, rootInput: string): string {

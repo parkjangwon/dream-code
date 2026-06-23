@@ -13,6 +13,13 @@ const pluginRecordSchema = z.object({
   agents: z.number().int().min(0),
   commands: z.number().int().min(0),
   mcpServers: z.number().int().min(0),
+  trust: z.object({
+    commandSurfaces: z.number().int().min(0),
+    mcpCommands: z.array(z.string()),
+  }).default({
+    commandSurfaces: 0,
+    mcpCommands: [],
+  }),
 });
 
 export type PluginRecord = z.infer<typeof pluginRecordSchema>;

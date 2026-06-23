@@ -10,6 +10,8 @@ import { writeProviderCredential } from "../src/credentials.js";
 import { checkpointPath } from "../src/memory-store.js";
 import { appendSessionTurn, listSessions, startSession } from "../src/session-store.js";
 import { compactCurrentSession, copyLastAssistantResponse, formatCompactContext } from "../src/session-actions.js";
+import { startAgentRun } from "../src/agent-run-store.js";
+import { saveFileCheckpoint } from "../src/file-history.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
 test("utility commands show rules, compact, export, and logout state", async () => {
@@ -108,6 +110,47 @@ test("add-dir and tasks persist lightweight workspace state", async () => {
     assert.match(outputText, /note\.md/u);
     assert.match(outputText, /mcp\.toml/u);
     assert.match(outputText, /No hooks configured/u);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("runs command shows diffs and reverts checkpointed run changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-runs-command-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-runs-command-project-"));
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    await mkdir(join(project, "src"), { recursive: true });
+    const filePath = join(project, "src", "index.ts");
+    await writeFile(filePath, "before\n", "utf8");
+    const checkpoint = await saveFileCheckpoint("src/index.ts", project, root);
+    await writeFile(filePath, "after\n", "utf8");
+    const run = await startAgentRun(root, {
+      id: "run-command",
+      kind: "agent",
+      agentId: "dream",
+      agentName: "Dream",
+      prompt: "edit file",
+    });
+    run.tool("edit src/index.ts", { ok: true, changedPath: filePath, checkpoints: [checkpoint] });
+    await run.finish("done");
+
+    await runWorkspaceCommand("/runs show latest", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/runs diff latest", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+    await runWorkspaceCommand("/runs revert latest", defaultConfig(), true, { question: async () => "" }, root, undefined, project);
+
+    const outputText = stripAnsi(chunks.join(""));
+    assert.match(outputText, /Run run-command/u);
+    assert.match(outputText, /-before/u);
+    assert.match(outputText, /\+after/u);
+    assert.match(outputText, /reverted run-command/u);
+    assert.equal(await readFile(filePath, "utf8"), "before\n");
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

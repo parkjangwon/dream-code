@@ -11,6 +11,7 @@ import {
 } from "./config-toml.js";
 import { defaultModelConfig, normalizeLoadedConfig } from "./config-model.js";
 import { modelConfigSchema } from "./model-routing.js";
+import { defaultAllowedShellExecutables } from "./shell-command.js";
 
 export const permissionModeSchema = z.enum(["ask", "auto", "plan", "yolo"]);
 export type PermissionMode = z.infer<typeof permissionModeSchema>;
@@ -46,6 +47,12 @@ const notificationSettingsSchema = z.object({
   minCompletionMs: 10_000,
 });
 
+const shellToolSettingsSchema = z.object({
+  allowedExecutables: z.array(z.string().min(1)).default([...defaultAllowedShellExecutables]),
+}).default({
+  allowedExecutables: [...defaultAllowedShellExecutables],
+});
+
 export const dreamConfigSchema = z.object({
   version: z.literal(1),
   permissions: z.object({
@@ -59,6 +66,7 @@ export const dreamConfigSchema = z.object({
     ripgrep: z.boolean(),
     lsp: z.boolean(),
     webResearch: z.boolean(),
+    shell: shellToolSettingsSchema,
   }),
   team: z.array(teamMemberSchema),
 });
@@ -102,6 +110,9 @@ export function defaultConfig(): DreamConfig {
       ripgrep: true,
       lsp: true,
       webResearch: true,
+      shell: {
+        allowedExecutables: [...defaultAllowedShellExecutables],
+      },
     },
     team: [
       { id: "architect", name: "Dream Architect", role: "architecture", mission: "Turn goals into small, verifiable plans.", enabled: true },

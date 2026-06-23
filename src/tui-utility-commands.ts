@@ -2,12 +2,12 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
-import { deleteProviderCredential } from "./credentials.js";
 import { restoreLatestFileCheckpoint } from "./file-history.js";
 import { runAgentPrompt } from "./agent-runner.js";
 import { formatHooksStatus } from "./hooks.js";
 import { runGoalCommand } from "./tui-goal-command.js";
 import { runLspCheck } from "./lsp-check.js";
+import { logoutProvider } from "./tui-logout-command.js";
 import { formatMcpRuntimeStatus } from "./mcp-context.js";
 import { runResearch } from "./research-tool.js";
 import { copyLastAssistantResponse, exportCurrentSession, formatSessionActionResult } from "./session-actions.js";
@@ -18,6 +18,7 @@ import type { Questioner } from "./tui-workspace-commands.js";
 import { formatContextCommand, formatRulesCommand } from "./context-docs.js";
 import { runTasksCommand } from "./tui-task-command.js";
 import { runWorkflowCommand } from "./tui-workflow-command.js";
+import { runRunsCommand } from "./tui-run-command.js";
 import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
 import {
   addWorkspaceDir,
@@ -93,6 +94,9 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       return true;
     case "/rules":
       output.write(`${await formatRulesCommand(options.configRoot, options.cwd)}\n`);
+      return true;
+    case "/runs":
+      output.write(`${await runRunsCommand(options)}\n`);
       return true;
     case "/research":
       await runResearchCommand(options);
@@ -217,15 +221,6 @@ async function runWorkflowPrompt(
   await appendTask(options.configRoot, taskLabel, prompt);
   output.write(`${paint(`${taskLabel.toLowerCase()} saved:`, ansi.green)} ${paint(filePath, ansi.blue)}\n`);
   await runFramedAgentPrompt({ ...options, rest: prompt }, title, instruction);
-}
-
-async function logoutProvider(root: string, rest: string, questioner: Questioner): Promise<string> {
-  const provider = await restOrAsk(rest, "Provider: ", questioner);
-  const providerId = provider.trim();
-  if (providerId.length === 0) {
-    return "logout skipped: no provider";
-  }
-  return await deleteProviderCredential(root, providerId) ? `logged out: ${providerId}` : `logout skipped: ${providerId} was not saved`;
 }
 
 async function restOrAsk(rest: string, prompt: string, questioner: Questioner): Promise<string> {

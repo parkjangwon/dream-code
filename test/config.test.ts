@@ -97,6 +97,30 @@ test("loadConfig persists provider enabled overrides", async () => {
   }
 });
 
+test("loadConfig persists shell allowlist policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-shell-policy-"));
+  try {
+    const config = {
+      ...defaultConfig(),
+      tools: {
+        ...defaultConfig().tools,
+        shell: {
+          allowedExecutables: ["git", "node", "npm"],
+        },
+      },
+    };
+    await saveConfig(root, config);
+
+    const savedToml = await readFile(configFilePath(root), "utf8");
+    const loaded = await loadConfig(root);
+
+    assert.match(savedToml, /\[tools\.shell\]\nallowedExecutables = \["git", "node", "npm"\]/u);
+    assert.deepEqual(loaded.tools.shell.allowedExecutables, ["git", "node", "npm"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function assertFileMissing(filePath: string): Promise<void> {
   await assert.rejects(() => stat(filePath), { code: "ENOENT" });
 }

@@ -19,6 +19,8 @@ import {
   streamEventsFromChunks,
   type StreamDataEvent,
 } from "./llm-stream-parser.js";
+import { nativeAgentToolDefinitions, type NativeToolDefinition } from "./provider-native-tools.js";
+import type { AgentToolRequest } from "./agent-tool-schema.js";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -44,11 +46,14 @@ export type StreamChatInput = {
   readonly env?: ProviderEnv;
   readonly configRoot?: string;
   readonly signal?: AbortSignal;
+  readonly tools?: readonly NativeToolDefinition[];
   readonly onToken: (token: string) => void | Promise<void>;
+  readonly onToolCall?: (request: AgentToolRequest) => void | Promise<void>;
 };
 
 export { parseOpenAiResponsesLine, parseOpenAiStreamLine, ProviderProtocolError, streamEventsFromChunks };
 export type { StreamDataEvent };
+export { nativeAgentToolDefinitions };
 
 export class MissingProviderConfigError extends Error {
   readonly provider: string;
@@ -150,6 +155,7 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
       settings.protocol,
       requestModel,
       input.messages,
+      input.tools,
     )),
     headersTimeout: 15_000,
     bodyTimeout: 120_000,
@@ -160,6 +166,7 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
       settings.protocol,
       requestModel,
       input.messages,
+      input.tools,
     )),
     signal: input.signal,
     headersTimeout: 15_000,
@@ -175,6 +182,9 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
     switch (event.kind) {
       case "content":
         await input.onToken(event.content);
+        break;
+      case "tool_call":
+        await input.onToolCall?.(event.request);
         break;
       case "done":
         return;
@@ -212,15 +222,23 @@ export function buildProviderRequestBody(
   protocol: ProviderProtocol,
   model: string,
   messages: readonly ChatMessage[],
+  tools: readonly NativeToolDefinition[] = [],
 ): Readonly<Record<string, unknown>> {
   switch (protocol) {
     case "chat-completions":
-      return { model, messages, stream: true };
+      return withOptionalTools({ model, messages, stream: true }, tools);
     case "responses":
-      return responseRequestBody(model, messages);
+      return withOptionalTools(responseRequestBody(model, messages), tools);
     default:
       return assertNever(protocol);
   }
+}
+
+function withOptionalTools(
+  body: Readonly<Record<string, unknown>>,
+  tools: readonly NativeToolDefinition[],
+): Readonly<Record<string, unknown>> {
+  return tools.length === 0 ? body : { ...body, tools };
 }
 
 function responseRequestBody(

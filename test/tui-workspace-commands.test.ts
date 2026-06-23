@@ -53,6 +53,29 @@ test("runWorkspaceCommand saves permission mode changes", async () => {
   }
 });
 
+test("runWorkspaceCommand saves production permission presets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-workspace-permission-preset-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const result = await runWorkspaceCommand(
+      "/permission preset safe",
+      defaultConfig(),
+      false,
+      { question: async () => "" },
+      root,
+    );
+    const saved = await loadConfig(root);
+
+    assert.equal(result.config.permissions.mode, "ask");
+    assert.deepEqual(result.config.tools.shell.allowedExecutables, ["cat", "date", "find", "git", "head", "ls", "pwd", "rg", "sed", "tail", "wc"]);
+    assert.equal(saved.permissions.mode, "ask");
+    assert.deepEqual(saved.tools.shell.allowedExecutables, result.config.tools.shell.allowedExecutables);
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runWorkspaceCommand fires postCommand hooks", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-workspace-hook-"));
   const outputPath = join(root, "hook-command.txt");

@@ -12,6 +12,7 @@ export type ShellCommandPolicy = {
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
   readonly env?: NodeJS.ProcessEnv;
+  readonly allowedExecutables?: readonly string[];
 };
 
 export type ShellCommandResult = {
@@ -21,7 +22,7 @@ export type ShellCommandResult = {
 
 const defaultTimeoutMs = 120_000;
 const maxOutput = 12_000;
-const allowedExecutables = new Set([
+export const defaultAllowedShellExecutables = [
   "awk",
   "bun",
   "cargo",
@@ -48,7 +49,7 @@ const allowedExecutables = new Set([
   "tail",
   "tsc",
   "wc",
-]);
+] as const;
 
 export function parseShellCommand(command: string): ParsedShellCommand {
   const tokens = tokenizeCommand(command);
@@ -59,7 +60,7 @@ export function parseShellCommand(command: string): ParsedShellCommand {
   return { executable, args: tokens.slice(1) };
 }
 
-export function assertShellCommandAllowed(command: string): ParsedShellCommand {
+export function assertShellCommandAllowed(command: string, policy: ShellCommandPolicy = {}): ParsedShellCommand {
   const risk = riskyShellReason(command);
   if (risk !== undefined) {
     throw new ShellCommandError(risk);
@@ -67,6 +68,7 @@ export function assertShellCommandAllowed(command: string): ParsedShellCommand {
 
   const parsed = parseShellCommand(command);
   const executableName = basename(parsed.executable);
+  const allowedExecutables = new Set(policy.allowedExecutables ?? defaultAllowedShellExecutables);
   if (!allowedExecutables.has(executableName)) {
     throw new ShellCommandError(`executable is not allowlisted: ${executableName}`);
   }
@@ -77,7 +79,7 @@ export function runCapturedCommand(command: string, policy: ShellCommandPolicy =
   return new Promise((resolve) => {
     let parsed: ParsedShellCommand;
     try {
-      parsed = assertShellCommandAllowed(command);
+      parsed = assertShellCommandAllowed(command, policy);
     } catch (error) {
       resolve({ ok: false, output: `blocked: ${errorMessage(error)}` });
       return;
@@ -128,11 +130,11 @@ export function runCapturedCommand(command: string, policy: ShellCommandPolicy =
   });
 }
 
-export function runInheritedCommand(command: string): Promise<number> {
+export function runInheritedCommand(command: string, policy: Pick<ShellCommandPolicy, "allowedExecutables"> = {}): Promise<number> {
   return new Promise((resolve, reject) => {
     let parsed: ParsedShellCommand;
     try {
-      parsed = assertShellCommandAllowed(command);
+      parsed = assertShellCommandAllowed(command, policy);
     } catch (error) {
       reject(error);
       return;

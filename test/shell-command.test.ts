@@ -32,3 +32,20 @@ test("assertShellCommandAllowed blocks non-allowlisted executables", () => {
     /not allowlisted/u,
   );
 });
+
+test("assertShellCommandAllowed accepts a caller supplied allowlist", () => {
+  const parsed = assertShellCommandAllowed("curl https://example.com", {
+    allowedExecutables: ["curl"],
+  });
+
+  assert.equal(parsed.executable, "curl");
+});
+
+test("runCapturedCommand uses a caller supplied allowlist", async () => {
+  const result = await runCapturedCommand("node -e \"console.log('custom')\"", {
+    allowedExecutables: ["node"],
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.output, /custom/u);
+});

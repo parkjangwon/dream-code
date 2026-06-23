@@ -72,6 +72,7 @@ export async function maybeRunShell(
   command: string,
   mode: PermissionMode,
   questioner: Questioner,
+  allowedExecutables?: readonly string[],
 ): Promise<void> {
   if (command.length === 0) {
     output.write("usage: /shell <command>\n");
@@ -86,7 +87,7 @@ export async function maybeRunShell(
     return;
   }
   try {
-    const code = await runShellCommand(command);
+    const code = await runShellCommand(command, allowedExecutables === undefined ? {} : { allowedExecutables });
     output.write(`exit ${code}\n`);
   } catch (error) {
     output.write(`${paint("blocked:", ansi.red)} ${error instanceof Error ? error.message : "shell command rejected"}\n`);

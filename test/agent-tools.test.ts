@@ -155,6 +155,22 @@ test("runAgentToolRequest does not block harmless shell text that mentions risky
   assert.doesNotMatch(result.output, /blocked:/u);
 });
 
+test("runAgentToolRequest applies configured shell allowlist", async () => {
+  const blocked = await runAgentToolRequest(
+    { tool: "shell", command: "node -e \"console.log('agent')\"" },
+    { mode: "yolo", shellAllowedExecutables: ["git"] },
+  );
+  const allowed = await runAgentToolRequest(
+    { tool: "shell", command: "node -e \"console.log('agent')\"" },
+    { mode: "yolo", shellAllowedExecutables: ["node"] },
+  );
+
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.output, /not allowlisted/u);
+  assert.equal(allowed.ok, true);
+  assert.match(allowed.output, /agent/u);
+});
+
 test("runAgentToolRequest enforces explicit per-agent tool policy", async () => {
   const result = await runAgentToolRequest(
     { tool: "shell", command: "echo no" },

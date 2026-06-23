@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
@@ -7,7 +7,14 @@ import test, { mock } from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import { formatAgentBoard } from "../src/agent-board.js";
 import { formatAgentRuns } from "../src/agent-run-format.js";
-import { listAgentRuns, startAgentRun } from "../src/agent-run-store.js";
+import {
+  formatAgentRunDiff,
+  formatAgentRunResumeContext,
+  listAgentRuns,
+  revertAgentRunChanges,
+  startAgentRun,
+} from "../src/agent-run-store.js";
+import { saveFileCheckpoint } from "../src/file-history.js";
 import { registerActor, updateActorStatus } from "../src/actor-store.js";
 import { sendInboxMessage } from "../src/inbox-store.js";
 import { formatAgentsOverview } from "../src/tui-agent-commands.js";
@@ -41,6 +48,42 @@ test("agent run store persists state, output, and wire events", async () => {
     assert.match(wire, /"type":"tool"/u);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("agent run store tracks checkpoints and reverts run changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-revert-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-project-"));
+  try {
+    await mkdir(join(project, "src"), { recursive: true });
+    const filePath = join(project, "src", "index.ts");
+    await writeFile(filePath, "before\n", "utf8");
+    const checkpoint = await saveFileCheckpoint("src/index.ts", project, root);
+    await writeFile(filePath, "after\n", "utf8");
+    const run = await startAgentRun(root, {
+      id: "run-revert",
+      kind: "agent",
+      agentId: "dream",
+      agentName: "Dream",
+      prompt: "change src/index.ts",
+    });
+
+    run.tool("write src/index.ts", filePath, checkpoint);
+    await run.finish("failed", { error: "verification failed" });
+
+    const diff = await formatAgentRunDiff(root, "run-revert");
+    const resume = await formatAgentRunResumeContext(root, "run-revert");
+    const reverted = await revertAgentRunChanges(root, "run-revert");
+
+    assert.match(diff, /src\/index\.ts/u);
+    assert.match(diff, /verification failed/u);
+    assert.match(resume, /Resume run run-revert/u);
+    assert.match(resume, /change src\/index\.ts/u);
+    assert.deepEqual(reverted.revertedPaths, [filePath]);
+    assert.equal(await readFile(filePath, "utf8"), "before\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
   }
 });
 

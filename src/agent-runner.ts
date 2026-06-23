@@ -155,7 +155,7 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
         }
         await runHookEvent(configRoot, "preTool", { tool: request.tool });
         const result = await runAgentToolRequest(request, agentToolPolicy(options, run.signal));
-        run.tool(request.tool, result.changedPath);
+        run.tool(request.tool, result.changedPath, result.checkpoint);
         await runHookEvent(configRoot, "postTool", { tool: request.tool, ok: String(result.ok) });
         runOptions.write(formatToolProgress(result));
         results.push(result);
@@ -241,6 +241,7 @@ function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): Agen
     signal,
     configRoot: options.configRoot ?? defaultConfigRoot(),
     workspaceRoot: options.cwd ?? cwd(),
+    shellAllowedExecutables: options.config.tools.shell.allowedExecutables,
     ...(options.approveTool === undefined ? {} : { approveTool: options.approveTool }),
     ...(allowedTools === undefined || allowedTools.length === 0 ? {} : { allowedTools }),
   };

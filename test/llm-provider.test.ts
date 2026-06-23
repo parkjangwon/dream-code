@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildProviderRequestHeaders,
   buildProviderRequestBody,
+  nativeAgentToolDefinitions,
   parseOpenAiResponsesLine,
   parseOpenAiStreamLine,
   resolveProviderSettingsForRequest,
@@ -118,6 +119,19 @@ test("buildProviderRequestBody ignores reasoning controls for stable provider co
   });
 });
 
+test("buildProviderRequestBody includes native tool schemas when supplied", () => {
+  const messages = [{ role: "user", content: "read the readme" }] as const;
+  const tools = nativeAgentToolDefinitions(["read", "shell"]);
+
+  const chatBody = buildProviderRequestBody("chat-completions", "gpt-test", messages, tools);
+  const responsesBody = buildProviderRequestBody("responses", "gpt-test", messages, tools);
+
+  assert.deepEqual(chatBody["tools"], tools);
+  assert.deepEqual(responsesBody["tools"], tools);
+  assert.equal(tools[0]?.function.name, "read");
+  assert.equal(tools[1]?.function.name, "shell");
+});
+
 test("parseOpenAiStreamLine extracts streamed content deltas", () => {
   const event = parseOpenAiStreamLine(
     'data: {"choices":[{"delta":{"content":"hello"}}]}',
@@ -134,12 +148,28 @@ test("parseOpenAiStreamLine skips null content deltas", () => {
   assert.deepEqual(event, { kind: "skip" });
 });
 
+test("parseOpenAiStreamLine extracts native chat tool calls", () => {
+  const event = parseOpenAiStreamLine(
+    'data: {"choices":[{"delta":{"tool_calls":[{"function":{"name":"read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}}]}',
+  );
+
+  assert.deepEqual(event, { kind: "tool_call", request: { tool: "read", path: "README.md" } });
+});
+
 test("parseOpenAiResponsesLine extracts streamed output text deltas", () => {
   const event = parseOpenAiResponsesLine(
     'data: {"type":"response.output_text.delta","delta":"hello"}',
   );
 
   assert.deepEqual(event, { kind: "content", content: "hello" });
+});
+
+test("parseOpenAiResponsesLine extracts native response tool calls", () => {
+  const event = parseOpenAiResponsesLine(
+    'data: {"type":"response.output_item.done","item":{"type":"function_call","name":"grep","arguments":"{\\"query\\":\\"TODO\\"}"}}',
+  );
+
+  assert.deepEqual(event, { kind: "tool_call", request: { tool: "grep", query: "TODO" } });
 });
 
 test("streamEventsFromChunks parses split server-sent event chunks", async () => {

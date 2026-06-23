@@ -1,11 +1,13 @@
-import { readFile } from "node:fs/promises";
-
-import { ansi, paint, stripAnsi } from "./ansi.js";
+import { ansi, paint } from "./ansi.js";
+import { formatAgentAge, truncatePreview } from "./agent-board-format.js";
 import type { AgentRunRecord, AgentRunStatus } from "./agent-run-record.js";
+import { readAgentRunPreview } from "./agent-run-preview.js";
 import { listAgentRuns } from "./agent-run-store.js";
 import type { ActorRecord, ActorStatus } from "./actor-record.js";
 import { listActors } from "./actor-store.js";
 import { listPendingInboxMessages } from "./inbox-store.js";
+
+export { readAgentRunPreview } from "./agent-run-preview.js";
 
 export type AgentBoardRow = {
   readonly id: string;
@@ -48,13 +50,6 @@ export async function formatAgentBoard(root: string): Promise<string> {
   ].join("\n");
 }
 
-export async function readAgentRunPreview(run: AgentRunRecord, limit = 320): Promise<string> {
-  const output = await readOptionalFile(run.outputPath);
-  const fallback = run.error ?? run.prompt;
-  const source = output.trim().length > 0 ? readableOutputPreview(stripAnsi(output)) || fallback : fallback;
-  return truncate(oneLine(source), limit);
-}
-
 function formatGroup(title: string, rows: readonly AgentBoardRow[], totalCount = rows.length): string {
   if (rows.length === 0) {
     return [`${paint(title, ansi.accent)} ${paint("0", ansi.dim)}`, `  ${paint("No sessions here.", ansi.dim)}`, ""].join("\n");
@@ -75,7 +70,7 @@ function formatRow(row: AgentBoardRow): string {
     paint(row.name.padEnd(22), ansi.bold),
     paint(row.age.padStart(6), ansi.dim),
     inbox,
-    paint(truncate(row.summary, 72), ansi.blue),
+    paint(truncatePreview(row.summary, 72), ansi.blue),
   ].join(" ");
 }
 
@@ -94,7 +89,7 @@ async function rowFromRun(
     group,
     status: statusText(run.status, actorStatus),
     name: run.agentName,
-    age: formatAge(run.startedAt, run.endedAt),
+    age: formatAgentAge(run.startedAt, run.endedAt),
     inboxCount,
     summary: summaryForRun(run, actor, await readAgentRunPreview(run)),
     prompt: run.prompt,
@@ -108,7 +103,7 @@ function rowFromActor(actor: ActorRecord, inboxCount: number): AgentBoardRow {
     group: groupForActor(actor.status),
     status: actorStatusText(actor.status),
     name: actor.name,
-    age: formatAge(actor.startedAt, actor.endedAt),
+    age: formatAgentAge(actor.startedAt, actor.endedAt),
     inboxCount,
     summary: actor.summary ?? actor.error ?? actor.task,
     prompt: actor.task,
@@ -205,17 +200,6 @@ async function pendingInboxCountsByActor(root: string): Promise<ReadonlyMap<stri
   return counts;
 }
 
-async function readOptionalFile(filePath: string): Promise<string> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error: unknown) {
-    if (isErrnoException(error) && error.code === "ENOENT") {
-      return "";
-    }
-    throw error;
-  }
-}
-
 function compareRows(left: AgentBoardRow, right: AgentBoardRow): number {
   return groupRank(left.group) - groupRank(right.group);
 }
@@ -244,44 +228,6 @@ function statusColor(group: AgentBoardGroup): string {
     default:
       return unexpected(group);
   }
-}
-
-function formatAge(startedAt: string, endedAt: string | undefined): string {
-  const start = Date.parse(startedAt);
-  const end = endedAt === undefined ? Date.now() : Date.parse(endedAt);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return "0.0s";
-  }
-  return `${(Math.max(0, end - start) / 1000).toFixed(1)}s`;
-}
-
-function oneLine(text: string): string {
-  return text.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0).join(" ");
-}
-
-function readableOutputPreview(text: string): string {
-  return text
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !isTransientOutputLine(line))
-    .slice(-3)
-    .join(" ");
-}
-
-function isTransientOutputLine(line: string): boolean {
-  return line.includes(" Thinking ") || line.startsWith("Thinking ") || line.startsWith("◆ Tool ");
-}
-
-function truncate(text: string, width: number): string {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 3))}...`;
-}
-
-type ErrnoException = Error & {
-  readonly code: string;
-};
-
-function isErrnoException(error: unknown): error is ErrnoException {
-  return error instanceof Error && "code" in error && typeof error.code === "string";
 }
 
 function unexpected(value: never): never {

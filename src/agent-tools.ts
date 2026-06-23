@@ -1,7 +1,7 @@
 import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
 import { formatReadOutput, formatSearchResults, formatToolProgress } from "./agent-tool-output.js";
-import { saveFileCheckpoint } from "./file-history.js";
+import { saveFileCheckpoint, type FileCheckpoint } from "./file-history.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
 import { runDiagnosticsTool, runFetchTool } from "./agent-tool-external.js";
 import { runArtifactTool, runTaskTool } from "./agent-tool-state.js";
@@ -35,6 +35,7 @@ export type AgentToolResult = {
   readonly ok: boolean;
   readonly output: string;
   readonly changedPath?: string;
+  readonly checkpoint?: FileCheckpoint;
 };
 export type AgentToolPolicy = {
   readonly mode: PermissionMode;
@@ -43,6 +44,7 @@ export type AgentToolPolicy = {
   readonly workspaceRoot?: string;
   readonly signal?: AbortSignal;
   readonly shellTimeoutMs?: number;
+  readonly shellAllowedExecutables?: readonly string[];
   readonly configRoot?: string;
 };
 
@@ -122,16 +124,23 @@ async function runApprovedAgentToolRequest(
         return { request, ok: true, output };
       }
       case "shell":
-        return { request, ...(await runShellCapture(request.command, policy)) };
+        return {
+          request,
+          ...(await runShellCapture(request.command, {
+            ...(policy.signal === undefined ? {} : { signal: policy.signal }),
+            ...(policy.shellTimeoutMs === undefined ? {} : { shellTimeoutMs: policy.shellTimeoutMs }),
+            ...(policy.shellAllowedExecutables === undefined ? {} : { allowedExecutables: policy.shellAllowedExecutables }),
+          })),
+        };
       case "write": {
         const checkpoint = await checkpointPathBeforeMutation(request.path, policy);
         const path = await writeWorkspaceFile(request.path, request.content, policy.workspaceRoot);
-        return { request, ok: true, output: formatMutationOutput(`wrote ${path}`, checkpoint), changedPath: path };
+        return { request, ok: true, output: formatMutationOutput(`wrote ${path}`, checkpoint?.snapshotPath), changedPath: path, ...(checkpoint === undefined ? {} : { checkpoint }) };
       }
       case "delete": {
         const checkpoint = await checkpointPathBeforeMutation(request.path, policy);
         const path = await deleteWorkspacePath(request.path, policy.workspaceRoot);
-        return { request, ok: true, output: formatMutationOutput(`deleted ${path}`, checkpoint), changedPath: path };
+        return { request, ok: true, output: formatMutationOutput(`deleted ${path}`, checkpoint?.snapshotPath), changedPath: path, ...(checkpoint === undefined ? {} : { checkpoint }) };
       }
       case "mkdir": {
         const path = await mkdirWorkspacePath(request.path, policy.workspaceRoot);
@@ -147,9 +156,10 @@ async function runApprovedAgentToolRequest(
           request,
           ok: result.replaced,
           output: result.replaced
-            ? formatMutationOutput(`edited ${result.path} (${result.replacements} replacements)`, checkpoint)
+            ? formatMutationOutput(`edited ${result.path} (${result.replacements} replacements)`, checkpoint?.snapshotPath)
             : result.message ?? `no match in ${result.path}`,
           ...(result.replaced ? { changedPath: result.path } : {}),
+          ...(result.replaced && checkpoint !== undefined ? { checkpoint } : {}),
         };
       }
       case "patch": {
@@ -182,9 +192,8 @@ function normalizePolicy(policyInput: PermissionMode | AgentToolPolicy): AgentTo
   return typeof policyInput === "string" ? { mode: policyInput } : policyInput;
 }
 
-async function checkpointPathBeforeMutation(path: string, policy: AgentToolPolicy): Promise<string | undefined> {
-  const checkpoint = await saveFileCheckpoint(path, policy.workspaceRoot, policy.configRoot ?? defaultConfigRoot());
-  return checkpoint?.snapshotPath;
+async function checkpointPathBeforeMutation(path: string, policy: AgentToolPolicy): Promise<FileCheckpoint | undefined> {
+  return saveFileCheckpoint(path, policy.workspaceRoot, policy.configRoot ?? defaultConfigRoot());
 }
 
 function formatMutationOutput(output: string, checkpoint: string | undefined): string {

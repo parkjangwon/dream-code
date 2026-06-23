@@ -1,12 +1,14 @@
 import { ansi, paint } from "./ansi.js";
 import {
   MissingProviderConfigError,
+  nativeAgentToolDefinitions,
   ProviderProtocolError,
   ProviderRequestError,
   streamChatCompletion,
   type ChatMessage,
 } from "./llm-provider.js";
 import { messageChars, optionalSignal } from "./agent-runner-utils.js";
+import type { AgentToolRequest } from "./agent-tool-schema.js";
 import { defaultConfigRoot } from "./config.js";
 import { recordModelTelemetry } from "./model-telemetry.js";
 import type { SelectedModel } from "./model-routing.js";
@@ -62,8 +64,13 @@ async function streamAgentOnce(
     assistantText = `${assistantText}${token}`;
     response.token(token);
   };
+  const onToolCall = (request: AgentToolRequest): void => {
+    const block = nativeToolBlock(request);
+    assistantText = `${assistantText}${block}`;
+    response.token(block);
+  };
   try {
-    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
+    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, tools: nativeAgentToolDefinitions(nativeToolNames()), onToken, onToolCall }, options.signal));
     response.finish();
     await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
     await options.onSelectedModel?.(selectedModel);
@@ -89,8 +96,11 @@ async function streamAgentSilently(
   const onToken = (token: string): void => {
     assistantText = `${assistantText}${token}`;
   };
+  const onToolCall = (request: AgentToolRequest): void => {
+    assistantText = `${assistantText}${nativeToolBlock(request)}`;
+  };
   try {
-    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, onToken }, options.signal));
+    await streamChatCompletion(optionalSignal({ selectedModel, messages, configRoot, tools: nativeAgentToolDefinitions(nativeToolNames()), onToken, onToolCall }, options.signal));
     await recordModelTelemetry(configRoot, modelTelemetryInput(selectedModel, true, startedAt, messages, assistantText));
     await options.onSelectedModel?.(selectedModel);
     return assistantText;
@@ -101,6 +111,14 @@ async function streamAgentSilently(
     });
     throw error;
   }
+}
+
+function nativeToolNames(): readonly Parameters<typeof nativeAgentToolDefinitions>[0][number][] {
+  return ["read", "list", "grep", "glob", "diff", "stat", "diagnostics", "shell", "write", "edit", "patch", "delete", "mkdir", "move", "copy", "artifact", "task", "mcp"];
+}
+
+function nativeToolBlock(request: AgentToolRequest): string {
+  return `\n\`\`\`dream-tool\n${JSON.stringify(request)}\n\`\`\`\n`;
 }
 
 function modelTelemetryInput(

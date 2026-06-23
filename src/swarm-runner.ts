@@ -1,5 +1,6 @@
 import type { AgentDefinition } from "./agent-library.js";
 import { loadAgentDefinitions } from "./agent-definition-loader.js";
+import { runWithAbort } from "./abortable-run.js";
 import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { writeSwarmMemory } from "./memory-writer.js";
@@ -7,6 +8,7 @@ import { defaultSwarmAgentRunner } from "./swarm-agent-runner.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
 import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
+import { monitorColumnsOption, monitorNowOption } from "./swarm-runner-options.js";
 import {
   createFastSwarmSynthesis,
   shouldUseFastSwarmSynthesis,
@@ -241,33 +243,10 @@ function createSwarmAbortController(externalSignal: AbortSignal | undefined): Ab
   return controller;
 }
 
-function runWithAbort(task: Promise<string>, signal: AbortSignal, cancelledOutput: string): Promise<string> {
-  if (signal.aborted) {
-    return Promise.resolve(cancelledOutput);
-  }
-  return new Promise((resolve, reject) => {
-    const abort = (): void => {
-      resolve(cancelledOutput);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    task.then(resolve, reject).finally(() => {
-      signal.removeEventListener("abort", abort);
-    });
-  });
-}
-
 function swarmPlanOptions(options: SwarmRunOptions): { readonly forceLanes?: number; readonly forceAgents?: number; readonly intensity?: SwarmIntensity } {
   return {
     ...(options.forceLanes === undefined ? {} : { forceLanes: options.forceLanes }),
     ...(options.forceAgents === undefined ? {} : { forceAgents: options.forceAgents }),
     ...(options.intensity === undefined ? {} : { intensity: options.intensity }),
   };
-}
-
-function monitorNowOption(now: (() => number) | undefined): { readonly now?: () => number } {
-  return now === undefined ? {} : { now };
-}
-
-function monitorColumnsOption(columns: number | undefined): { readonly terminalColumns?: number } {
-  return columns === undefined ? {} : { terminalColumns: columns };
 }

@@ -18,7 +18,9 @@ test("runPluginCommand installs and lists plugins", async () => {
 
     assert.match(installed, /plugin installed: Tiny Claude Plugin/u);
     assert.match(installed, /1 skill\(s\), 0 agent\(s\), 0 command\(s\), 0 MCP server\(s\)/u);
+    assert.match(installed, /Trust summary/u);
     assert.match(listed, /Tiny Claude Plugin 0.1.0/u);
+    assert.match(listed, /trust:/u);
     assert.match(installedList, /Tiny Claude Plugin 0.1.0/u);
   } finally {
     await rm(root, { recursive: true, force: true });
