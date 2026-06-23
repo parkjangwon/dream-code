@@ -6,12 +6,23 @@ export function isAgentToolName(value: string): value is AgentToolName {
     case "read":
     case "list":
     case "search":
+    case "grep":
+    case "glob":
     case "research":
+    case "fetch":
+    case "diff":
+    case "stat":
+    case "diagnostics":
     case "shell":
     case "write":
     case "edit":
+    case "patch":
     case "delete":
     case "mkdir":
+    case "move":
+    case "copy":
+    case "artifact":
+    case "task":
     case "mcp":
       return true;
     default:

@@ -21,6 +21,14 @@ function approvalLabel(request: AgentToolRequest): string {
       return `glob ${request.pattern}`;
     case "research":
       return `research ${request.query}`;
+    case "fetch":
+      return `fetch ${request.url}`;
+    case "diff":
+      return `diff ${request.path ?? "."}`;
+    case "stat":
+      return `stat ${request.path}`;
+    case "diagnostics":
+      return "run diagnostics";
     case "shell":
       return `run shell: ${request.command}`;
     case "write":
@@ -31,6 +39,16 @@ function approvalLabel(request: AgentToolRequest): string {
       return `delete ${request.path}`;
     case "mkdir":
       return `create directory ${request.path}`;
+    case "patch":
+      return "apply patch";
+    case "move":
+      return `move ${request.from} to ${request.to}`;
+    case "copy":
+      return `copy ${request.from} to ${request.to}`;
+    case "artifact":
+      return `artifact ${request.action} ${request.path ?? request.name ?? ""}`.trim();
+    case "task":
+      return `task ${request.action}`;
     case "mcp":
       return `call MCP ${request.server}/${request.name}`;
     default:
