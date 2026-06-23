@@ -12,6 +12,14 @@ test("runtime source files stay English-only", async () => {
   }
 });
 
+test("README documents LoopSpec automation", async () => {
+  const readme = await readFile("README.md", "utf8");
+
+  assert.match(readme, /\/loop/u);
+  assert.match(readme, /LoopSpec/u);
+  assert.match(readme, /command evaluator/u);
+});
+
 async function listTypeScriptFiles(root: string): Promise<readonly string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const nestedFiles = await Promise.all(

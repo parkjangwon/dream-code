@@ -9,6 +9,7 @@ import { createCronRun, listCronProjects, loadDueCronJobs, updateCronJob } from 
 import { saveCronArtifact } from "./cron-artifacts.js";
 import type { CronJob, CronProject } from "./cron-types.js";
 import { notifyCronComplete } from "./notifications.js";
+import { runCronLoopJob } from "./cron-loop-runner.js";
 import { parseSwarmArgs, type SwarmArgs } from "./swarm-args.js";
 import { runAgentSwarm } from "./swarm-runner.js";
 import { runWorkflowScript, type WorkflowRunEvent } from "./workflow-engine.js";
@@ -162,6 +163,9 @@ async function executeCronJob(
       throw new Error(result.error);
     }
     return renderWorkflowCronResult(result.value, result.events, result.durationMs);
+  }
+  if (job.mode === "loop" || job.prompt.trim().startsWith("/loop")) {
+    return runCronLoopJob({ configRoot, job, project, runAgent });
   }
   return runAgent({ prompt: job.prompt, cwd: project.cwd, job });
 }

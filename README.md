@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.12)
+Dream Code (v0.1.13)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.12
-git push origin v0.1.12
+git tag v0.1.13
+git push origin v0.1.13
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -108,7 +108,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.12 sh install.sh
+DREAM_CODE_VERSION=v0.1.13 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -153,7 +153,12 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Native notifications:** completion and permission-required alerts through
   standard OS notification tools, with hook-friendly command overrides.
 - **Cron automation:** schedule recurring agent work from the TUI, run it from a
-  background daemon, and let jobs call normal prompts, `/workflow`, or `/swarm`.
+  background daemon, and let jobs call normal prompts, `/workflow`, `/loop`, or
+  `/swarm`.
+- **LoopSpec automation:** run guarded agent/evaluator loops with `/loop`, where
+  a command evaluator decides whether each turn passed before Dream Code
+  continues. Use it for checks with real pass/fail signals, not vague taste
+  work.
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
   `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
   templates.
@@ -204,6 +209,44 @@ regression, performance, integration, and final-judge lanes. Use `--lanes N`
 only when you want exactly `N` lanes; combining it with `--overdrive` is the
 hidden high-lane path for intentionally noisy stress runs. The older `--size N`
 spelling still works as a deprecated alias for cron and existing scripts.
+
+## LoopSpec
+
+`/loop` turns a repeatable coding task into a small loop: Dream Code runs an
+agent turn, executes a command evaluator, and keeps going until the evaluator
+passes or the turn budget is exhausted. Run `/loop` with no arguments to create
+`.dream/loops/example.json`, preview with `--dry-run`, then execute the saved
+spec when the command looks right.
+
+```text
+/loop
+/loop .dream/loops/example.json --dry-run
+/loop .dream/loops/example.json
+```
+
+LoopSpec files are JSON and start with `version: 1`:
+
+```json
+{
+  "version": 1,
+  "name": "test-ratchet",
+  "goal": "Make the project checks pass without weakening the checks.",
+  "prompt": "Inspect the failing check, make the smallest fix, and leave a short verification note.",
+  "maxTurns": 3,
+  "evaluator": {
+    "type": "command",
+    "command": "npm",
+    "args": ["test"],
+    "passExitCodes": [0],
+    "timeoutMs": 120000
+  }
+}
+```
+
+The command evaluator runs a real local process, so Dream Code asks for approval
+outside YOLO mode and records loop runs under `~/.dream/loops/runs/`. Cron can
+run LoopSpecs with a `/loop path/to/spec.json` job, but evaluator commands are
+allowed only for jobs saved with YOLO permission.
 
 ## Agent Board
 

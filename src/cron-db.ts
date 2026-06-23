@@ -20,7 +20,7 @@ export const jobRowSchema = z.object({
   schedule: z.string(),
   timezone: z.string(),
   prompt: z.string(),
-  mode: z.enum(["agent", "workflow", "swarm"]),
+  mode: z.enum(["agent", "workflow", "swarm", "loop"]),
   enabled: z.number(),
   model_mode: z.enum(["auto", "single"]),
   permission_mode: z.enum(["ask", "auto", "plan", "yolo"]),

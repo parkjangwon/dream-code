@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cronJobModeSchema = z.enum(["agent", "workflow", "swarm"]);
+export const cronJobModeSchema = z.enum(["agent", "workflow", "swarm", "loop"]);
 export type CronJobMode = z.infer<typeof cronJobModeSchema>;
 
 export const cronRunStatusSchema = z.enum(["completed", "failed", "blocked", "cancelled"]);

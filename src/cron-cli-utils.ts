@@ -39,10 +39,13 @@ export function parseDaemonInterval(args: readonly string[]): number {
   return Number.isFinite(seconds) ? Math.max(5_000, seconds * 1_000) : defaultDaemonIntervalMs;
 }
 
-export function parseMode(raw: string): "agent" | "workflow" | "swarm" {
+export function parseMode(raw: string): "agent" | "workflow" | "swarm" | "loop" {
   const normalized = raw.trim();
   if (normalized === "workflow" || normalized.startsWith("/workflow")) {
     return "workflow";
+  }
+  if (normalized === "loop" || normalized.startsWith("/loop")) {
+    return "loop";
   }
   if (normalized === "swarm" || normalized.startsWith("/swarm")) {
     return "swarm";
@@ -76,6 +79,7 @@ export function printCronUsage(): void {
     "  dream cron list",
     "  dream cron add \"every day at 09:00 run tests\"",
     "  dream cron add --name nightly --mode swarm \"0 2 * * * /swarm --deep audit project\"",
+    "  dream cron add --name ratchet --mode loop --permission yolo \"0 2 * * * /loop .dream/loops/test.json\"",
     "  dream cron run <job>",
     "  dream cron pause <job>",
     "  dream cron resume <job>",

@@ -9,6 +9,7 @@ import {
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
 import { runHookEvent } from "./hooks.js";
+import { runLoopCommand } from "./tui-loop-command.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
 import { runAgentTextPrompt } from "./tui-agent-prompt-flow.js";
 import { enableAutoRouting } from "./tui-auto-routing-command.js";
@@ -155,6 +156,19 @@ async function runWorkspaceCommandBody(
         }),
         shouldContinue: true,
       };
+    case "/loop":
+      await runLoopCommand({
+        config,
+        configRoot,
+        command: command.name,
+        rest: command.rest,
+        questioner,
+        cwd,
+        oneShotYolo,
+        ...(sessionRuntime === undefined ? {} : { sessionRuntime }),
+        ...(signal === undefined ? {} : { signal }),
+      });
+      return { config, shouldContinue: true };
     case "/skills":
       await showSkillMenu(configRoot, questioner);
       return { config, shouldContinue: true };

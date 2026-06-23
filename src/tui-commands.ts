@@ -24,6 +24,7 @@ export const slashCommands = [
   { name: "/interview", summary: "Align on implementation direction", acceptsArgs: false },
   { name: "/login", summary: "Login to a provider", acceptsArgs: true },
   { name: "/logout", summary: "Forget provider credentials", acceptsArgs: true },
+  { name: "/loop", summary: "Run a LoopSpec until checks pass", acceptsArgs: true },
   { name: "/lsp", summary: "Run language diagnostics", acceptsArgs: false },
   { name: "/mcp", summary: "Show MCP settings", acceptsArgs: false },
   { name: "/model", summary: "Choose active model", acceptsArgs: true },
