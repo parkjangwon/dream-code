@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { stdout } from "node:process";
 
 import { loadConfig, type DreamConfig } from "./config.js";
+import { assertShellCommandAllowed } from "./shell-command.js";
 
 export type NotificationKind = "completion" | "permissionRequired";
 
@@ -15,7 +16,7 @@ export type NotificationCommand = {
   readonly command: string;
   readonly args: readonly string[];
   readonly env: Readonly<Record<string, string>>;
-  readonly shell: boolean;
+  readonly custom: boolean;
 };
 
 const notificationTimeoutMs = 1_200;
@@ -101,14 +102,14 @@ export function notificationCommandForPlatform(
   const commandEnv = { ...stringEnv(env), ...notificationEnv(notification) };
   const customCommand = env["DREAM_NOTIFICATION_COMMAND"];
   if (isNonEmptyString(customCommand)) {
-    return { command: customCommand, args: [], env: commandEnv, shell: true };
+    return customNotificationCommand(customCommand, commandEnv);
   }
   if (isTermux(env)) {
     return {
       command: "termux-notification",
       args: ["--title", notification.title, "--content", notification.body],
       env: commandEnv,
-      shell: false,
+      custom: false,
     };
   }
   switch (platform) {
@@ -117,16 +118,16 @@ export function notificationCommandForPlatform(
         command: "osascript",
         args: ["-e", `display notification "${escapeAppleScript(notification.body)}" with title "${escapeAppleScript(notification.title)}"`],
         env: commandEnv,
-        shell: false,
+        custom: false,
       };
     case "linux":
-      return { command: "notify-send", args: [notification.title, notification.body], env: commandEnv, shell: false };
+      return { command: "notify-send", args: [notification.title, notification.body], env: commandEnv, custom: false };
     case "win32":
       return {
         command: "powershell.exe",
         args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", windowsNotificationScript()],
         env: commandEnv,
-        shell: false,
+        custom: false,
       };
     default:
       return undefined;
@@ -136,7 +137,7 @@ export function notificationCommandForPlatform(
 function runNotificationCommand(command: NotificationCommand): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn(command.command, command.args, {
-      shell: command.shell,
+      shell: false,
       env: { ...process.env, ...command.env },
       stdio: "ignore",
     });
@@ -159,7 +160,19 @@ function runNotificationCommand(command: NotificationCommand): Promise<boolean> 
 }
 
 function shouldAttemptNotification(command: NotificationCommand, env: NodeJS.ProcessEnv): boolean {
-  return command.shell || stdout.isTTY === true || env["DREAM_FORCE_NOTIFICATION"] === "1";
+  return command.custom || stdout.isTTY === true || env["DREAM_FORCE_NOTIFICATION"] === "1";
+}
+
+function customNotificationCommand(command: string, env: Readonly<Record<string, string>>): NotificationCommand | undefined {
+  try {
+    const parsed = assertShellCommandAllowed(command);
+    return { command: parsed.executable, args: parsed.args, env, custom: true };
+  } catch (error) {
+    if (error instanceof Error) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 function notificationEnv(notification: NativeNotification): Readonly<Record<string, string>> {

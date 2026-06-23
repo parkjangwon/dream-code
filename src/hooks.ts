@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
 import { ansi, paint } from "./ansi.js";
+import { runCapturedCommand } from "./shell-command.js";
 
 const hookEventSchema = z.enum(["preTool", "postTool", "postCommand"]);
 const hookSchema = z.object({
@@ -22,7 +22,6 @@ export type HookRunResult = {
 };
 
 const hookTimeoutMs = 5_000;
-const maxHookOutput = 4_000;
 
 export function hooksFilePath(root: string): string {
   return join(root, "hooks.toml");
@@ -96,28 +95,9 @@ function unquote(value: string): string {
 }
 
 function runHookCommand(command: string, metadata: HookMetadata): Promise<Pick<HookRunResult, "ok" | "output">> {
-  return new Promise((resolve) => {
-    const child = spawn(command, {
-      shell: true,
-      env: { ...process.env, ...hookEnv(metadata) },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let output = "";
-    const timeout = setTimeout(() => child.kill(), hookTimeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => {
-      output = appendLimited(output, chunk.toString("utf8"));
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      output = appendLimited(output, chunk.toString("utf8"));
-    });
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      resolve({ ok: false, output: error.message });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      resolve({ ok: code === 0, output: output.trim() });
-    });
+  return runCapturedCommand(command, {
+    env: { ...process.env, ...hookEnv(metadata) },
+    timeoutMs: hookTimeoutMs,
   });
 }
 
@@ -167,11 +147,6 @@ function parseHookLog(line: string): readonly HookLogEntry[] {
     }
     throw error;
   }
-}
-
-function appendLimited(base: string, chunk: string): string {
-  const next = `${base}${chunk}`;
-  return next.length > maxHookOutput ? `${next.slice(0, maxHookOutput)}\n[truncated]` : next;
 }
 
 function hookEnv(metadata: HookMetadata): Record<string, string> {

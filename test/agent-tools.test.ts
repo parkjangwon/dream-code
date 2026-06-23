@@ -57,6 +57,20 @@ test("extractAgentToolRequests recovers simple single-quoted tool objects", () =
   assert.equal(requests[1]?.tool, "shell");
 });
 
+test("extractAgentToolRequests parses structured tool call envelopes", () => {
+  const requests = extractAgentToolRequests([
+    "```dream-tool",
+    "{\"tool_calls\":[{\"tool\":\"read\",\"path\":\"README.md\"},{\"tool\":\"grep\",\"query\":\"TODO\"}]}",
+    "{\"calls\":[{\"tool\":\"list\",\"path\":\"src\"}]}",
+    "```",
+  ].join("\n"));
+
+  assert.equal(requests.length, 3);
+  assert.equal(requests[0]?.tool, "read");
+  assert.equal(requests[1]?.tool, "grep");
+  assert.equal(requests[2]?.tool, "list");
+});
+
 test("runAgentToolRequest gates shell tools behind yolo permission", async () => {
   const result = await runAgentToolRequest({ tool: "shell", command: "echo no" }, "ask");
 

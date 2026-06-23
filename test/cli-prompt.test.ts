@@ -131,6 +131,56 @@ test("dream -p runs end-to-end through the compiled CLI", async () => {
   }
 });
 
+test("dream -p blocks shell metacharacter tool calls through the compiled CLI", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-cli-prompt-shell-e2e-"));
+  let requests = 0;
+  let agentRequests = 0;
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body = `${body}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      requests += 1;
+      const isDreaming = body.includes("hidden Dreaming memory consolidator");
+      if (!isDreaming) {
+        agentRequests += 1;
+      }
+      const content = isDreaming
+        ? "{\"memories\":[]}"
+        : agentRequests === 1
+        ? "```dream-tool\n{\"tool_calls\":[{\"tool\":\"shell\",\"command\":\"echo ok && echo bad\"}]}\n```"
+        : "shell policy e2e ok";
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        `data: {\"choices\":[{\"delta\":{\"content\":${JSON.stringify(content)}}}]}`,
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+
+    const result = await runDreamCli(["--yolo", "-p", "try shell policy", "--json", "--quiet"], {
+      ...process.env,
+      DREAM_CODE_HOME: root,
+    });
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.response, "shell policy e2e ok");
+    assert.equal(agentRequests, 2);
+    assert.equal(requests, 3);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function listen(server: ReturnType<typeof createServer>): Promise<string> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);

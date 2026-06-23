@@ -1,12 +1,11 @@
-import { spawn } from "node:child_process";
 import { request } from "undici";
+
+import { runCapturedCommand } from "./shell-command.js";
 
 export type ResearchResult = {
   readonly ok: boolean;
   readonly output: string;
 };
-
-const maxResearchOutput = 10_000;
 
 export async function runResearch(query: string): Promise<ResearchResult> {
   const command = process.env["DREAM_RESEARCH_COMMAND"];
@@ -17,21 +16,9 @@ export async function runResearch(query: string): Promise<ResearchResult> {
 }
 
 function runResearchCommand(command: string, query: string): Promise<ResearchResult> {
-  return new Promise((resolve) => {
-    const child = spawn(command, {
-      shell: true,
-      env: { ...process.env, DREAM_QUERY: query },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let output = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      output = appendLimited(output, chunk.toString("utf8"));
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      output = appendLimited(output, chunk.toString("utf8"));
-    });
-    child.on("error", (error) => resolve({ ok: false, output: error.message }));
-    child.on("close", (code) => resolve({ ok: code === 0, output: output.trim() }));
+  return runCapturedCommand(command, {
+    env: { ...process.env, DREAM_QUERY: query },
+    timeoutMs: 15_000,
   });
 }
 
@@ -146,9 +133,4 @@ function snippetAfter(html: string, index: number): string {
   const match = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/u.exec(nearby)
     ?? /class="result__snippet"[^>]*>([\s\S]*?)<\/div>/u.exec(nearby);
   return cleanHtml(match?.[1] ?? "");
-}
-
-function appendLimited(base: string, chunk: string): string {
-  const next = `${base}${chunk}`;
-  return next.length > maxResearchOutput ? `${next.slice(0, maxResearchOutput)}\n[truncated]` : next;
 }

@@ -85,8 +85,12 @@ export async function maybeRunShell(
     output.write(`${paint("blocked:", ansi.red)} ${risk}\n`);
     return;
   }
-  const code = await runShellCommand(command);
-  output.write(`exit ${code}\n`);
+  try {
+    const code = await runShellCommand(command);
+    output.write(`exit ${code}\n`);
+  } catch (error) {
+    output.write(`${paint("blocked:", ansi.red)} ${error instanceof Error ? error.message : "shell command rejected"}\n`);
+  }
 }
 
 async function confirmWrite(

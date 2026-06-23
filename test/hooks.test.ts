@@ -36,10 +36,16 @@ test("runHookEvent executes matching hooks with metadata env", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-hooks-run-"));
   try {
     const outputFile = join(root, "hook.out");
+    const scriptFile = join(root, "hook.cjs");
+    await writeFile(
+      scriptFile,
+      `require('node:fs').writeFileSync(${JSON.stringify(outputFile)}, process.env.DREAM_TOOL || '')`,
+      "utf8",
+    );
     await writeFile(join(root, "hooks.toml"), [
       "[[hook]]",
       "event = \"postTool\"",
-      `command = "printf $DREAM_TOOL > ${outputFile}"`,
+      `command = "node ${scriptFile}"`,
       "enabled = true",
     ].join("\n"), "utf8");
 

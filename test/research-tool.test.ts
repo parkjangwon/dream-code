@@ -6,7 +6,7 @@ import { parseDuckDuckGoResults, parseJinaSearchResults, runResearch } from "../
 test("runResearch uses DREAM_RESEARCH_COMMAND when configured", async () => {
   const previous = process.env["DREAM_RESEARCH_COMMAND"];
   try {
-    process.env["DREAM_RESEARCH_COMMAND"] = "printf \"search:$DREAM_QUERY\"";
+    process.env["DREAM_RESEARCH_COMMAND"] = "node -e \"console.log(`search:${process.env.DREAM_QUERY}`)\"";
 
     const result = await runResearch("official docs");
 

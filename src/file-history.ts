@@ -1,5 +1,6 @@
 import { appendFile, copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { z } from "zod";
 
 export type FileCheckpoint = {
   readonly id: string;
@@ -12,6 +13,15 @@ export type FileCheckpoint = {
 type FileCheckpointRecord = FileCheckpoint & {
   readonly version: 1;
 };
+
+const fileCheckpointRecordSchema = z.object({
+  version: z.literal(1),
+  id: z.string().min(1),
+  createdAt: z.string().min(1),
+  path: z.string().min(1),
+  workspaceRoot: z.string().min(1),
+  snapshotPath: z.string().min(1),
+});
 
 type ErrnoException = Error & {
   readonly code?: string;
@@ -64,6 +74,7 @@ export async function restoreLatestFileCheckpoint(
     throw new Error(`No file history found for ${relativePath}`);
   }
 
+  await saveFileCheckpoint(inputPath, workspaceRoot, configRoot);
   await mkdir(dirname(absolutePath), { recursive: true });
   await copyFile(latest.snapshotPath, absolutePath);
   return absolutePath;
@@ -83,7 +94,8 @@ async function readCheckpointRecords(checkpointRoot: string): Promise<readonly F
   const records: FileCheckpointRecord[] = [];
   for (const entry of entries) {
     if (entry.isFile() && entry.name.endsWith(".json")) {
-      records.push(JSON.parse(await readFile(join(checkpointRoot, entry.name), "utf8")) as FileCheckpointRecord);
+      const parsedJson: unknown = JSON.parse(await readFile(join(checkpointRoot, entry.name), "utf8"));
+      records.push(fileCheckpointRecordSchema.parse(parsedJson));
     }
   }
   return records;

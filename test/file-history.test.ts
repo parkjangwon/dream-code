@@ -25,3 +25,24 @@ test("file history restores the latest checkpoint for a workspace file", async (
     await rm(project, { recursive: true, force: true });
   }
 });
+
+test("file history checkpoints the current file before restoring", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-file-history-root-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-file-history-project-"));
+  try {
+    await mkdir(join(project, "src"), { recursive: true });
+    const filePath = join(project, "src", "index.ts");
+    await writeFile(filePath, "before\n", "utf8");
+    await saveFileCheckpoint("src/index.ts", project, root);
+    await writeFile(filePath, "after\n", "utf8");
+
+    await restoreLatestFileCheckpoint("src/index.ts", project, root);
+    assert.equal(await readFile(filePath, "utf8"), "before\n");
+
+    await restoreLatestFileCheckpoint("src/index.ts", project, root);
+    assert.equal(await readFile(filePath, "utf8"), "after\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});

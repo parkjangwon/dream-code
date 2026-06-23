@@ -43,6 +43,17 @@ if (readText("src/config.ts").includes('permissions: { mode: "yolo" }')) {
   fail("defaultConfig must not start fresh installs in yolo permission mode");
 }
 
+for (const filePath of typeScriptFiles("src")) {
+  const text = readText(filePath);
+  if (text.includes("shell: true")) {
+    fail(`${filePath}: shell:true is forbidden; use src/shell-command.ts argv execution`);
+  }
+  const pureLoc = text.split(/\r?\n/u).filter((line) => !/^\s*$/u.test(line) && !/^\s*\/\//u.test(line)).length;
+  if (pureLoc > 300) {
+    fail(`${filePath}: ${pureLoc} pure LOC exceeds the 300-line runtime ceiling`);
+  }
+}
+
 const forbiddenRules = [
   { pattern: /\bas\s+any\b/u, label: "as any" },
   { pattern: /:\s*any\b/u, label: "any annotation" },

@@ -1,4 +1,13 @@
+import { z } from "zod";
+
 import { toolRequestSchema, type AgentToolRequest } from "./agent-tool-schema.js";
+
+const toolRequestEnvelopeSchema = z.union([
+  toolRequestSchema,
+  z.array(toolRequestSchema),
+  z.object({ tool_calls: z.array(toolRequestSchema) }),
+  z.object({ calls: z.array(toolRequestSchema) }),
+]);
 
 export function extractAgentToolRequests(text: string): readonly AgentToolRequest[] {
   const fenced = [...text.matchAll(/```dream-tool\s*\n([\s\S]*?)```/gu)]
@@ -32,8 +41,20 @@ function parseBareToolObjects(text: string): readonly AgentToolRequest[] {
 
 function parseToolJson(raw: string): readonly AgentToolRequest[] {
   const parsedJson = parseJsonObject(raw) ?? parseJsonObject(normalizeLooseJson(raw));
-  const parsed = toolRequestSchema.safeParse(parsedJson);
-  return parsed.success ? [parsed.data] : [];
+  const parsed = toolRequestEnvelopeSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return [];
+  }
+  if (Array.isArray(parsed.data)) {
+    return parsed.data;
+  }
+  if ("tool_calls" in parsed.data) {
+    return parsed.data.tool_calls;
+  }
+  if ("calls" in parsed.data) {
+    return parsed.data.calls;
+  }
+  return [parsed.data];
 }
 
 function parseJsonObject(raw: string | undefined): unknown {

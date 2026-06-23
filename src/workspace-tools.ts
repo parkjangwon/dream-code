@@ -1,6 +1,7 @@
-import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+
+import { runInheritedCommand } from "./shell-command.js";
 
 export type ReadFileResult = {
   readonly path: string;
@@ -134,16 +135,7 @@ export async function replaceInWorkspaceFile(
 }
 
 export function runShellCommand(command: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, { shell: true, stdio: "inherit" });
-
-    child.once("error", (error) => {
-      reject(error);
-    });
-    child.once("close", (code) => {
-      resolve(code ?? 1);
-    });
-  });
+  return runInheritedCommand(command);
 }
 
 export function resolveWorkspacePath(inputPath: string, rootInput: string): string {

@@ -1,60 +1,27 @@
 import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { cwd } from "node:process";
-import { z } from "zod";
 
 import { defaultConfigRoot } from "./config.js";
 import { pruneEmptySessions } from "./session-gc.js";
 import { sessionDirFor, sessionIndexPath as layoutSessionIndexPath } from "./session-layout.js";
+import {
+  parseJsonLine,
+  parseJsonText,
+  sessionIndexEntrySchema,
+  sessionStateSchema,
+  wireTurnSchema,
+  type DreamSession,
+  type SessionIndexEntry,
+  type SessionRole,
+  type SessionState,
+  type SessionStore,
+  type SessionTurn,
+  type WireTurn,
+} from "./session-store-schema.js";
 
-const sessionRoleSchema = z.enum(["user", "assistant"]);
-
-const sessionTurnSchema = z.object({
-  role: sessionRoleSchema,
-  content: z.string(),
-  createdAt: z.string(),
-});
-
-const sessionStateSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  summary: z.string().min(1),
-  directory: z.string().min(1),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-const sessionIndexEntrySchema = z.object({
-  sessionId: z.string().min(1),
-  sessionDir: z.string().min(1),
-  directory: z.string().min(1),
-});
-
-const wireTurnSchema = z.object({
-  type: z.literal("turn"),
-  role: sessionRoleSchema,
-  content: z.string(),
-  createdAt: z.string(),
-});
-
-type SessionIndexEntry = z.infer<typeof sessionIndexEntrySchema>;
-type SessionState = z.infer<typeof sessionStateSchema>;
-type WireTurn = z.infer<typeof wireTurnSchema>;
-
-export type SessionRole = z.infer<typeof sessionRoleSchema>;
-export type SessionTurn = z.infer<typeof sessionTurnSchema>;
-export type DreamSession = SessionState & { readonly turns: SessionTurn[] };
-export type SessionStore = { readonly version: 1; readonly sessions: DreamSession[] };
-
-export class SessionStoreParseError extends Error {
-  readonly filePath: string;
-
-  constructor(filePath: string, reason: string) {
-    super(`Could not parse Dream Code sessions at ${filePath}: ${reason}`);
-    this.name = "SessionStoreParseError";
-    this.filePath = filePath;
-  }
-}
+export type { DreamSession, SessionRole, SessionStore, SessionTurn } from "./session-store-schema.js";
+export { SessionStoreParseError } from "./session-store-schema.js";
 
 export function sessionIndexPath(root = defaultConfigRoot()): string {
   return layoutSessionIndexPath(root);
@@ -265,30 +232,6 @@ async function readWireTurns(sessionDir: string): Promise<SessionTurn[]> {
 function updatedDreamSession(session: DreamSession, role: SessionRole, content: string, now: string): DreamSession {
   const summary = role === "user" ? sentenceFromText(content) : session.summary;
   return { ...session, summary, updatedAt: now, turns: [...session.turns, { role, content, createdAt: now }] };
-}
-
-function parseJsonText<T>(schema: z.ZodType<T>, filePath: string, raw: string): T {
-  try {
-    const parsedJson: unknown = JSON.parse(raw);
-    return parseUnknown(schema, filePath, parsedJson);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new SessionStoreParseError(filePath, error.message);
-    }
-    throw error;
-  }
-}
-
-function parseJsonLine<T>(schema: z.ZodType<T>, filePath: string, line: string): T {
-  return parseJsonText(schema, filePath, line);
-}
-
-function parseUnknown<T>(schema: z.ZodType<T>, filePath: string, input: unknown): T {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) {
-    throw new SessionStoreParseError(filePath, parsed.error.message);
-  }
-  return parsed.data;
 }
 
 function sentenceFromText(text: string): string {

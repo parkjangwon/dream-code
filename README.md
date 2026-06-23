@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.16)
+Dream Code (v0.1.17)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.16
-git push origin v0.1.16
+git tag v0.1.17
+git push origin v0.1.17
 ```
 
 The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
@@ -108,7 +108,7 @@ The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.16 sh install.sh
+DREAM_CODE_VERSION=v0.1.17 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -151,7 +151,7 @@ DREAM_CODE_SOURCE=1 sh install.sh
   context with `/context`, and preserve task progress without flooding every
   request.
 - **Native notifications:** completion and permission-required alerts through
-  standard OS notification tools, with hook-friendly command overrides.
+  standard OS notification tools, with allowlisted argv command overrides.
 - **Cron automation:** schedule recurring agent work from the TUI, run it from a
   background daemon, and let jobs call normal prompts, `/workflow`, `/loop`, or
   `/swarm`.
@@ -166,10 +166,10 @@ DREAM_CODE_SOURCE=1 sh install.sh
   LSP diagnostics, live MCP tools, hooks, and local tool health.
 - **Workspace control:** let the agent list, search, grep with regex/globs,
   glob files with gitignore awareness, read line ranges, create directories,
-  write files, edit files with replacement-count guards, delete files, run shell
-  commands, and research the web. Fresh installs start in ask mode; use
-  `dream --yolo` for one-shot bypass or `/yolo` when you intentionally want
-  persisted bypass. Existing
+  write files, edit files with replacement-count guards, delete files, run
+  allowlisted argv commands, and research the web. Fresh installs start in ask
+  mode; use `dream --yolo` for one-shot bypass or `/yolo` when you intentionally
+  want persisted bypass. Existing
   files are checkpointed under `~/.dream/file-history/` before write/edit/delete
   tools mutate them.
 
@@ -459,13 +459,16 @@ Enter       Submit input or choose a menu item
   guarded edit, unified patch, move, copy, delete, MCP calls, artifacts, and
   task ledger updates
 - File history checkpoints before write/edit/patch/move/copy/delete and
-  `/restore <path>`
-- Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
+  `/restore <path>`; restore also checkpoints the current file first so a
+  restore can be undone
+- Web research through an allowlisted `DREAM_RESEARCH_COMMAND` argv command or
+  built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge
 - Hook execution with recent run logs
 - Local file read/write/edit helpers
-- Shell command support with permission mode awareness and destructive-pattern blocking
+- Shell command support with permission mode awareness, executable allowlisting,
+  shell-metacharacter blocking, and destructive-pattern blocking
 - Native OS notifications for long completions and permission-required states
 - Ask mode by default, with `dream --yolo` or `/yolo` for explicit bypass control
 - Copy/export conversation helpers
