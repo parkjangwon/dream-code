@@ -81,14 +81,14 @@ test("runWorkspaceCommand handles shared slash commands from the palette", async
     const outputText = chunks.join("");
     assert.equal(help.shouldContinue, true);
     assert.equal(status.shouldContinue, true);
-    assert.equal(yolo.config.permissions.mode, "ask");
-    assert.equal((await loadConfig(root)).permissions.mode, "ask");
+    assert.equal(yolo.config.permissions.mode, "yolo");
+    assert.equal((await loadConfig(root)).permissions.mode, "yolo");
     assert.equal(sessions.find((session) => session.id === current.id)?.name, "Shared router");
     assert.equal(switchedSessionId, previous.id);
     assert.equal(exit.shouldContinue, false);
     assert.match(outputText, /Commands:/u);
     assert.match(outputText, /Dream Status/u);
-    assert.match(outputText, /ask/u);
+    assert.match(outputText, /yolo/u);
     assert.match(outputText, /session: older-project/u);
     assert.match(outputText, /Good night/u);
     assert.doesNotMatch(outputText, /unknown command/u);

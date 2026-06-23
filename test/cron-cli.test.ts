@@ -20,7 +20,7 @@ test("runCliCronCommand creates jobs with the default permission mode", async ()
     const jobs = await listCronJobs(root, project.id);
 
     assert.equal(jobs[0]?.name, "daily");
-    assert.equal(jobs[0]?.permissionMode, "yolo");
+    assert.equal(jobs[0]?.permissionMode, "ask");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

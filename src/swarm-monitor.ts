@@ -15,7 +15,7 @@ import {
   wrapIndex,
 } from "./swarm-monitor-state.js";
 import type { SwarmLane } from "./swarm-plan.js";
-import { withHiddenCursor } from "./terminal-frame.js";
+import { clearPreviousFrame, withHiddenCursor } from "./terminal-frame.js";
 
 export type SwarmMonitor = {
   readonly start: () => void;
@@ -39,6 +39,7 @@ type MonitorOptions = {
   readonly interactive?: boolean;
   readonly onAbort?: () => void;
   readonly maxVisibleLanes?: number;
+  readonly terminalColumns?: number;
   readonly now?: () => number;
 };
 
@@ -51,7 +52,7 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   let synthesisStatus: SwarmSynthesisStatus = "waiting";
   let synthesisStartedAt: number | undefined;
   let synthesisFinishedAt: number | undefined;
-  let renderedLineCount = 0;
+  let renderedSnapshot = "";
   let frame = 0;
   let selectedIndex: number | undefined;
   let view: SwarmMonitorView = "monitor";
@@ -83,8 +84,8 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       synthesisFinishedAt,
     });
     if (options.replaceInPlace === true) {
-      options.write(withHiddenCursor(`${clearPreviousSnapshot(renderedLineCount)}${snapshot}`));
-      renderedLineCount = countLines(snapshot);
+      options.write(withHiddenCursor(`${clearPreviousFrame(renderedSnapshot, options.terminalColumns)}${snapshot}`));
+      renderedSnapshot = snapshot;
       return;
     }
     options.write(snapshot);
@@ -246,12 +247,4 @@ function laneSnapshot(lane: SwarmLane, index: number, state: MutableLaneState | 
     startedAt: state?.startedAt,
     finishedAt: state?.finishedAt,
   };
-}
-
-function clearPreviousSnapshot(lineCount: number): string {
-  return lineCount === 0 ? "" : "\u001B[1A\r\u001B[2K".repeat(lineCount);
-}
-
-function countLines(text: string): number {
-  return text.endsWith("\n") ? text.slice(0, -1).split("\n").length : text.split("\n").length;
 }

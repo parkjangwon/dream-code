@@ -22,6 +22,10 @@ export function runShellCapture(command: string, policy: ShellCaptureOptions): P
       resolve({ ok: false, output: shellOutput(risk, "cancelled") });
       return;
     }
+    if (risk !== undefined) {
+      resolve({ ok: false, output: `blocked: ${risk}` });
+      return;
+    }
     const child = spawn(command, { shell: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     let settled = false;

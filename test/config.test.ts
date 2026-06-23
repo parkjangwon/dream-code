@@ -21,7 +21,7 @@ test("loadConfig returns defaults when the config file is absent", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-config-"));
   try {
     const config = await loadConfig(root);
-    assert.equal(config.permissions.mode, "yolo");
+    assert.equal(config.permissions.mode, "ask");
     assert.equal(config.model.mode, "single");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -41,7 +41,7 @@ test("initializeDreamHome creates first-run files and directories", async () => 
     const savedModels = await readFile(modelConfigFilePath(root), "utf8");
     const savedCredentials = await readFile(credentialsFilePath(root), "utf8");
 
-    assert.match(savedConfig, /\[permissions\]\nmode = "yolo"/u);
+    assert.match(savedConfig, /\[permissions\]\nmode = "ask"/u);
     assert.match(savedModels, /\[model\.single\.models\]/u);
     assert.deepEqual(JSON.parse(savedCredentials), { version: 1, providers: {} });
     await assertDirectory(join(root, "artifacts"));
@@ -60,14 +60,14 @@ test("togglePersistedYolo flips and saves the permission mode", async () => {
   try {
     await mkdir(root, { recursive: true });
     await saveConfig(root, defaultConfig());
-    const disabled = await togglePersistedYolo(root);
     const enabled = await togglePersistedYolo(root);
+    const disabled = await togglePersistedYolo(root);
     const savedToml = await readFile(configFilePath(root), "utf8");
     const modelsToml = await readFile(modelConfigFilePath(root), "utf8");
 
-    assert.equal(disabled.permissions.mode, "ask");
     assert.equal(enabled.permissions.mode, "yolo");
-    assert.match(savedToml, /\[permissions\]\nmode = "yolo"/);
+    assert.equal(disabled.permissions.mode, "ask");
+    assert.match(savedToml, /\[permissions\]\nmode = "ask"/);
     assert.doesNotMatch(savedToml, /\[model\]/);
     assert.match(modelsToml, /\[model\.single\.models\]/);
     await assertFileMissing(join(root, legacyAgentConfigFileName()));

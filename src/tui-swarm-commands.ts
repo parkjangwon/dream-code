@@ -42,6 +42,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     write: (chunk: string) => output.write(chunk),
     replaceMonitor,
     monitorRows: output.rows,
+    ...(output.columns === undefined ? {} : { monitorColumns: output.columns }),
     ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   };
   const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
@@ -58,6 +59,7 @@ function swarmRunOptions(
     readonly goal: string;
     readonly write: (chunk: string) => boolean;
     readonly replaceMonitor: boolean;
+    readonly monitorColumns?: number;
   },
   parsed: SwarmArgs,
 ): Parameters<typeof runAgentSwarm>[0] {

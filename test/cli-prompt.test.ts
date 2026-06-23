@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -90,6 +91,46 @@ test("runPromptCommand can emit json and run dreaming after completion", async (
   }
 });
 
+test("dream -p runs end-to-end through the compiled CLI", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-cli-prompt-e2e-"));
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body = `${body}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      const content = body.includes("hidden Dreaming memory consolidator")
+        ? "{\"memories\":[]}"
+        : "compiled cli e2e ok";
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        `data: {\"choices\":[{\"delta\":{\"content\":${JSON.stringify(content)}}}]}`,
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+
+    const result = await runDreamCli(["-p", "hello from compiled cli", "--json", "--quiet"], {
+      ...process.env,
+      DREAM_CODE_HOME: root,
+    });
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.response, "compiled cli e2e ok");
+    assert.equal(parsed.dreaming.reason, "no-memories");
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function listen(server: ReturnType<typeof createServer>): Promise<string> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -100,6 +141,31 @@ function listen(server: ReturnType<typeof createServer>): Promise<string> {
         return;
       }
       resolve(`http://127.0.0.1:${address.port}/v1`);
+    });
+  });
+}
+
+function runDreamCli(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["dist/src/cli.js", ...args], {
+      cwd: process.cwd(),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout = `${stdout}${chunk.toString("utf8")}`;
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString("utf8")}`;
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      resolve({ code: code ?? 1, stdout, stderr });
     });
   });
 }

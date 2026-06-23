@@ -23,6 +23,14 @@ test("parseSwarmArgs reads overdrive mode", () => {
   });
 });
 
+test("parseSwarmArgs reads a positional lane count after an intensity preset", () => {
+  assert.deepEqual(parseSwarmArgs("--overdrive 30 프로젝트 분석해줘"), {
+    goal: "프로젝트 분석해줘",
+    forceLanes: 30,
+    intensity: "overdrive",
+  });
+});
+
 test("parseSwarmArgs allows hidden exact-lane overdrive", () => {
   assert.deepEqual(parseSwarmArgs("--lanes 25 --overdrive Audit everything"), {
     goal: "Audit everything",

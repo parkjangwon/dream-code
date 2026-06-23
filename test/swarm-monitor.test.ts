@@ -5,6 +5,7 @@ import { stripAnsi } from "../src/ansi.js";
 import { createSwarmMonitor } from "../src/swarm-monitor.js";
 import { renderSwarmMonitorSnapshot } from "../src/swarm-monitor-render.js";
 import type { SwarmLane } from "../src/swarm-plan.js";
+import { terminalVisibleWidth } from "../src/terminal-width.js";
 
 test("renderSwarmMonitorSnapshot displays lane status, progress, and synthesis state", () => {
   const rendered = stripAnsi(renderSwarmMonitorSnapshot({
@@ -217,6 +218,47 @@ test("createSwarmMonitor can redraw the same live panel in place", () => {
   assert.equal(chunks[1]?.includes("\u001B[1A\r\u001B[2K"), true);
 });
 
+test("createSwarmMonitor clears wrapped visual rows in narrow terminals", () => {
+  const chunks: string[] = [];
+  const lanes: readonly SwarmLane[] = [
+    {
+      id: "lane-1",
+      title: "Implementation Reviewer",
+      agent: {
+        id: "implementation-reviewer",
+        name: "Implementation Reviewer",
+        summary: "Review implementation details.",
+        model: "inherit",
+        tools: ["read"],
+        prompt: "Review.",
+        source: "built-in",
+      },
+      prompt: "Review.",
+    },
+  ];
+  const options = {
+    goal: "Build a live monitor with narrow terminal wrapping",
+    lanes,
+    replaceInPlace: true,
+    terminalColumns: 42,
+    now: () => 1000,
+    write: (chunk: string) => {
+      chunks.push(chunk);
+    },
+  };
+  const monitor = createSwarmMonitor(options);
+
+  monitor.start();
+  monitor.laneStarted("lane-1");
+
+  const firstFrame = stripAnsi(chunks[0] ?? "");
+  const expectedRows = visualRowCount(firstFrame, options.terminalColumns);
+  const clearRows = clearRowCount(chunks[1] ?? "");
+
+  assert.ok(expectedRows > logicalLineCount(firstFrame));
+  assert.equal(clearRows, expectedRows);
+});
+
 test("createSwarmMonitor renders lane progress previews in the cockpit", () => {
   const chunks: string[] = [];
   const lanes: readonly SwarmLane[] = [
@@ -252,3 +294,16 @@ test("createSwarmMonitor renders lane progress previews in the cockpit", () => {
   assert.match(chunks.join("\n"), /900 chars/u);
   assert.match(chunks.join("\n"), /DONE/u);
 });
+
+function clearRowCount(text: string): number {
+  return (text.match(/\u001B\[1A\r\u001B\[2K/gu) ?? []).length;
+}
+
+function logicalLineCount(text: string): number {
+  return text.endsWith("\n") ? text.slice(0, -1).split("\n").length : text.split("\n").length;
+}
+
+function visualRowCount(text: string, columns: number): number {
+  const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
+  return lines.reduce((total, line) => total + Math.max(1, Math.ceil(terminalVisibleWidth(line) / columns)), 0);
+}

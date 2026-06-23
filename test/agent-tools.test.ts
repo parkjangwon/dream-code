@@ -127,11 +127,18 @@ test("runAgentToolRequest checkpoints existing files before mutating them", asyn
   }
 });
 
-test("runAgentToolRequest annotates risky shell commands in yolo mode", async () => {
+test("runAgentToolRequest blocks destructive shell commands in yolo mode", async () => {
+  const result = await runAgentToolRequest({ tool: "shell", command: "git reset --hard" }, "yolo");
+
+  assert.equal(result.ok, false);
+  assert.match(result.output, /blocked: destructive shell pattern detected/u);
+});
+
+test("runAgentToolRequest does not block harmless shell text that mentions risky commands", async () => {
   const result = await runAgentToolRequest({ tool: "shell", command: "echo git reset --hard" }, "yolo");
 
   assert.equal(result.ok, true);
-  assert.match(result.output, /risk: destructive shell pattern detected/u);
+  assert.doesNotMatch(result.output, /blocked:/u);
 });
 
 test("runAgentToolRequest enforces explicit per-agent tool policy", async () => {

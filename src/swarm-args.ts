@@ -19,6 +19,11 @@ export function parseSwarmArgs(args: string): SwarmArgs {
     const parsedIntensity = parseIntensity(token);
     if (parsedIntensity !== undefined) {
       intensity = parsedIntensity;
+      const count = parseLaneCount(tokens[index + 1]);
+      if (forceLanes === undefined && count !== undefined) {
+        forceLanes = count;
+        index += 1;
+      }
       continue;
     }
     if (token === "--lanes" || token === "--size") {
@@ -64,6 +69,9 @@ function parseIntensity(value: string | undefined): SwarmIntensity | undefined {
 
 function parseLaneCount(value: string | undefined): number | undefined {
   if (value === undefined) {
+    return undefined;
+  }
+  if (!/^\d+$/u.test(value)) {
     return undefined;
   }
   const parsed = Number.parseInt(value, 10);

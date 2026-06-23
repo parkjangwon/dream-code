@@ -82,7 +82,8 @@ export async function maybeRunShell(
   }
   const risk = riskyShellReason(command);
   if (risk !== undefined) {
-    output.write(`${paint("risk:", ansi.yellow)} ${risk}\n`);
+    output.write(`${paint("blocked:", ansi.red)} ${risk}\n`);
+    return;
   }
   const code = await runShellCommand(command);
   output.write(`exit ${code}\n`);

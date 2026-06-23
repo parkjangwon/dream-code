@@ -68,6 +68,7 @@ export type SwarmRunOptions = {
   readonly write: (text: string) => void;
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
+  readonly monitorColumns?: number;
   readonly signal?: AbortSignal;
   readonly sessionId?: string;
   readonly synthesisMode?: SwarmSynthesisMode;
@@ -99,6 +100,7 @@ export async function runAgentSwarmWithAgents(
       abortController.abort();
     },
     ...monitorNowOption(options.now),
+    ...monitorColumnsOption(options.monitorColumns),
     ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   } : {
     goal: options.goal,
@@ -110,6 +112,7 @@ export async function runAgentSwarmWithAgents(
       abortController.abort();
     },
     ...monitorNowOption(options.now),
+    ...monitorColumnsOption(options.monitorColumns),
     ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced, plan.intensity));
@@ -263,4 +266,8 @@ function swarmPlanOptions(options: SwarmRunOptions): { readonly forceLanes?: num
 
 function monitorNowOption(now: (() => number) | undefined): { readonly now?: () => number } {
   return now === undefined ? {} : { now };
+}
+
+function monitorColumnsOption(columns: number | undefined): { readonly terminalColumns?: number } {
+  return columns === undefined ? {} : { terminalColumns: columns };
 }

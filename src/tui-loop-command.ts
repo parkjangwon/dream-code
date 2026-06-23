@@ -43,7 +43,8 @@ export async function runLoopCommand(options: LoopCommandOptions): Promise<void>
     output.write(`${paint("budget:", ansi.dim)} ${spec.maxTurns} agent turns + ${spec.maxTurns} evaluator runs\n`);
     const risk = riskyShellReason(formatEvaluatorCommand(spec));
     if (risk !== undefined) {
-      output.write(`${paint("risk:", ansi.yellow)} ${risk}\n`);
+      output.write(`${paint("loop blocked:", ansi.red)} ${risk}\n`);
+      return;
     }
     const result = await runLoopSpec({
       workspace: options.cwd,

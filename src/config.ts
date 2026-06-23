@@ -83,7 +83,7 @@ export class ConfigParseError extends Error {
 export function defaultConfig(): DreamConfig {
   return {
     version: 1,
-    permissions: { mode: "yolo" },
+    permissions: { mode: "ask" },
     providers: {},
     notifications: {
       enabled: true,

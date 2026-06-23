@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.13)
+Dream Code (v0.1.16)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,17 +98,17 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.13
-git push origin v0.1.13
+git tag v0.1.16
+git push origin v0.1.16
 ```
 
-The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
+The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 `dream-code-*.tgz`, and writes `SHA256SUMS`.
 
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.13 sh install.sh
+DREAM_CODE_VERSION=v0.1.16 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -167,8 +167,9 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Workspace control:** let the agent list, search, grep with regex/globs,
   glob files with gitignore awareness, read line ranges, create directories,
   write files, edit files with replacement-count guards, delete files, run shell
-  commands, and research the web. Fresh installs start in YOLO bypass mode; use
-  `/yolo` to toggle back to ask mode when you want approval prompts. Existing
+  commands, and research the web. Fresh installs start in ask mode; use
+  `dream --yolo` for one-shot bypass or `/yolo` when you intentionally want
+  persisted bypass. Existing
   files are checkpointed under `~/.dream/file-history/` before write/edit/delete
   tools mutate them.
 
@@ -464,9 +465,9 @@ Enter       Submit input or choose a menu item
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge
 - Hook execution with recent run logs
 - Local file read/write/edit helpers
-- Shell command support with permission mode awareness
+- Shell command support with permission mode awareness and destructive-pattern blocking
 - Native OS notifications for long completions and permission-required states
-- YOLO bypass mode by default, with `dream --yolo` or `/yolo` for explicit control
+- Ask mode by default, with `dream --yolo` or `/yolo` for explicit bypass control
 - Copy/export conversation helpers
 - Ripgrep/fd/jq-friendly local tool checks
 
