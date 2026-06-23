@@ -19,9 +19,17 @@ export function renderInputView(
   previousLineCount = 0,
 ): number {
   const width = Math.max(64, output.columns ?? 80);
-  const lines = inputViewLines(state, prompt, secret, statusLines, width);
+  const contentWidth = width - 4;
   const promptWidth = terminalVisibleWidth(prompt);
-  const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - 4 - promptWidth));
+  const viewport = inputViewport(state.text, state.cursor, Math.max(0, contentWidth - promptWidth));
+  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills, state.fileMentions)}`;
+  const lines = [
+    borderLine("top", width),
+    boxedLine(promptLine, contentWidth),
+    borderLine("bottom", width),
+    ...statusLines,
+    ...renderAuxiliaryLines(state, secret, width),
+  ];
   output.write(withHiddenCursor([
     clearRenderedLinesSequence(previousLineCount),
     lines.join("\n"),
@@ -30,66 +38,12 @@ export function renderInputView(
   return lines.length;
 }
 
-export function renderAnchoredInputView(
-  state: InputState,
-  prompt: string,
-  secret = false,
-  statusLines: readonly string[] = [],
-  previousLineCount = 0,
-): number {
-  const width = Math.max(64, output.columns ?? 80);
-  const rows = output.rows ?? 24;
-  const lines = inputViewLines(state, prompt, secret, statusLines, width);
-  const startRow = Math.max(1, rows - lines.length + 1);
-  const promptWidth = terminalVisibleWidth(prompt);
-  const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - 4 - promptWidth));
-  output.write(withHiddenCursor([
-    clearAnchoredInputArea(previousLineCount, rows),
-    `\u001B[${startRow};1H`,
-    lines.join("\n"),
-    `\u001B[${startRow + 1};${3 + promptWidth + viewport.cursorColumn}H`,
-  ].join("")));
-  return lines.length;
-}
-
-export function inputViewLines(
-  state: InputState,
-  prompt: string,
-  secret = false,
-  statusLines: readonly string[] = [],
-  width = Math.max(64, output.columns ?? 80),
-): readonly string[] {
-  const contentWidth = width - 4;
-  const promptWidth = terminalVisibleWidth(prompt);
-  const viewport = inputViewport(state.text, state.cursor, Math.max(0, contentWidth - promptWidth));
-  const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills, state.fileMentions)}`;
-  return [
-    borderLine("top", width),
-    boxedLine(promptLine, contentWidth),
-    borderLine("bottom", width),
-    ...statusLines,
-    ...renderAuxiliaryLines(state, secret, width),
-  ];
-}
-
 export function clearRenderedLines(count: number): void {
   if (count === 0) {
     return;
   }
 
   output.write(withHiddenCursor(clearRenderedLinesSequence(count)));
-}
-
-function clearAnchoredInputArea(previousLineCount: number, rows: number): string {
-  if (previousLineCount === 0) {
-    return "";
-  }
-  const startRow = Math.max(1, rows - previousLineCount + 1);
-  let sequence = "";
-  for (let row = startRow; row <= rows; row += 1) {
-    sequence = `${sequence}\u001B[${row};1H\r\u001B[2K`;
-  }
-  return sequence;
 }
 
 function clearRenderedLinesSequence(count: number): string {

@@ -21,7 +21,6 @@ export type RunAgentTextPromptOptions = {
   readonly cwd: string;
   readonly sessionRuntime?: SessionRuntime;
   readonly signal?: AbortSignal;
-  readonly write?: (text: string) => void;
 };
 
 export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Promise<CommandResult> {
@@ -30,9 +29,6 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
   }
   let assistantTranscript = "";
   const sessionId = options.sessionRuntime?.currentId();
-  const write = options.write ?? ((chunk: string) => {
-    output.write(chunk);
-  });
   const agentPrompt = {
     config: options.config,
     configRoot: options.configRoot,
@@ -41,27 +37,23 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     approveTool: (request: AgentToolRequest) => approveAgentTool(request, options.questioner),
     write: (chunk: string) => {
-      write(chunk);
+      output.write(chunk);
       assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
     },
   };
   await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
-  await finishAgentTextPrompt(options, assistantTranscript, write);
+  await finishAgentTextPrompt(options, assistantTranscript);
   return { config: options.config, shouldContinue: true };
 }
 
-async function finishAgentTextPrompt(
-  options: RunAgentTextPromptOptions,
-  assistantTranscript: string,
-  write: (text: string) => void,
-): Promise<void> {
+async function finishAgentTextPrompt(options: RunAgentTextPromptOptions, assistantTranscript: string): Promise<void> {
   if (options.sessionRuntime !== undefined) {
     await appendSessionTurn(options.configRoot, options.sessionRuntime.currentId(), "assistant", assistantTranscript);
     await maybeAutoCompactSession(options.configRoot, options.sessionRuntime.currentId(), {
       summarizer: createLlmCompactSummarizer(options.config, options.configRoot),
     }).catch((error: unknown) => {
       if (error instanceof Error) {
-        write(`auto compact skipped: ${error.message}\n`);
+        output.write(`auto compact skipped: ${error.message}\n`);
         return;
       }
       throw error;
@@ -73,7 +65,7 @@ async function finishAgentTextPrompt(
     configRoot: options.configRoot,
     userText: options.text,
     assistantTranscript,
-    write,
+    write: (chunk) => output.write(chunk),
     cwd: options.cwd,
     ...(options.sessionRuntime === undefined ? {} : { sessionRuntime: options.sessionRuntime }),
   });

@@ -1,30 +1,36 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface, type Interface } from "node:readline/promises";
 
-import { defaultConfigRoot, loadConfig, type DreamConfig } from "./config.js";
+import {
+  defaultConfigRoot,
+  loadConfig,
+  type DreamConfig,
+} from "./config.js";
 import { initializeDreamHome } from "./config-init.js";
 import { startSession, type DreamSession } from "./session-store.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
-import { handleAgentViewResult } from "./tui-agent-commands.js";
-import { loadAgentViewOptions } from "./tui-agent-panel-options.js";
 import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { runWithEscInterrupt } from "./tui-interrupt.js";
-import { dispatchTuiRunningCommand } from "./tui-running-command-dispatch.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import { readInteractiveProviderManager } from "./tui-provider-manager.js";
-import { renderHeader } from "./tui-render.js";
-import { runningAgentViewResultLines } from "./tui-running-agent-view.js";
+import {
+  renderHeader,
+} from "./tui-render.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
 import { discoverFileMentionTargets } from "./file-mention-targets.js";
-import { runWorkspaceCommand, type CommandResult, type Questioner } from "./tui-workspace-commands.js";
+import {
+  runWorkspaceCommand,
+  type CommandResult,
+  type Questioner,
+} from "./tui-workspace-commands.js";
 
 export type TuiOptions = {
   readonly oneShotYolo: boolean;
@@ -69,15 +75,11 @@ async function runInteractiveLoop(
     },
   };
   let shouldContinue = true;
-  let anchorNextInput = false;
   while (shouldContinue) {
     const configRoot = options.configRoot ?? defaultConfigRoot();
     const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const skills = await loadEnabledSkills(configRoot);
     const fileMentions = await discoverFileMentionTargets(process.cwd());
-    const agentView = await loadAgentViewOptions(configRoot, process.cwd());
-    const questioner = interactiveQuestioner(config, options);
-    const redrawHeader = () => renderHeader(config, options.oneShotYolo);
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
@@ -85,39 +87,18 @@ async function runInteractiveLoop(
       skills,
       fileMentions,
       statusLines,
-      agentView,
-      anchored: anchorNextInput,
-      redrawHeader,
+      redrawHeader: () => {
+        renderHeader(config, options.oneShotYolo);
+      },
     });
     if (answer.kind === "cancel") {
       await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
       return config;
     }
-    if (answer.kind === "agentView") {
-      await handleAgentViewResult(answer.result, configRoot, questioner, process.cwd());
-      anchorNextInput = true;
-      continue;
-    }
     history = appendHistory(history, answer.text);
-    const useEscInterrupt = shouldUseEscInterrupt(answer.text);
-    if (useEscInterrupt) {
-      anchorNextInput = true;
-    }
-    const result = useEscInterrupt
-      ? await runWithEscInterrupt(
-        (signal, write) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal, write),
-        {
-          input: { prompt: "> ", history, commands: slashCommands, skills, fileMentions, statusLines, agentView, redrawHeader },
-          loadAgentView: () => loadAgentViewOptions(configRoot, process.cwd()),
-          onAgentViewResult: (result, _write, setStatusLines) => {
-            setStatusLines(runningAgentViewResultLines(result));
-          },
-          onRunningCommand: (command, write, setStatusLines) => dispatchTuiRunningCommand(command, {
-            config, oneShotYolo: options.oneShotYolo, sessionId: currentSessionId, write, setStatusLines,
-            ...(options.configRoot === undefined ? {} : { configRoot: options.configRoot }),
-          }),
-        },
-      )
+    const questioner = interactiveQuestioner(config, options);
+    const result = shouldUseEscInterrupt(answer.text)
+      ? await runWithEscInterrupt((signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal))
       : await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
     config = result.config;
     shouldContinue = result.shouldContinue;
@@ -159,7 +140,6 @@ export async function handleInput(
   questioner: Questioner,
   sessionRuntime?: SessionRuntime,
   signal?: AbortSignal,
-  write?: (text: string) => void,
 ): Promise<CommandResult> {
   if (text.length === 0) {
     return { config, shouldContinue: true };
@@ -170,7 +150,7 @@ export async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal, write);
+  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal);
 }
 
 function shouldUseEscInterrupt(text: string): boolean {

@@ -2,7 +2,6 @@ import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
 import { ansi } from "../src/ansi.js";
-import { anchoredInputViewLines } from "../src/tui-anchored-input-render.js";
 import {
   cursorUpToPromptLineCount,
   displayInputText,
@@ -38,17 +37,6 @@ test("renderInputView batches redraw into one cursor-hidden frame", () => {
   } finally {
     stdout.mock.restore();
   }
-});
-
-test("anchoredInputViewLines keeps the prompt position stable when above-panel lines appear", () => {
-  const state = createInputState([], []);
-  const withoutPanel = anchoredInputViewLines(state, "> ", false, ["status"], [], 80);
-  const withPanel = anchoredInputViewLines(state, "> ", false, ["status"], ["Agents", "Running"], 80);
-
-  assert.match(withoutPanel[withoutPanel.length - 3] ?? "", /> /u);
-  assert.match(withPanel[withPanel.length - 3] ?? "", /> /u);
-  assert.equal(withoutPanel[withoutPanel.length - 1], "status");
-  assert.equal(withPanel[withPanel.length - 1], "status");
 });
 
 test("inline shortcut guide is derived from a literal question mark input", () => {

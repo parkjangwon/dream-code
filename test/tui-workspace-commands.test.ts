@@ -9,7 +9,6 @@ import { registerActor } from "../src/actor-store.js";
 import { defaultConfig, loadConfig } from "../src/config.js";
 import { drainInboxMessages } from "../src/inbox-store.js";
 import { loadSkillSettings } from "../src/skill-settings.js";
-import { slashCommands } from "../src/tui-commands.js";
 import { runWorkspaceCommand } from "../src/tui-workspace-commands.js";
 
 test("runWorkspaceCommand routes /model to model configuration", async () => {
@@ -27,32 +26,6 @@ test("runWorkspaceCommand routes /model to model configuration", async () => {
 
     assert.equal(result.config.model.single.defaultTier, "high");
     assert.equal(saved.model.single.defaultTier, "high");
-  } finally {
-    stdout.mock.restore();
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("runWorkspaceCommand does not expose /help as a slash command", async () => {
-  const root = await mkdtemp(join(tmpdir(), "dream-workspace-no-help-"));
-  const chunks: string[] = [];
-  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
-    chunks.push(chunk);
-    return true;
-  });
-  try {
-    assert.equal(slashCommands.some((command) => command.name.slice(0) === "/help"), false);
-
-    const result = await runWorkspaceCommand(
-      "/help",
-      defaultConfig(),
-      false,
-      { question: async () => "" },
-      root,
-    );
-
-    assert.equal(result.shouldContinue, true);
-    assert.match(chunks.join(""), /unknown command: \/help/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

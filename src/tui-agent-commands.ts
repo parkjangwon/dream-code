@@ -95,7 +95,7 @@ export async function formatAgentsOverview(configRoot: string, cwd = currentWork
   }).join("\n")}\n`;
 }
 
-export async function handleAgentViewResult(
+async function handleAgentViewResult(
   result: AgentViewResult,
   configRoot: string,
   questioner: AgentQuestioner,
