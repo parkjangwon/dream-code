@@ -1,10 +1,14 @@
 import { stdin as input, stdout as output } from "node:process";
 import { emitKeypressEvents, type Key } from "node:readline";
 
-import { ansi, paint } from "./ansi.js";
+import { ansi } from "./ansi.js";
 import { actionForKey, type InteractiveInputOptions } from "./tui-input.js";
+import { agentViewLines, type AgentViewOptions, type AgentViewResult } from "./tui-agent-view.js";
+import { createAgentViewState, hasActiveAgentRows, shouldFocusAgentViewFromInput, shouldReturnFromAgentView, updateAgentView, type AgentViewState } from "./tui-agent-view-state.js";
 import { inputViewLines, renderAnchoredInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputState } from "./tui-input-state.js";
+import { dispatchRunningCommand, type RunningOutputWriter, type RunningStatusWriter } from "./tui-interrupt-dispatch.js";
+import { formatActivateRunningInputRegion, formatClearRunningInput, formatDeactivateRunningInputRegion, formatGuardedRunningOutput, interruptHint } from "./tui-interrupt-format.js";
 import { parseRunningCommand, type RunningCommand } from "./tui-running-command.js";
 
 export type EscInterruptState = {
@@ -18,16 +22,17 @@ export type EscInterruptUpdate = {
 
 export const escInterruptWindowMs = 1_500;
 
-export type RunningOutputWriter = (text: string) => void;
-export type RunningStatusWriter = (lines: readonly string[]) => void;
+export type { RunningOutputWriter, RunningStatusWriter } from "./tui-interrupt-dispatch.js";
+export { formatGuardedRunningOutput } from "./tui-interrupt-format.js";
+
+type AgentViewResultHandler = (result: AgentViewResult, write: RunningOutputWriter, setStatusLines: RunningStatusWriter) => Promise<void> | void;
+type RunningCommandHandler = (command: RunningCommand, write: RunningOutputWriter, setStatusLines: RunningStatusWriter) => Promise<void> | void;
 
 export type EscInterruptOptions = {
   readonly input?: InteractiveInputOptions;
-  readonly onRunningCommand?: (
-    command: RunningCommand,
-    write: RunningOutputWriter,
-    setStatusLines: RunningStatusWriter,
-  ) => Promise<void> | void;
+  readonly loadAgentView?: () => Promise<AgentViewOptions>;
+  readonly onAgentViewResult?: AgentViewResultHandler;
+  readonly onRunningCommand?: RunningCommandHandler;
 };
 
 export async function runWithEscInterrupt<T>(
@@ -40,14 +45,14 @@ export async function runWithEscInterrupt<T>(
   }
 
   let state: EscInterruptState = {};
-  let inputState = createInputState(
-    options.input?.history ?? [],
-    options.input?.commands ?? [],
-    options.input?.skills ?? [],
-    {
-      fileMentions: options.input?.fileMentions ?? [],
-    },
-  );
+  let inputState = createInputState(options.input?.history ?? [], options.input?.commands ?? [], options.input?.skills ?? [], {
+    fileMentions: options.input?.fileMentions ?? [],
+  });
+  let agentViewOptions = options.input?.agentView;
+  let agentViewState: AgentViewState | undefined = agentViewOptions !== undefined && hasActiveAgentRows(agentViewOptions)
+    ? createAgentViewState(agentViewOptions)
+    : undefined;
+  let agentViewFocused = false;
   let renderedInputLines = 0;
   let statusLines = options.input?.statusLines ?? [];
   let pendingCommand = Promise.resolve();
@@ -63,12 +68,18 @@ export async function runWithEscInterrupt<T>(
     statusLines = lines;
     renderInputWithRegion();
   };
+  const renderedStatusLines = (): readonly string[] => {
+    if (agentViewState === undefined) {
+      return statusLines;
+    }
+    return [...statusLines, "", ...agentViewLines(agentViewState)];
+  };
   const renderInput = (): void => {
     renderedInputLines = renderAnchoredInputView(
       inputState,
       options.input?.prompt ?? "> ",
       options.input?.secret === true,
-      statusLines,
+      renderedStatusLines(),
       renderedInputLines,
     );
   };
@@ -78,14 +89,14 @@ export async function runWithEscInterrupt<T>(
       inputState,
       options.input?.prompt ?? "> ",
       options.input?.secret === true,
-      statusLines,
+      renderedStatusLines(),
     ).length;
     activateRegion();
     renderedInputLines = renderAnchoredInputView(
       inputState,
       options.input?.prompt ?? "> ",
       options.input?.secret === true,
-      statusLines,
+      renderedStatusLines(),
       previousLineCount,
     );
   };
@@ -101,6 +112,36 @@ export async function runWithEscInterrupt<T>(
       controller.abort();
       return;
     }
+    if (agentViewFocused && agentViewState !== undefined) {
+      if (shouldReturnFromAgentView(agentViewState, key)) {
+        agentViewFocused = false;
+        renderInputWithRegion();
+        return;
+      }
+      const agentUpdate = updateAgentView(agentViewState, value, key);
+      agentViewState = agentUpdate.state;
+      if (agentUpdate.result === undefined) {
+        renderInputWithRegion();
+        return;
+      }
+      if (agentUpdate.result.kind === "close") {
+        agentViewFocused = false;
+        renderInputWithRegion();
+        return;
+      }
+      pendingCommand = pendingCommand
+        .then(async () => {
+          if (agentUpdate.result !== undefined) {
+            await options.onAgentViewResult?.(agentUpdate.result, writeGuardedOutput, setStatusLines);
+          }
+        })
+        .finally(() => {
+          agentViewFocused = false;
+          renderInputWithRegion();
+        });
+      return;
+    }
+
     if (key.name === "escape") {
       const update = nextEscInterruptState(state, Date.now());
       state = update.state;
@@ -116,6 +157,27 @@ export async function runWithEscInterrupt<T>(
     const action = actionForKey(value, key);
     if (action === undefined) {
       return;
+    }
+    if (action.kind === "down") {
+      if (shouldFocusAgentViewFromInput(inputState, agentViewOptions) && agentViewOptions !== undefined) {
+        agentViewState = createAgentViewState(agentViewOptions);
+        agentViewFocused = true;
+        renderInputWithRegion();
+        return;
+      }
+      if (inputState.text.length === 0 && inputState.historyIndex === undefined && inputState.palette === undefined && options.loadAgentView !== undefined) {
+        pendingCommand = pendingCommand.then(async () => {
+          const loaded = await options.loadAgentView?.();
+          if (loaded === undefined || !shouldFocusAgentViewFromInput(inputState, loaded)) {
+            return;
+          }
+          agentViewOptions = loaded;
+          agentViewState = createAgentViewState(loaded);
+          agentViewFocused = true;
+          renderInputWithRegion();
+        });
+        return;
+      }
     }
     const update = reduceInputState(inputState, action);
     inputState = update.state;
@@ -133,7 +195,7 @@ export async function runWithEscInterrupt<T>(
           pendingCommand = pendingCommand
             .then(async () => dispatchRunningCommand(
               parseRunningCommand(submittedText),
-              options,
+              options.onRunningCommand,
               controller,
               writeGuardedOutput,
               setStatusLines,
@@ -192,71 +254,6 @@ export function nextEscInterruptState(
     return { state: {}, effect: "abort" };
   }
   return { state: { armedAt: now }, effect: "arm" };
-}
-
-function interruptHint(label: string, style: string): string {
-  return `${paint(".......", ansi.accent)}  ${paint(label, style)}\n`;
-}
-
-async function dispatchRunningCommand(
-  command: RunningCommand,
-  options: EscInterruptOptions,
-  controller: AbortController,
-  write: RunningOutputWriter,
-  setStatusLines: RunningStatusWriter,
-): Promise<void> {
-  if (command.kind === "ignore") {
-    return;
-  }
-  if (command.kind === "interrupt") {
-    write(interruptHint("interrupting agent run", ansi.red));
-    controller.abort();
-    return;
-  }
-  await options.onRunningCommand?.(command, write, setStatusLines);
-  if (command.kind === "steer" && command.priority) {
-    write(interruptHint("priority steering queued; interrupting current run", ansi.yellow));
-    controller.abort();
-  }
-}
-
-export function formatGuardedRunningOutput(text: string, _state: InputState, inputLineCount: number, rows?: number): string {
-  const boundary = text.endsWith("\n") || text.endsWith("\r") ? "" : "\n";
-  return `${formatOutputCursor(rows, inputLineCount)}${text}${boundary}`;
-}
-
-function formatActivateRunningInputRegion(rows: number | undefined, inputLineCount: number): string {
-  const region = runningInputRegion(rows, inputLineCount);
-  return region === undefined ? "" : `\u001B[1;${region.outputRow}r\u001B[${region.outputRow};1H`;
-}
-
-function formatDeactivateRunningInputRegion(): string {
-  return "\u001B[r";
-}
-
-function formatOutputCursor(rows: number | undefined, inputLineCount: number): string {
-  const region = runningInputRegion(rows, inputLineCount);
-  return region === undefined ? "\r\u001B[2K" : `\u001B[${region.outputRow};1H`;
-}
-
-function formatClearRunningInput(rows: number | undefined, inputLineCount: number): string {
-  if (rows === undefined || inputLineCount === 0) {
-    return "\r\u001B[2K";
-  }
-  const startRow = Math.max(1, rows - inputLineCount + 1);
-  let sequence = "";
-  for (let row = startRow; row <= rows; row += 1) {
-    sequence = `${sequence}\u001B[${row};1H\r\u001B[2K`;
-  }
-  return sequence;
-}
-
-function runningInputRegion(rows: number | undefined, inputLineCount: number): { readonly outputRow: number } | undefined {
-  if (rows === undefined || rows < 4 || inputLineCount === 0) {
-    return undefined;
-  }
-  const outputRow = rows - inputLineCount;
-  return outputRow < 1 ? undefined : { outputRow };
 }
 
 function assertNever(value: never): never {

@@ -3,6 +3,18 @@ import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
+import {
+  agentViewLines,
+  type AgentViewOptions,
+  type AgentViewResult,
+} from "./tui-agent-view.js";
+import {
+  createAgentViewState,
+  hasActiveAgentRows,
+  shouldFocusAgentViewFromInput,
+  shouldReturnFromAgentView,
+  updateAgentView,
+} from "./tui-agent-view-state.js";
 import { clearRenderedLines, renderInputText, renderInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
@@ -19,11 +31,13 @@ export type InteractiveInputOptions = {
   readonly secret?: boolean;
   readonly statusLines?: readonly string[];
   readonly cancelOnEmptyBackspace?: boolean;
+  readonly agentView?: AgentViewOptions;
 };
 
 export type InteractiveInputResult =
   | { readonly kind: "submit"; readonly text: string }
-  | { readonly kind: "cancel" };
+  | { readonly kind: "cancel" }
+  | { readonly kind: "agentView"; readonly result: AgentViewResult };
 
 export const ctrlCExitWindowMs = 1_500;
 
@@ -42,12 +56,17 @@ export function readInteractiveInput(
       cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
       fileMentions: options.fileMentions ?? [],
     });
+    const initialAgentView = options.agentView;
+    let agentViewState = initialAgentView !== undefined && hasActiveAgentRows(initialAgentView)
+      ? createAgentViewState(initialAgentView)
+      : undefined;
+    let agentViewFocused = false;
     let renderedLines = 0;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
 
     const render = (): void => {
-      renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedLines);
+      renderedLines = renderInputView(state, options.prompt, options.secret === true, renderedStatusLines(), renderedLines);
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
@@ -61,9 +80,50 @@ export function readInteractiveInput(
       resolve(result);
     };
 
+    const renderedStatusLines = (): readonly string[] => {
+      if (agentViewState === undefined) {
+        return options.statusLines ?? [];
+      }
+      return [...(options.statusLines ?? []), "", ...agentViewLines(agentViewState)];
+    };
+
     const onKeypress = (value: string | undefined, key: Key): void => {
+      if (agentViewFocused && agentViewState !== undefined) {
+        if (key.ctrl === true && key.name === "l") {
+          options.redrawHeader();
+          renderedLines = 0;
+          render();
+          return;
+        }
+        if (shouldReturnFromAgentView(agentViewState, key)) {
+          agentViewFocused = false;
+          render();
+          return;
+        }
+        const agentUpdate = updateAgentView(agentViewState, value, key);
+        agentViewState = agentUpdate.state;
+        if (agentUpdate.result === undefined) {
+          render();
+          return;
+        }
+        if (agentUpdate.result.kind === "close") {
+          agentViewFocused = false;
+          render();
+          return;
+        }
+        finish({ kind: "agentView", result: agentUpdate.result }, false);
+        return;
+      }
+
       const action = actionForKey(value, key);
       if (action === undefined) {
+        return;
+      }
+      const agentView = options.agentView;
+      if (action.kind === "down" && shouldFocusAgentViewFromInput(state, agentView) && agentView !== undefined) {
+        agentViewState = createAgentViewState(agentView);
+        agentViewFocused = true;
+        render();
         return;
       }
 
@@ -99,7 +159,7 @@ export function readInteractiveInput(
             lastCtrlCAt = now;
             clearRenderedLines(renderedLines);
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
+            renderedLines = renderInputView(state, options.prompt, options.secret === true, renderedStatusLines());
           }
           return;
         default:

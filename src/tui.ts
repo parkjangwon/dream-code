@@ -8,6 +8,8 @@ import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
+import { handleAgentViewResult } from "./tui-agent-commands.js";
+import { loadAgentViewOptions } from "./tui-agent-panel-options.js";
 import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { runWithEscInterrupt } from "./tui-interrupt.js";
@@ -15,6 +17,7 @@ import { dispatchTuiRunningCommand } from "./tui-running-command-dispatch.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import { readInteractiveProviderManager } from "./tui-provider-manager.js";
 import { renderHeader } from "./tui-render.js";
+import { runningAgentViewResultLines } from "./tui-running-agent-view.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
@@ -71,6 +74,8 @@ async function runInteractiveLoop(
     const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
     const skills = await loadEnabledSkills(configRoot);
     const fileMentions = await discoverFileMentionTargets(process.cwd());
+    const agentView = await loadAgentViewOptions(configRoot, process.cwd());
+    const questioner = interactiveQuestioner(config, options);
     const answer = await readInteractiveInput({
       prompt: "> ",
       history,
@@ -78,6 +83,7 @@ async function runInteractiveLoop(
       skills,
       fileMentions,
       statusLines,
+      agentView,
       redrawHeader: () => {
         renderHeader(config, options.oneShotYolo);
       },
@@ -86,29 +92,24 @@ async function runInteractiveLoop(
       await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
       return config;
     }
+    if (answer.kind === "agentView") {
+      await handleAgentViewResult(answer.result, configRoot, questioner, process.cwd());
+      continue;
+    }
     history = appendHistory(history, answer.text);
-    const questioner = interactiveQuestioner(config, options);
     const result = shouldUseEscInterrupt(answer.text)
       ? await runWithEscInterrupt(
         (signal, write) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal, write),
         {
-          input: {
-            prompt: "> ",
-            history,
-            commands: slashCommands,
-            skills,
-            fileMentions,
-            statusLines,
-            redrawHeader: () => {
-              renderHeader(config, options.oneShotYolo);
-            },
+          input: { prompt: "> ", history, commands: slashCommands, skills, fileMentions, statusLines, agentView, redrawHeader: () => {
+            renderHeader(config, options.oneShotYolo);
+          } },
+          loadAgentView: () => loadAgentViewOptions(configRoot, process.cwd()),
+          onAgentViewResult: (result, _write, setStatusLines) => {
+            setStatusLines(runningAgentViewResultLines(result));
           },
           onRunningCommand: (command, write, setStatusLines) => dispatchTuiRunningCommand(command, {
-            config,
-            oneShotYolo: options.oneShotYolo,
-            sessionId: currentSessionId,
-            write,
-            setStatusLines,
+            config, oneShotYolo: options.oneShotYolo, sessionId: currentSessionId, write, setStatusLines,
             ...(options.configRoot === undefined ? {} : { configRoot: options.configRoot }),
           }),
         },
