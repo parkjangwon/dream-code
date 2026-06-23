@@ -54,7 +54,7 @@ export function shouldFocusAgentViewFromInput(input: {
 }
 
 export function shouldReturnFromAgentView(state: AgentViewState, key: Key): boolean {
-  return key.name === "up" && state.tab === "running" && state.selectedIndex === 0;
+  return key.name === "up" && state.selectedIndex === 0;
 }
 
 export function updateAgentView(

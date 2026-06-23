@@ -42,7 +42,9 @@ test("updateAgentView switches running and library tabs with arrow keys", () => 
 
 test("shouldReturnFromAgentView exits to main input from the first running row", () => {
   const state = createAgentViewState({ rows: [workingRow], agents: [] });
+  const library = updateAgentView(state, undefined, { name: "right" }).state;
 
   assert.equal(shouldReturnFromAgentView(state, { name: "up" }), true);
+  assert.equal(shouldReturnFromAgentView(library, { name: "up" }), true);
   assert.equal(shouldReturnFromAgentView(state, { name: "down" }), false);
 });

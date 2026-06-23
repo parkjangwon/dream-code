@@ -100,9 +100,6 @@ export async function runWithEscInterrupt<T>(
       0,
     );
   };
-  const deactivateRegion = (): void => {
-    writeInternal(formatDeactivateRunningInputRegion());
-  };
   const onKeypress = (value: string | undefined, key: Key): void => {
     if (key.ctrl === true && key.name === "c") {
       writeGuardedOutput(interruptHint("interrupting agent run", ansi.red));
@@ -113,6 +110,7 @@ export async function runWithEscInterrupt<T>(
       if (shouldReturnFromAgentView(agentViewState, key)) {
         agentViewFocused = false;
         agentViewState = undefined;
+        state = {};
         renderInputWithRegion();
         return;
       }
@@ -125,6 +123,7 @@ export async function runWithEscInterrupt<T>(
       if (agentUpdate.result.kind === "close") {
         agentViewFocused = false;
         agentViewState = undefined;
+        state = {};
         renderInputWithRegion();
         return;
       }
@@ -137,6 +136,7 @@ export async function runWithEscInterrupt<T>(
         .finally(() => {
           agentViewFocused = false;
           agentViewState = undefined;
+          state = {};
           renderInputWithRegion();
         });
       return;
@@ -239,7 +239,7 @@ export async function runWithEscInterrupt<T>(
     output.off("resize", onResize);
     await pendingCommand;
     writeInternal(formatClearRunningInput(output.rows, renderedInputLines));
-    deactivateRegion();
+    writeInternal(formatDeactivateRunningInputRegion());
     input.setRawMode(previousRawMode);
     input.pause();
   }
