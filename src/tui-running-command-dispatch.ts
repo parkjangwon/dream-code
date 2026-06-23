@@ -14,6 +14,7 @@ export type RunningCommandDispatchOptions = {
   readonly oneShotYolo: boolean;
   readonly sessionId: string;
   readonly write: (text: string) => void;
+  readonly setStatusLines: (lines: readonly string[]) => void;
 };
 
 export async function dispatchTuiRunningCommand(
@@ -23,10 +24,10 @@ export async function dispatchTuiRunningCommand(
   const configRoot = options.configRoot ?? defaultConfigRoot();
   switch (command.kind) {
     case "agents":
-      options.write(`\n${await formatAgentsOverview(configRoot)}`);
+      options.setStatusLines(linesForPanel(await formatAgentsOverview(configRoot)));
       return;
     case "status":
-      options.write(`\n${await formatStatusDashboard(configRoot, options.config, options.oneShotYolo)}\n`);
+      options.setStatusLines(linesForPanel(await formatStatusDashboard(configRoot, options.config, options.oneShotYolo)));
       return;
     case "steer":
       writeSteeringResult(
@@ -47,6 +48,10 @@ export async function dispatchTuiRunningCommand(
     default:
       return assertNever(command);
   }
+}
+
+function linesForPanel(text: string): readonly string[] {
+  return text.replace(/\n$/u, "").split(/\r?\n/u);
 }
 
 function writeSteeringResult(

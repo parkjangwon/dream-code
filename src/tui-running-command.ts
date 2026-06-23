@@ -11,113 +11,12 @@ export type RunningCommand =
   | { readonly kind: "reply"; readonly actorId: string; readonly text: string }
   | { readonly kind: "unknown"; readonly name: string };
 
-export type RunningInputState = {
-  readonly buffer: string;
-  readonly cursor: number;
-};
-
-export type RunningInputEffect =
-  | { readonly kind: "none" }
-  | { readonly kind: "render" }
-  | { readonly kind: "submit"; readonly command: RunningCommand };
-
-export type RunningInputKey = {
-  readonly name?: string | undefined;
-  readonly ctrl?: boolean | undefined;
-  readonly meta?: boolean | undefined;
-};
-
-export type RunningInputUpdate = {
-  readonly state: RunningInputState;
-  readonly effect: RunningInputEffect;
-};
-
 export type SteeringTarget = {
   readonly actor: ActorRecord;
   readonly messageId: string;
 };
 
 const slashCommandPattern = /^\/([^\s]+)(?:\s+([\s\S]*))?$/u;
-
-export function initialRunningInputState(): RunningInputState {
-  return { buffer: "", cursor: 0 };
-}
-
-export function reduceRunningInputState(
-  state: RunningInputState,
-  value: string | undefined,
-  key: RunningInputKey,
-): RunningInputUpdate {
-  if (key.name === "return" || key.name === "enter") {
-    return {
-      state: initialRunningInputState(),
-      effect: { kind: "submit", command: parseRunningCommand(state.buffer) },
-    };
-  }
-  if (key.ctrl === true && key.name === "u") {
-    return {
-      state: { buffer: state.buffer.slice(state.cursor), cursor: 0 },
-      effect: { kind: "render" },
-    };
-  }
-  if (key.ctrl === true && key.name === "k") {
-    return {
-      state: { buffer: state.buffer.slice(0, state.cursor), cursor: state.cursor },
-      effect: { kind: "render" },
-    };
-  }
-  if (key.ctrl === true && key.name === "a") {
-    return { state: { ...state, cursor: 0 }, effect: { kind: "render" } };
-  }
-  if (key.ctrl === true && key.name === "e") {
-    return { state: { ...state, cursor: state.buffer.length }, effect: { kind: "render" } };
-  }
-  if (key.name === "backspace") {
-    if (state.cursor === 0) {
-      return { state, effect: { kind: "none" } };
-    }
-    return {
-      state: {
-        buffer: `${state.buffer.slice(0, state.cursor - 1)}${state.buffer.slice(state.cursor)}`,
-        cursor: state.cursor - 1,
-      },
-      effect: { kind: "render" },
-    };
-  }
-  if (key.name === "delete") {
-    if (state.cursor >= state.buffer.length) {
-      return { state, effect: { kind: "none" } };
-    }
-    return {
-      state: {
-        buffer: `${state.buffer.slice(0, state.cursor)}${state.buffer.slice(state.cursor + 1)}`,
-        cursor: state.cursor,
-      },
-      effect: { kind: "render" },
-    };
-  }
-  if (key.name === "left") {
-    return { state: { ...state, cursor: Math.max(0, state.cursor - 1) }, effect: { kind: "render" } };
-  }
-  if (key.name === "right") {
-    return { state: { ...state, cursor: Math.min(state.buffer.length, state.cursor + 1) }, effect: { kind: "render" } };
-  }
-  if (key.name === "home") {
-    return { state: { ...state, cursor: 0 }, effect: { kind: "render" } };
-  }
-  if (key.name === "end") {
-    return { state: { ...state, cursor: state.buffer.length }, effect: { kind: "render" } };
-  }
-  if (key.ctrl === true || key.meta === true || value === undefined || value.length === 0) {
-    return { state, effect: { kind: "none" } };
-  }
-
-  const nextBuffer = `${state.buffer.slice(0, state.cursor)}${value}${state.buffer.slice(state.cursor)}`;
-  return {
-    state: { buffer: nextBuffer, cursor: state.cursor + value.length },
-    effect: { kind: "render" },
-  };
-}
 
 export function parseRunningCommand(line: string): RunningCommand {
   const trimmed = line.trim();

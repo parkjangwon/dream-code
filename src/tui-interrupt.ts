@@ -2,12 +2,10 @@ import { stdin as input, stdout as output } from "node:process";
 import { emitKeypressEvents, type Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
-import {
-  initialRunningInputState,
-  reduceRunningInputState,
-  type RunningCommand,
-  type RunningInputState,
-} from "./tui-running-command.js";
+import { actionForKey, type InteractiveInputOptions } from "./tui-input.js";
+import { inputViewLines, renderAnchoredInputView } from "./tui-input-render.js";
+import { createInputState, reduceInputState, type InputState } from "./tui-input-state.js";
+import { parseRunningCommand, type RunningCommand } from "./tui-running-command.js";
 
 export type EscInterruptState = {
   readonly armedAt?: number;
@@ -21,9 +19,15 @@ export type EscInterruptUpdate = {
 export const escInterruptWindowMs = 1_500;
 
 export type RunningOutputWriter = (text: string) => void;
+export type RunningStatusWriter = (lines: readonly string[]) => void;
 
 export type EscInterruptOptions = {
-  readonly onRunningCommand?: (command: RunningCommand, write: RunningOutputWriter) => Promise<void> | void;
+  readonly input?: InteractiveInputOptions;
+  readonly onRunningCommand?: (
+    command: RunningCommand,
+    write: RunningOutputWriter,
+    setStatusLines: RunningStatusWriter,
+  ) => Promise<void> | void;
 };
 
 export async function runWithEscInterrupt<T>(
@@ -36,20 +40,57 @@ export async function runWithEscInterrupt<T>(
   }
 
   let state: EscInterruptState = {};
-  let runningInput = initialRunningInputState();
+  let inputState = createInputState(
+    options.input?.history ?? [],
+    options.input?.commands ?? [],
+    options.input?.skills ?? [],
+    {
+      fileMentions: options.input?.fileMentions ?? [],
+    },
+  );
+  let renderedInputLines = 0;
+  let statusLines = options.input?.statusLines ?? [];
   let pendingCommand = Promise.resolve();
   const previousRawMode = input.isRaw;
   const writeInternal = (text: string): void => {
     output.write(text);
   };
   const writeGuardedOutput = (text: string): void => {
-    writeInternal(formatGuardedRunningOutput(text, runningInput, output.rows));
+    writeInternal(formatGuardedRunningOutput(text, inputState, renderedInputLines, output.rows));
+    renderInput();
   };
-  const renderPrompt = (): void => {
-    writeInternal(formatRunningPrompt(runningInput, output.rows));
+  const setStatusLines = (lines: readonly string[]): void => {
+    statusLines = lines;
+    renderInputWithRegion();
+  };
+  const renderInput = (): void => {
+    renderedInputLines = renderAnchoredInputView(
+      inputState,
+      options.input?.prompt ?? "> ",
+      options.input?.secret === true,
+      statusLines,
+      renderedInputLines,
+    );
+  };
+  const renderInputWithRegion = (): void => {
+    const previousLineCount = renderedInputLines;
+    renderedInputLines = inputViewLines(
+      inputState,
+      options.input?.prompt ?? "> ",
+      options.input?.secret === true,
+      statusLines,
+    ).length;
+    activateRegion();
+    renderedInputLines = renderAnchoredInputView(
+      inputState,
+      options.input?.prompt ?? "> ",
+      options.input?.secret === true,
+      statusLines,
+      previousLineCount,
+    );
   };
   const activateRegion = (): void => {
-    writeInternal(formatActivateRunningInputRegion(output.rows));
+    writeInternal(formatActivateRunningInputRegion(output.rows, renderedInputLines));
   };
   const deactivateRegion = (): void => {
     writeInternal(formatDeactivateRunningInputRegion());
@@ -72,28 +113,54 @@ export async function runWithEscInterrupt<T>(
       return;
     }
 
-    const update = reduceRunningInputState(runningInput, value, key);
-    runningInput = update.state;
-    if (update.effect.kind === "render") {
-      renderPrompt();
+    const action = actionForKey(value, key);
+    if (action === undefined) {
       return;
     }
-    if (update.effect.kind === "submit") {
-      const command = update.effect.command;
-      renderPrompt();
-      pendingCommand = pendingCommand
-        .then(async () => dispatchRunningCommand(command, options, controller, writeGuardedOutput))
-        .catch((error: unknown) => {
-          writeGuardedOutput(interruptHint(error instanceof Error ? error.message : "running command failed", ansi.red));
-        })
-        .finally(() => {
-          renderPrompt();
-        });
+    const update = reduceInputState(inputState, action);
+    inputState = update.state;
+    switch (update.effect.kind) {
+      case "none":
+        renderInputWithRegion();
+        return;
+      case "submit":
+        {
+          const submittedText = update.effect.text;
+          inputState = createInputState(inputState.history, inputState.commands, inputState.skills, {
+            fileMentions: inputState.fileMentions,
+          });
+          renderInputWithRegion();
+          pendingCommand = pendingCommand
+            .then(async () => dispatchRunningCommand(
+              parseRunningCommand(submittedText),
+              options,
+              controller,
+              writeGuardedOutput,
+              setStatusLines,
+            ))
+            .catch((error: unknown) => {
+              writeGuardedOutput(interruptHint(error instanceof Error ? error.message : "running command failed", ansi.red));
+            })
+            .finally(() => {
+              renderInputWithRegion();
+            });
+          return;
+        }
+      case "redraw":
+        options.input?.redrawHeader();
+        renderedInputLines = 0;
+        renderInputWithRegion();
+        return;
+      case "cancel":
+        writeGuardedOutput(interruptHint("interrupting agent run", ansi.red));
+        controller.abort();
+        return;
+      default:
+        return assertNever(update.effect);
     }
   };
   const onResize = (): void => {
-    activateRegion();
-    renderPrompt();
+    renderInputWithRegion();
   };
 
   emitKeypressEvents(input);
@@ -101,16 +168,15 @@ export async function runWithEscInterrupt<T>(
   input.resume();
   input.on("keypress", onKeypress);
   output.on("resize", onResize);
-  activateRegion();
+  renderInputWithRegion();
   writeGuardedOutput(interruptHint("esc interrupt · type steering text · /status /agents /interrupt", ansi.guide));
-  renderPrompt();
   try {
     return await task(controller.signal, writeGuardedOutput);
   } finally {
     input.off("keypress", onKeypress);
     output.off("resize", onResize);
     await pendingCommand;
-    writeInternal(formatClearRunningPrompt(output.rows));
+    writeInternal(formatClearRunningInput(output.rows, renderedInputLines));
     deactivateRegion();
     input.setRawMode(previousRawMode);
     input.pause();
@@ -137,6 +203,7 @@ async function dispatchRunningCommand(
   options: EscInterruptOptions,
   controller: AbortController,
   write: RunningOutputWriter,
+  setStatusLines: RunningStatusWriter,
 ): Promise<void> {
   if (command.kind === "ignore") {
     return;
@@ -146,27 +213,20 @@ async function dispatchRunningCommand(
     controller.abort();
     return;
   }
-  await options.onRunningCommand?.(command, write);
+  await options.onRunningCommand?.(command, write, setStatusLines);
   if (command.kind === "steer" && command.priority) {
     write(interruptHint("priority steering queued; interrupting current run", ansi.yellow));
     controller.abort();
   }
 }
 
-export function formatGuardedRunningOutput(text: string, state: RunningInputState, rows?: number): string {
+export function formatGuardedRunningOutput(text: string, _state: InputState, inputLineCount: number, rows?: number): string {
   const boundary = text.endsWith("\n") || text.endsWith("\r") ? "" : "\n";
-  return `${formatOutputCursor(rows)}${text}${boundary}${formatRunningPrompt(state, rows)}`;
+  return `${formatOutputCursor(rows, inputLineCount)}${text}${boundary}`;
 }
 
-function formatRunningPrompt(state: RunningInputState, rows?: number): string {
-  const prefix = `${paint(".......", ansi.accent)}  ${paint("running >", ansi.guide)} `;
-  const prompt = `${formatClearRunningPrompt(rows)}${prefix}${state.buffer}`;
-  const suffixLength = state.buffer.length - state.cursor;
-  return suffixLength > 0 ? `${prompt}\u001B[${suffixLength}D` : prompt;
-}
-
-function formatActivateRunningInputRegion(rows?: number): string {
-  const region = runningInputRegion(rows);
+function formatActivateRunningInputRegion(rows: number | undefined, inputLineCount: number): string {
+  const region = runningInputRegion(rows, inputLineCount);
   return region === undefined ? "" : `\u001B[1;${region.outputRow}r\u001B[${region.outputRow};1H`;
 }
 
@@ -174,16 +234,31 @@ function formatDeactivateRunningInputRegion(): string {
   return "\u001B[r";
 }
 
-function formatOutputCursor(rows?: number): string {
-  const region = runningInputRegion(rows);
+function formatOutputCursor(rows: number | undefined, inputLineCount: number): string {
+  const region = runningInputRegion(rows, inputLineCount);
   return region === undefined ? "\r\u001B[2K" : `\u001B[${region.outputRow};1H`;
 }
 
-function formatClearRunningPrompt(rows?: number): string {
-  const region = runningInputRegion(rows);
-  return region === undefined ? "\r\u001B[2K" : `\u001B[${region.inputRow};1H\r\u001B[2K`;
+function formatClearRunningInput(rows: number | undefined, inputLineCount: number): string {
+  if (rows === undefined || inputLineCount === 0) {
+    return "\r\u001B[2K";
+  }
+  const startRow = Math.max(1, rows - inputLineCount + 1);
+  let sequence = "";
+  for (let row = startRow; row <= rows; row += 1) {
+    sequence = `${sequence}\u001B[${row};1H\r\u001B[2K`;
+  }
+  return sequence;
 }
 
-function runningInputRegion(rows?: number): { readonly outputRow: number; readonly inputRow: number } | undefined {
-  return rows === undefined || rows < 4 ? undefined : { outputRow: rows - 1, inputRow: rows };
+function runningInputRegion(rows: number | undefined, inputLineCount: number): { readonly outputRow: number } | undefined {
+  if (rows === undefined || rows < 4 || inputLineCount === 0) {
+    return undefined;
+  }
+  const outputRow = rows - inputLineCount;
+  return outputRow < 1 ? undefined : { outputRow };
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected running input effect: ${JSON.stringify(value)}`);
 }

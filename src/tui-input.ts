@@ -121,7 +121,7 @@ export function readInteractiveInput(
   });
 }
 
-function actionForKey(value: string | undefined, key: Key): InputAction | undefined {
+export function actionForKey(value: string | undefined, key: Key): InputAction | undefined {
   if (key.ctrl === true && key.name === "l") {
     return { kind: "ctrlL" };
   }

@@ -92,11 +92,23 @@ async function runInteractiveLoop(
       ? await runWithEscInterrupt(
         (signal, write) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal, write),
         {
-          onRunningCommand: (command, write) => dispatchTuiRunningCommand(command, {
+          input: {
+            prompt: "> ",
+            history,
+            commands: slashCommands,
+            skills,
+            fileMentions,
+            statusLines,
+            redrawHeader: () => {
+              renderHeader(config, options.oneShotYolo);
+            },
+          },
+          onRunningCommand: (command, write, setStatusLines) => dispatchTuiRunningCommand(command, {
             config,
             oneShotYolo: options.oneShotYolo,
             sessionId: currentSessionId,
             write,
+            setStatusLines,
             ...(options.configRoot === undefined ? {} : { configRoot: options.configRoot }),
           }),
         },

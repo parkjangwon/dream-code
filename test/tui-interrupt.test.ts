@@ -7,12 +7,12 @@ import { join } from "node:path";
 import { formatGuardedRunningOutput, nextEscInterruptState } from "../src/tui-interrupt.js";
 import { registerActor } from "../src/actor-store.js";
 import { drainInboxMessages } from "../src/inbox-store.js";
+import { slashCommands } from "../src/tui-commands.js";
+import { createInputState, reduceInputState } from "../src/tui-input-state.js";
 import {
-  initialRunningInputState,
   parseRunningCommand,
   queueReplyMessage,
   queueSteeringMessage,
-  reduceRunningInputState,
 } from "../src/tui-running-command.js";
 
 test("nextEscInterruptState requires two escape presses inside the interrupt window", () => {
@@ -57,46 +57,27 @@ test("parseRunningCommand treats plain text as steering and recognizes running c
   });
 });
 
-test("reduceRunningInputState edits and submits a running command line", () => {
-  let state = initialRunningInputState();
-  state = reduceRunningInputState(state, "abc", {}).state;
-  state = reduceRunningInputState(state, undefined, { name: "left" }).state;
-  state = reduceRunningInputState(state, "X", {}).state;
+test("running input uses the standard slash command palette", () => {
+  const typed = reduceInputState(createInputState([], slashCommands), { kind: "insert", value: "/agen" }).state;
+  const completed = reduceInputState(typed, { kind: "enter" });
 
-  assert.equal(state.buffer, "abXc");
-  assert.equal(state.cursor, 3);
-
-  const cleared = reduceRunningInputState(state, undefined, { ctrl: true, name: "u" });
-  assert.equal(cleared.state.buffer, "c");
-  assert.equal(cleared.state.cursor, 0);
-
-  const submitted = reduceRunningInputState({ buffer: "/status", cursor: 7 }, "\r", { name: "return" });
-  assert.deepEqual(submitted.effect, { kind: "submit", command: { kind: "status" } });
-  assert.equal(submitted.state.buffer, "");
+  assert.equal(completed.state.text, "/agents ");
+  assert.equal(completed.effect.kind, "none");
 });
 
 test("formatGuardedRunningOutput keeps agent output off the running input line", () => {
-  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", {
-    buffer: "/agents",
-    cursor: 7,
-  });
+  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", createInputState([], slashCommands), 0);
 
   assert.match(rendered, /^\r\u001B\[2K/u);
   assert.match(rendered, /Tool read src\/tui\.ts\n/u);
-  assert.match(rendered, /running >.*\/agents/u);
   assert.doesNotMatch(rendered, /\/agentsTool read/u);
 });
 
-test("formatGuardedRunningOutput uses a reserved bottom input row when terminal height is known", () => {
-  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", {
-    buffer: "/agents",
-    cursor: 7,
-  }, 24);
+test("formatGuardedRunningOutput writes above the anchored input component when terminal height is known", () => {
+  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", createInputState([], slashCommands), 5, 24);
 
-  assert.match(rendered, /^\u001B\[23;1H/u);
-  assert.match(rendered, /\u001B\[24;1H\r\u001B\[2K/u);
-  assert.match(rendered, /running >.*\/agents/u);
-  assert.doesNotMatch(rendered, /\/agentsTool read/u);
+  assert.match(rendered, /^\u001B\[19;1H/u);
+  assert.match(rendered, /Tool read src\/tui\.ts\n/u);
 });
 
 test("queueSteeringMessage sends to the current running main actor inbox", async () => {
