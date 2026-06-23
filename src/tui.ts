@@ -1,11 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface, type Interface } from "node:readline/promises";
 
-import {
-  defaultConfigRoot,
-  loadConfig,
-  type DreamConfig,
-} from "./config.js";
+import { defaultConfigRoot, loadConfig, type DreamConfig } from "./config.js";
 import { initializeDreamHome } from "./config-init.js";
 import { startSession, type DreamSession } from "./session-store.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
@@ -15,22 +11,17 @@ import { slashCommands } from "./tui-commands.js";
 import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
 import { runWithEscInterrupt } from "./tui-interrupt.js";
+import { dispatchTuiRunningCommand } from "./tui-running-command-dispatch.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import { readInteractiveProviderManager } from "./tui-provider-manager.js";
-import {
-  renderHeader,
-} from "./tui-render.js";
+import { renderHeader } from "./tui-render.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
 import { discoverFileMentionTargets } from "./file-mention-targets.js";
-import {
-  runWorkspaceCommand,
-  type CommandResult,
-  type Questioner,
-} from "./tui-workspace-commands.js";
+import { runWorkspaceCommand, type CommandResult, type Questioner } from "./tui-workspace-commands.js";
 
 export type TuiOptions = {
   readonly oneShotYolo: boolean;
@@ -98,7 +89,18 @@ async function runInteractiveLoop(
     history = appendHistory(history, answer.text);
     const questioner = interactiveQuestioner(config, options);
     const result = shouldUseEscInterrupt(answer.text)
-      ? await runWithEscInterrupt((signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal))
+      ? await runWithEscInterrupt(
+        (signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal),
+        {
+          onRunningCommand: (command) => dispatchTuiRunningCommand(command, {
+            config,
+            oneShotYolo: options.oneShotYolo,
+            sessionId: currentSessionId,
+            write: (text) => output.write(text),
+            ...(options.configRoot === undefined ? {} : { configRoot: options.configRoot }),
+          }),
+        },
+      )
       : await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
     config = result.config;
     shouldContinue = result.shouldContinue;

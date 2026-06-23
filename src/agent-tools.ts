@@ -1,8 +1,17 @@
 import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
-import { ansi, paint } from "./ansi.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
+import { formatReadOutput, formatSearchResults, formatToolProgress } from "./agent-tool-output.js";
 import { saveFileCheckpoint } from "./file-history.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
+import { runDiagnosticsTool, runFetchTool } from "./agent-tool-external.js";
+import { runArtifactTool, runTaskTool } from "./agent-tool-state.js";
+import {
+  runCopyTool,
+  runDiffTool,
+  runMoveTool,
+  runPatchTool,
+  runStatTool,
+} from "./agent-tool-workspace.js";
 import { runShellCapture } from "./agent-shell-tool.js";
 import { toolLabel, toolResultLabel } from "./agent-tool-labels.js";
 import { globWorkspaceFiles, grepWorkspaceText } from "./workspace-search-tools.js";
@@ -37,6 +46,8 @@ export type AgentToolPolicy = {
   readonly configRoot?: string;
 };
 
+export { formatToolProgress, formatToolResults } from "./agent-tool-output.js";
+
 export async function runAgentToolRequest(
   request: AgentToolRequest,
   policyInput: PermissionMode | AgentToolPolicy,
@@ -45,10 +56,10 @@ export async function runAgentToolRequest(
   if (!toolAllowed(request.tool, policy.allowedTools)) {
     return { request, ok: false, output: `Tool ${request.tool} is not allowed for this agent.` };
   }
-  if (!readOnlyTool(request.tool) && policy.mode === "plan") {
+  if (requestMutates(request) && policy.mode === "plan") {
     return { request, ok: false, output: `Plan mode blocks ${toolLabel(request)}. Switch to ask, auto, or yolo before changing files or running mutating tools.` };
   }
-  if (!readOnlyTool(request.tool) && policy.mode !== "yolo") {
+  if (requestMutates(request) && policy.mode !== "yolo") {
     if (policy.approveTool !== undefined && await policy.approveTool(request)) {
       return runApprovedAgentToolRequest(request, policy);
     }
@@ -98,6 +109,14 @@ async function runApprovedAgentToolRequest(
         const result = await runResearch(request.query);
         return { request, ok: result.ok, output: result.output };
       }
+      case "fetch":
+        return { request, ...(await runFetchTool(request, policy.signal)) };
+      case "diff":
+        return { request, ok: true, output: await runDiffTool(request, workspacePolicy(policy)) };
+      case "stat":
+        return { request, ok: true, output: await runStatTool(request, workspacePolicy(policy)) };
+      case "diagnostics":
+        return { request, ok: true, output: await runDiagnosticsTool(policy.workspaceRoot ?? process.cwd()) };
       case "mcp": {
         const output = await callConfiguredMcpTool(policy.configRoot ?? defaultConfigRoot(), request, policy.signal);
         return { request, ok: true, output };
@@ -133,41 +152,30 @@ async function runApprovedAgentToolRequest(
           ...(result.replaced ? { changedPath: result.path } : {}),
         };
       }
+      case "patch": {
+        const result = await runPatchTool(request, workspacePolicy(policy));
+        return { request, ok: true, ...result };
+      }
+      case "move": {
+        const result = await runMoveTool(request, workspacePolicy(policy));
+        return { request, ok: true, ...result };
+      }
+      case "copy": {
+        const result = await runCopyTool(request, workspacePolicy(policy));
+        return { request, ok: true, ...result };
+      }
+      case "artifact": {
+        const result = await runArtifactTool(request, policy.configRoot ?? defaultConfigRoot());
+        return { request, ok: true, ...result };
+      }
+      case "task":
+        return { request, ok: true, output: await runTaskTool(request, policy.configRoot ?? defaultConfigRoot()) };
       default:
         return assertNever(request);
     }
   } catch (error) {
     return { request, ok: false, output: error instanceof Error ? error.message : "Unknown tool error" };
   }
-}
-
-export function formatToolResults(results: readonly AgentToolResult[]): string {
-  return [
-    "Dream Code tool results:",
-    ...results.map((result) => [
-      `- ${result.ok ? "ok" : "failed"} ${toolResultLabel(result.request)}`,
-      result.output,
-    ].join("\n")),
-    "Continue from these results. If more local data is needed, request another dream-tool block.",
-  ].join("\n\n");
-}
-
-export function formatToolProgress(result: AgentToolResult): string {
-  const marker = result.ok ? paint("◆", ansi.green) : paint("◆", ansi.yellow);
-  return `${marker} ${paint("Tool", ansi.bold)} ${paint(toolLabel(result.request), ansi.blue)}\n`;
-}
-
-function formatSearchResults(results: readonly { readonly path: string; readonly line: number; readonly text: string }[]): string {
-  return results.length === 0 ? "no matches" : results.map((result) => `${result.path}:${result.line}: ${result.text}`).join("\n");
-}
-
-function formatReadOutput(
-  result: { readonly path: string; readonly bytes: number; readonly content: string },
-  startLine: number | undefined,
-  endLine: number | undefined,
-): string {
-  const range = startLine === undefined && endLine === undefined ? "" : ` lines ${startLine ?? 1}-${endLine ?? "end"}`;
-  return `${result.path} (${result.bytes} bytes${range})\n${result.content}`;
 }
 
 function normalizePolicy(policyInput: PermissionMode | AgentToolPolicy): AgentToolPolicy {
@@ -187,8 +195,44 @@ function toolAllowed(tool: AgentToolName, allowedTools: readonly AgentToolName[]
   return allowedTools === undefined || allowedTools.includes(tool);
 }
 
-function readOnlyTool(tool: AgentToolName): boolean {
-  return tool === "read" || tool === "list" || tool === "search" || tool === "grep" || tool === "glob" || tool === "research";
+function requestMutates(request: AgentToolRequest): boolean {
+  switch (request.tool) {
+    case "read":
+    case "list":
+    case "search":
+    case "grep":
+    case "glob":
+    case "research":
+    case "fetch":
+    case "diff":
+    case "stat":
+    case "diagnostics":
+      return false;
+    case "artifact":
+      return request.action === "write" || request.action === "delete";
+    case "task":
+      return request.action === "add" || request.action === "update";
+    case "shell":
+    case "mcp":
+    case "write":
+    case "delete":
+    case "mkdir":
+    case "edit":
+    case "patch":
+    case "move":
+    case "copy":
+      return true;
+    default:
+      return assertNever(request);
+  }
+}
+
+function workspacePolicy(policy: AgentToolPolicy): { readonly workspaceRoot: string; readonly configRoot: string; readonly signal?: AbortSignal } {
+  return {
+    workspaceRoot: policy.workspaceRoot ?? process.cwd(),
+    configRoot: policy.configRoot ?? defaultConfigRoot(),
+    ...(policy.signal === undefined ? {} : { signal: policy.signal }),
+  };
 }
 
 function assertNever(value: never): never {

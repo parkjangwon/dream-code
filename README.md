@@ -453,9 +453,12 @@ Enter       Submit input or choose a menu item
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
 - Daemon-backed cron jobs for recurring prompts, workflows, and swarms
-- Agent file tools for list, search, grep, glob, read ranges, mkdir, write,
-  guarded edit, and delete
-- File history checkpoints before write/edit/delete and `/restore <path>`
+- Agent tools for reading, listing, text search, regex grep, gitignore-aware
+  glob, exact URL fetch, workspace stat, diff, diagnostics, mkdir, write,
+  guarded edit, unified patch, move, copy, delete, MCP calls, artifacts, and
+  task ledger updates
+- File history checkpoints before write/edit/patch/move/copy/delete and
+  `/restore <path>`
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
 - MCP stdio server discovery and `tools/list` / `tools/call` bridge

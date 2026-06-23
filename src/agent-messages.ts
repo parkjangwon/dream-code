@@ -65,13 +65,22 @@ function formatToolProtocol(): string {
     "{\"tool\":\"grep\",\"query\":\"TODO|FIXME\",\"path\":\"src\",\"regex\":true,\"glob\":\"**/*.ts\",\"contextLines\":2}",
     "{\"tool\":\"glob\",\"pattern\":\"src/**/*.ts\"}",
     "{\"tool\":\"research\",\"query\":\"official docs for ...\"}",
+    "{\"tool\":\"fetch\",\"url\":\"https://example.com/doc\"}",
+    "{\"tool\":\"diff\",\"path\":\"src/file.ts\"}",
+    "{\"tool\":\"stat\",\"path\":\"README.md\"}",
+    "{\"tool\":\"diagnostics\"}",
     "{\"tool\":\"mcp\",\"server\":\"server-name\",\"name\":\"tool-name\",\"arguments\":{}}",
     "{\"tool\":\"shell\",\"command\":\"npm test\"}",
     "{\"tool\":\"mkdir\",\"path\":\"src\"}",
     "{\"tool\":\"edit\",\"path\":\"file.ts\",\"search\":\"old\",\"replace\":\"new\"}",
+    "{\"tool\":\"patch\",\"patch\":\"--- a/file.ts\\n+++ b/file.ts\\n@@ -1 +1 @@\\n-old\\n+new\\n\"}",
+    "{\"tool\":\"move\",\"from\":\"old.ts\",\"to\":\"new.ts\"}",
+    "{\"tool\":\"copy\",\"from\":\"template.md\",\"to\":\"draft.md\"}",
+    "{\"tool\":\"artifact\",\"action\":\"write\",\"name\":\"report.md\",\"content\":\"text\"}",
+    "{\"tool\":\"task\",\"action\":\"add\",\"label\":\"Task\",\"detail\":\"Do the work\"}",
     "{\"tool\":\"write\",\"path\":\"file.ts\",\"content\":\"text\"}",
     "{\"tool\":\"delete\",\"path\":\"file.ts\"}",
-    "Use shell/mcp/mkdir/write/edit/delete only when permission mode allows it; otherwise explain the needed command.",
+    "Use diagnostics/shell/mcp/mkdir/write/edit/patch/move/copy/artifact/task/delete only when permission mode allows it; otherwise explain the needed command.",
   ].join("\n");
 }
 
