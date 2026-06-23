@@ -12,6 +12,8 @@ export type ReadFileResult = {
 export type EditFileResult = {
   readonly path: string;
   readonly replaced: boolean;
+  readonly replacements: number;
+  readonly message?: string;
 };
 
 export type WorkspaceSearchResult = {
@@ -20,18 +22,32 @@ export type WorkspaceSearchResult = {
   readonly text: string;
 };
 
+export type ReadWorkspaceFileOptions = {
+  readonly maxChars?: number;
+  readonly startLine?: number;
+  readonly endLine?: number;
+};
+
+export type ReplaceInFileOptions = {
+  readonly replaceAll?: boolean;
+  readonly expectedReplacements?: number;
+};
+
 export async function readWorkspaceFile(
   inputPath: string,
-  maxChars = 8_000,
+  optionsOrMaxChars: ReadWorkspaceFileOptions | number = 8_000,
   workspaceRoot = process.cwd(),
 ): Promise<ReadFileResult> {
   const absolutePath = resolveWorkspacePath(inputPath, workspaceRoot);
   const content = await readFile(absolutePath, "utf8");
-  const truncated = content.length > maxChars;
+  const options = typeof optionsOrMaxChars === "number" ? { maxChars: optionsOrMaxChars } : optionsOrMaxChars;
+  const ranged = sliceLineRange(content, options.startLine, options.endLine);
+  const maxChars = options.maxChars ?? 8_000;
+  const truncated = ranged.length > maxChars;
 
   return {
     path: absolutePath,
-    content: truncated ? content.slice(0, maxChars) : content,
+    content: truncated ? ranged.slice(0, maxChars) : ranged,
     truncated,
     bytes: Buffer.byteLength(content),
   };
@@ -92,16 +108,29 @@ export async function replaceInWorkspaceFile(
   inputPath: string,
   searchText: string,
   replacementText: string,
+  options: ReplaceInFileOptions = {},
   workspaceRoot = process.cwd(),
 ): Promise<EditFileResult> {
   const absolutePath = resolveWorkspacePath(inputPath, workspaceRoot);
   const content = await readFile(absolutePath, "utf8");
-  if (!content.includes(searchText)) {
-    return { path: absolutePath, replaced: false };
+  const replacements = countOccurrences(content, searchText);
+  if (options.expectedReplacements !== undefined && replacements !== options.expectedReplacements) {
+    return {
+      path: absolutePath,
+      replaced: false,
+      replacements,
+      message: `expected ${options.expectedReplacements} replacements but found ${replacements}`,
+    };
+  }
+  if (replacements === 0) {
+    return { path: absolutePath, replaced: false, replacements };
   }
 
-  await writeFile(absolutePath, content.replace(searchText, replacementText), "utf8");
-  return { path: absolutePath, replaced: true };
+  const next = options.replaceAll === true
+    ? content.split(searchText).join(replacementText)
+    : content.replace(searchText, replacementText);
+  await writeFile(absolutePath, next, "utf8");
+  return { path: absolutePath, replaced: true, replacements: options.replaceAll === true ? replacements : 1 };
 }
 
 export function runShellCommand(command: string): Promise<number> {
@@ -117,7 +146,7 @@ export function runShellCommand(command: string): Promise<number> {
   });
 }
 
-function resolveWorkspacePath(inputPath: string, rootInput: string): string {
+export function resolveWorkspacePath(inputPath: string, rootInput: string): string {
   const root = resolve(rootInput);
   const absolutePath = resolve(root, inputPath);
   if (absolutePath !== root && !absolutePath.startsWith(`${root}${sep}`)) {
@@ -127,6 +156,11 @@ function resolveWorkspacePath(inputPath: string, rootInput: string): string {
 }
 
 async function collectTextFiles(root: string, limit: number): Promise<readonly string[]> {
+  const files = await collectFiles(root, limit);
+  return files.filter((path) => textLike(path));
+}
+
+async function collectFiles(root: string, limit: number): Promise<readonly string[]> {
   const info = await stat(root);
   if (info.isFile()) {
     return [root];
@@ -140,7 +174,7 @@ async function collectTextFiles(root: string, limit: number): Promise<readonly s
     const path = resolve(root, entry.name);
     if (entry.isDirectory()) {
       files.push(...await collectTextFiles(path, limit - files.length));
-    } else if (entry.isFile() && textLike(entry.name)) {
+    } else if (entry.isFile()) {
       files.push(path);
     }
   }
@@ -153,4 +187,21 @@ function ignoredEntry(name: string): boolean {
 
 function textLike(name: string): boolean {
   return /\.(?:[cm]?[jt]sx?|json|md|txt|toml|ya?ml|css|html|java|py|go|rs|sh)$/u.test(name);
+}
+
+function sliceLineRange(content: string, startLine: number | undefined, endLine: number | undefined): string {
+  if (startLine === undefined && endLine === undefined) {
+    return content;
+  }
+  const lines = content.split(/\r?\n/u);
+  const start = Math.max(1, startLine ?? 1);
+  const end = Math.min(lines.length, endLine ?? lines.length);
+  if (start > end) {
+    return "";
+  }
+  return lines.slice(start - 1, end).join("\n");
+}
+
+function countOccurrences(content: string, needle: string): number {
+  return content.split(needle).length - 1;
 }

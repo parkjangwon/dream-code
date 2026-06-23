@@ -8,6 +8,10 @@ export function toolLabel(request: AgentToolRequest): string {
       return `list ${request.path ?? "."}`;
     case "search":
       return `search ${request.query}`;
+    case "grep":
+      return `grep ${request.query}`;
+    case "glob":
+      return `glob ${request.pattern}`;
     case "research":
       return `research ${request.query}`;
     case "shell":

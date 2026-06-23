@@ -1,6 +1,6 @@
 {
   "name": "dream-code",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Termux-first coding harness CLI. Even while you sleep, your dreams keep building.",
   "license": "MIT",
   "type": "module",

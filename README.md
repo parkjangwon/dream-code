@@ -32,7 +32,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.11)
+Dream Code (v0.1.12)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -98,8 +98,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.11
-git push origin v0.1.11
+git tag v0.1.12
+git push origin v0.1.12
 ```
 
 The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
@@ -108,7 +108,7 @@ The release workflow runs `npm ci`, `npm test`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.11 sh install.sh
+DREAM_CODE_VERSION=v0.1.12 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -159,11 +159,13 @@ DREAM_CODE_SOURCE=1 sh install.sh
   templates.
 - **Project awareness:** load `AGENTS.md`, `DESIGN.md`, plans, tasks, sessions,
   LSP diagnostics, live MCP tools, hooks, and local tool health.
-- **Workspace control:** let the agent list, search, read, create directories,
-  write files, edit files, delete files, run shell commands, and research the
-  web. Fresh installs start in YOLO bypass mode; use `/yolo` to toggle back to
-  ask mode when you want approval prompts. Existing files are checkpointed under
-  `~/.dream/file-history/` before write/edit/delete tools mutate them.
+- **Workspace control:** let the agent list, search, grep with regex/globs,
+  glob files with gitignore awareness, read line ranges, create directories,
+  write files, edit files with replacement-count guards, delete files, run shell
+  commands, and research the web. Fresh installs start in YOLO bypass mode; use
+  `/yolo` to toggle back to ask mode when you want approval prompts. Existing
+  files are checkpointed under `~/.dream/file-history/` before write/edit/delete
+  tools mutate them.
 
 ## Providers
 
@@ -408,7 +410,8 @@ Enter       Submit input or choose a menu item
 - Hidden memory writer for compact/checkpoint updates
 - Workflow-as-code JavaScript recipes with starter generation
 - Daemon-backed cron jobs for recurring prompts, workflows, and swarms
-- Agent file tools for list, search, read, mkdir, write, edit, and delete
+- Agent file tools for list, search, grep, glob, read ranges, mkdir, write,
+  guarded edit, and delete
 - File history checkpoints before write/edit/delete and `/restore <path>`
 - Web research through `DREAM_RESEARCH_COMMAND` or built-in DuckDuckGo fallback
 - TypeScript, Rust, Go, Python, and Java diagnostics through `/lsp`
