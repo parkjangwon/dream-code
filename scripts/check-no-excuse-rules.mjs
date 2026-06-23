@@ -56,10 +56,14 @@ for (const filePath of typeScriptFiles("src")) {
 
 const forbiddenRules = [
   { pattern: /\bas\s+any\b/u, label: "as any" },
+  { pattern: /\bas\s+unknown\b/u, label: "as unknown" },
   { pattern: /:\s*any\b/u, label: "any annotation" },
   { pattern: /@ts-ignore/u, label: "@ts-ignore" },
   { pattern: /@ts-expect-error/u, label: "@ts-expect-error" },
+  { pattern: /\benum\s+[A-Za-z_$][\w$]*/u, label: "enum declaration" },
   { pattern: /\bexport\s+(?:let|var)\b/u, label: "mutable export" },
+  { pattern: /(^|[^=!<>])![.;,\]\)\}]/u, label: "non-null assertion" },
+  { pattern: /\bfetch\s*\(/u, label: "bare fetch" },
 ];
 
 for (const filePath of typeScriptFiles("src").concat(typeScriptFiles("test"))) {

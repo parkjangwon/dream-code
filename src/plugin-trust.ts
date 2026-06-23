@@ -27,7 +27,8 @@ export async function summarizePluginTrust(sourceRoot: string): Promise<PluginRe
 
 function parseJsonObject(raw: string): unknown {
   try {
-    return JSON.parse(raw) as unknown;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed;
   } catch (error) {
     if (error instanceof SyntaxError) {
       return undefined;

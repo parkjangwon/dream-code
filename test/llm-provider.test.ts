@@ -9,10 +9,13 @@ import {
   parseOpenAiStreamLine,
   resolveProviderSettingsForRequest,
   resolveProviderSettings,
+  streamChatCompletion,
   streamEventsFromChunks,
 } from "../src/llm-provider.js";
 import { codexAuthFilePath, codexOAuthBaseUrl } from "../src/codex-oauth.js";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -127,7 +130,20 @@ test("buildProviderRequestBody includes native tool schemas when supplied", () =
   const responsesBody = buildProviderRequestBody("responses", "gpt-test", messages, tools);
 
   assert.deepEqual(chatBody["tools"], tools);
-  assert.deepEqual(responsesBody["tools"], tools);
+  assert.deepEqual(responsesBody["tools"], [
+    {
+      type: "function",
+      name: "read",
+      description: "Read a workspace file.",
+      parameters: tools[0]?.function.parameters,
+    },
+    {
+      type: "function",
+      name: "shell",
+      description: "Run an allowlisted shell command.",
+      parameters: tools[1]?.function.parameters,
+    },
+  ]);
   assert.equal(tools[0]?.function.name, "read");
   assert.equal(tools[1]?.function.name, "shell");
 });
@@ -191,10 +207,137 @@ test("streamEventsFromChunks parses split server-sent event chunks", async () =>
   ]);
 });
 
+test("streamEventsFromChunks assembles streamed chat tool call deltas", async () => {
+  const events = [];
+  const chunks = [
+    Buffer.from('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"read","arguments":"{\\"pa"}}]}}]}\n\n'),
+    Buffer.from('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\\":\\"README.md\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n'),
+    Buffer.from("data: [DONE]\n\n"),
+  ];
+
+  for await (const event of streamEventsFromChunks(toAsync(chunks))) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events, [
+    { kind: "skip" },
+    { kind: "skip" },
+    { kind: "tool_call", request: { tool: "read", path: "README.md" } },
+    { kind: "skip" },
+    { kind: "done" },
+    { kind: "skip" },
+  ]);
+});
+
+test("streamEventsFromChunks emits one chat tool call after finish reason", async () => {
+  const events = [];
+  const chunks = [
+    Buffer.from('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}}]}\n\n'),
+    Buffer.from('data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'),
+  ];
+
+  for await (const event of streamEventsFromChunks(toAsync(chunks))) {
+    events.push(event);
+  }
+
+  assert.deepEqual(events, [
+    { kind: "skip" },
+    { kind: "skip" },
+    { kind: "tool_call", request: { tool: "read", path: "README.md" } },
+    { kind: "skip" },
+  ]);
+});
+
+test("streamChatCompletion retries transient provider HTTP failures", async () => {
+  const server = await startChatServer([
+    { status: 429, body: "rate limited" },
+    { status: 200, body: 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n' },
+  ]);
+  const tokens: string[] = [];
+  try {
+    await streamChatCompletion({
+      selectedModel: {
+        provider: "custom-openai",
+        model: "test-model",
+        tier: "mid",
+        reason: "test",
+      },
+      messages: [{ role: "user", content: "hello" }],
+      env: {
+        CUSTOM_OPENAI_API_KEY: "secret",
+        DREAM_CUSTOM_OPENAI_BASE_URL: server.baseUrl,
+      },
+      onToken: (token) => {
+        tokens.push(token);
+      },
+    });
+
+    assert.deepEqual(tokens, ["ok"]);
+    assert.equal(server.requests(), 2);
+  } finally {
+    await server.close();
+  }
+});
+
 async function* toAsync(chunks: readonly Buffer[]): AsyncGenerator<Buffer> {
   for (const chunk of chunks) {
     yield chunk;
   }
+}
+
+type ChatResponse = {
+  readonly status: number;
+  readonly body: string;
+};
+
+type ChatServer = {
+  readonly baseUrl: string;
+  readonly requests: () => number;
+  readonly close: () => Promise<void>;
+};
+
+function startChatServer(responses: readonly ChatResponse[]): Promise<ChatServer> {
+  let requestCount = 0;
+  const server = createServer((request, response) => {
+    requestCount += 1;
+    const next = responses[Math.min(requestCount - 1, responses.length - 1)];
+    if (request.url !== "/chat/completions" || next === undefined) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("not found");
+      return;
+    }
+    response.writeHead(next.status, { "content-type": "text/event-stream" });
+    response.end(next.body);
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      const address = server.address();
+      if (!isAddressInfo(address)) {
+        reject(new Error("Chat test server did not expose a TCP port."));
+        return;
+      }
+      resolve({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        requests: () => requestCount,
+        close: () => new Promise((closeResolve, closeReject) => {
+          server.close((error) => {
+            if (error !== undefined) {
+              closeReject(error);
+              return;
+            }
+            closeResolve();
+          });
+        }),
+      });
+    });
+  });
+}
+
+function isAddressInfo(value: string | AddressInfo | null): value is AddressInfo {
+  return typeof value === "object" && value !== null && "port" in value;
 }
 
 function fakeJwt(exp: number): string {

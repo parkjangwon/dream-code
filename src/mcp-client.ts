@@ -195,8 +195,9 @@ function takeMessage(buffer: Buffer<ArrayBufferLike>): ParsedMessage | undefined
   if (buffer.length < bodyEnd) {
     return undefined;
   }
+  const message: unknown = JSON.parse(buffer.subarray(bodyStart, bodyEnd).toString("utf8"));
   return {
-    message: JSON.parse(buffer.subarray(bodyStart, bodyEnd).toString("utf8")) as unknown,
+    message,
     rest: buffer.subarray(bodyEnd),
   };
 }

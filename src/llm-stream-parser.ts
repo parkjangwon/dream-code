@@ -14,12 +14,14 @@ const chatChunkSchema = z.object({
     delta: z.object({
       content: z.string().nullable().optional(),
       tool_calls: z.array(z.object({
+        index: z.number().int().nonnegative().optional(),
         function: z.object({
           name: z.string().optional(),
           arguments: z.string().optional(),
         }).passthrough().optional(),
       }).passthrough()).optional(),
     }).passthrough(),
+    finish_reason: z.string().nullable().optional(),
   }).passthrough()),
 }).passthrough();
 
@@ -40,23 +42,33 @@ export class ProviderProtocolError extends Error {
   }
 }
 
+type ChatToolCallBuffer = {
+  name?: string;
+  arguments: string;
+};
+
+type ChatToolCallAccumulator = {
+  readonly calls: Map<number, ChatToolCallBuffer>;
+};
+
 export async function* streamEventsFromChunks(
   chunks: AsyncIterable<unknown>,
   protocol: ProviderProtocol = "chat-completions",
 ): AsyncGenerator<StreamDataEvent> {
   let buffer = "";
+  const chatTools: ChatToolCallAccumulator = { calls: new Map() };
 
   for await (const chunk of chunks) {
     buffer += chunkToText(chunk);
     const lines = buffer.split(/\r?\n/u);
     buffer = lines.pop() ?? "";
     for (const line of lines) {
-      yield parseStreamLine(line, protocol);
+      yield parseStreamLineWithState(line, protocol, chatTools);
     }
   }
 
   if (buffer.trim().length > 0) {
-    yield parseStreamLine(buffer, protocol);
+    yield parseStreamLineWithState(buffer, protocol, chatTools);
   }
 }
 
@@ -72,6 +84,29 @@ export function parseStreamLine(line: string, protocol: ProviderProtocol): Strea
 }
 
 export function parseOpenAiStreamLine(line: string): StreamDataEvent {
+  return parseOpenAiStreamLineWithState(line, { calls: new Map() }, true);
+}
+
+function parseStreamLineWithState(
+  line: string,
+  protocol: ProviderProtocol,
+  chatTools: ChatToolCallAccumulator,
+): StreamDataEvent {
+  switch (protocol) {
+    case "chat-completions":
+      return parseOpenAiStreamLineWithState(line, chatTools, false);
+    case "responses":
+      return parseOpenAiResponsesLine(line);
+    default:
+      return assertNever(protocol);
+  }
+}
+
+function parseOpenAiStreamLineWithState(
+  line: string,
+  chatTools: ChatToolCallAccumulator,
+  emitDeltaToolCalls: boolean,
+): StreamDataEvent {
   const data = parseSseData(line);
   if (data.kind !== "json") {
     return data.event;
@@ -82,8 +117,12 @@ export function parseOpenAiStreamLine(line: string): StreamDataEvent {
     throw new ProviderProtocolError(parsedChunk.error.message);
   }
 
-  const delta = parsedChunk.data.choices[0]?.delta;
-  const nativeCall = firstNativeToolCall(delta?.tool_calls);
+  const choice = parsedChunk.data.choices[0];
+  const delta = choice?.delta;
+  appendNativeToolCalls(chatTools, delta?.tool_calls);
+  const nativeCall = choice?.finish_reason === "tool_calls"
+    ? flushFirstNativeToolCall(chatTools)
+    : emitDeltaToolCalls ? firstNativeToolCall(delta?.tool_calls) : undefined;
   if (nativeCall !== undefined) {
     return nativeCall;
   }
@@ -132,15 +171,41 @@ function firstNativeToolCall(calls: readonly unknown[] | undefined): StreamDataE
   return request === undefined ? undefined : { kind: "tool_call", request };
 }
 
-function readNativeCall(value: unknown): { readonly name?: string; readonly arguments?: string } {
+function flushFirstNativeToolCall(chatTools: ChatToolCallAccumulator): StreamDataEvent | undefined {
+  const completed = [...chatTools.calls.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map((entry) => entry[1])
+    .find((call) => call.name !== undefined);
+  chatTools.calls.clear();
+  const request = completed?.name === undefined
+    ? undefined
+    : parseNativeToolCall(completed.name, completed.arguments);
+  return request === undefined ? undefined : { kind: "tool_call", request };
+}
+
+function appendNativeToolCalls(chatTools: ChatToolCallAccumulator, calls: readonly unknown[] | undefined): void {
+  for (const call of calls ?? []) {
+    const delta = readNativeCall(call);
+    const index = delta.index ?? 0;
+    const previous = chatTools.calls.get(index) ?? { arguments: "" };
+    const name = delta.name ?? previous.name;
+    chatTools.calls.set(index, {
+      ...(name === undefined ? {} : { name }),
+      arguments: `${previous.arguments}${delta.arguments ?? ""}`,
+    });
+  }
+}
+
+function readNativeCall(value: unknown): { readonly index?: number; readonly name?: string; readonly arguments?: string } {
   if (!isRecord(value)) {
     return {};
   }
   const fn = value["function"];
   if (!isRecord(fn)) {
-    return {};
+    return typeof value["index"] === "number" ? { index: value["index"] } : {};
   }
   return {
+    ...(typeof value["index"] === "number" ? { index: value["index"] } : {}),
     ...(typeof fn["name"] === "string" ? { name: fn["name"] } : {}),
     ...(typeof fn["arguments"] === "string" ? { arguments: fn["arguments"] } : {}),
   };

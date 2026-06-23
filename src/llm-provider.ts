@@ -1,5 +1,3 @@
-import { request } from "undici";
-
 import { CodexOAuthError, readCodexOAuthCredential } from "./codex-oauth.js";
 import { readProviderCredential, type ProviderCredential } from "./credentials.js";
 import type { SelectedModel } from "./model-routing.js";
@@ -21,6 +19,12 @@ import {
 } from "./llm-stream-parser.js";
 import { nativeAgentToolDefinitions, type NativeToolDefinition } from "./provider-native-tools.js";
 import type { AgentToolRequest } from "./agent-tool-schema.js";
+import { requestProviderWithRetry, type ProviderRequestOptions } from "./provider-http.js";
+import {
+  buildProviderRequestBody,
+  buildProviderRequestHeaders,
+  endpointFor,
+} from "./provider-request.js";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -51,7 +55,14 @@ export type StreamChatInput = {
   readonly onToolCall?: (request: AgentToolRequest) => void | Promise<void>;
 };
 
-export { parseOpenAiResponsesLine, parseOpenAiStreamLine, ProviderProtocolError, streamEventsFromChunks };
+export {
+  buildProviderRequestBody,
+  buildProviderRequestHeaders,
+  parseOpenAiResponsesLine,
+  parseOpenAiStreamLine,
+  ProviderProtocolError,
+  streamEventsFromChunks,
+};
 export type { StreamDataEvent };
 export { nativeAgentToolDefinitions };
 
@@ -159,7 +170,7 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
     )),
     headersTimeout: 15_000,
     bodyTimeout: 120_000,
-  } : {
+  } satisfies ProviderRequestOptions : {
     method: "POST",
     headers: buildProviderRequestHeaders(settings),
     body: JSON.stringify(buildProviderRequestBody(
@@ -171,8 +182,8 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
     signal: input.signal,
     headersTimeout: 15_000,
     bodyTimeout: 120_000,
-  };
-  const response = await request(endpointFor(settings), requestOptions);
+  } satisfies ProviderRequestOptions;
+  const response = await requestProviderWithRetry(endpointFor(settings), requestOptions);
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ProviderRequestError(response.statusCode, await response.body.text());
@@ -194,65 +205,6 @@ export async function streamChatCompletion(input: StreamChatInput): Promise<void
         assertNever(event);
     }
   }
-}
-
-function endpointFor(settings: ProviderSettings): string {
-  switch (settings.protocol) {
-    case "chat-completions":
-      return `${settings.baseUrl}/chat/completions`;
-    case "responses":
-      return `${settings.baseUrl}/responses`;
-    default:
-      return assertNever(settings.protocol);
-  }
-}
-
-export function buildProviderRequestHeaders(settings: ProviderSettings): Record<string, string> {
-  const authHeader = settings.apiKeyHeader === "api-key"
-    ? { "api-key": settings.apiKey }
-    : { authorization: `Bearer ${settings.apiKey}` };
-  return {
-    ...settings.extraHeaders,
-    ...authHeader,
-    "content-type": "application/json",
-  };
-}
-
-export function buildProviderRequestBody(
-  protocol: ProviderProtocol,
-  model: string,
-  messages: readonly ChatMessage[],
-  tools: readonly NativeToolDefinition[] = [],
-): Readonly<Record<string, unknown>> {
-  switch (protocol) {
-    case "chat-completions":
-      return withOptionalTools({ model, messages, stream: true }, tools);
-    case "responses":
-      return withOptionalTools(responseRequestBody(model, messages), tools);
-    default:
-      return assertNever(protocol);
-  }
-}
-
-function withOptionalTools(
-  body: Readonly<Record<string, unknown>>,
-  tools: readonly NativeToolDefinition[],
-): Readonly<Record<string, unknown>> {
-  return tools.length === 0 ? body : { ...body, tools };
-}
-
-function responseRequestBody(
-  model: string,
-  messages: readonly ChatMessage[],
-): Readonly<Record<string, unknown>> {
-  const instructions = messages
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
-    .join("\n\n");
-  const input = messages.filter((message) => message.role !== "system");
-  return instructions.length === 0
-    ? { model, input: messages, store: false, stream: true }
-    : { model, input, instructions, store: false, stream: true };
 }
 
 function firstEnv(env: ProviderEnv, keys: readonly string[]): string | undefined {

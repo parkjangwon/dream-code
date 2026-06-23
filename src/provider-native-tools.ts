@@ -1,5 +1,6 @@
 import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
 import { toolRequestSchema } from "./agent-tool-schema.js";
+import type { ProviderProtocol } from "./provider-registry.js";
 
 type JsonSchema = Readonly<Record<string, unknown>>;
 
@@ -11,6 +12,15 @@ export type NativeToolDefinition = {
     readonly parameters: JsonSchema;
   };
 };
+
+export type NativeResponseToolDefinition = {
+  readonly type: "function";
+  readonly name: AgentToolName;
+  readonly description: string;
+  readonly parameters: JsonSchema;
+};
+
+export type ProviderNativeToolDefinition = NativeToolDefinition | NativeResponseToolDefinition;
 
 const toolDescriptions: Readonly<Record<AgentToolName, string>> = {
   read: "Read a workspace file.",
@@ -71,6 +81,25 @@ export function nativeAgentToolDefinitions(names: readonly AgentToolName[]): rea
   }));
 }
 
+export function providerNativeToolDefinitions(
+  protocol: ProviderProtocol,
+  tools: readonly NativeToolDefinition[],
+): readonly ProviderNativeToolDefinition[] {
+  switch (protocol) {
+    case "chat-completions":
+      return tools;
+    case "responses":
+      return tools.map((tool) => ({
+        type: "function",
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters,
+      }));
+    default:
+      return assertNever(protocol);
+  }
+}
+
 export function parseNativeToolCall(name: string, rawArguments: string | undefined): AgentToolRequest | undefined {
   const parsedArguments = parseArguments(rawArguments);
   const parsed = toolRequestSchema.safeParse({ ...parsedArguments, tool: name });
@@ -81,7 +110,15 @@ function parseArguments(raw: string | undefined): Record<string, unknown> {
   if (raw === undefined || raw.trim().length === 0) {
     return {};
   }
-  const parsed = JSON.parse(raw) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return {};
+    }
+    throw error;
+  }
   return isRecord(parsed) ? parsed : {};
 }
 
@@ -107,4 +144,8 @@ function enumSchema(values: readonly string[]): JsonSchema {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected provider tool protocol: ${String(value)}`);
 }
