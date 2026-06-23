@@ -28,6 +28,7 @@ GEMINI.md
 # Dream Code local state
 .dream/
 .dream-code/
+.ulw/
 dream.credentials.json
 dream.local.json
 dream.config.local.json
