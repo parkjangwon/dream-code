@@ -27,6 +27,7 @@ const maxDocChars = 12_000;
 export async function loadContextDocs(options: LoadContextDocsOptions): Promise<ContextDocs> {
   const configRoot = options.configRoot ?? defaultConfigRoot();
   const rules = await readExistingDocs([
+    { label: "home AGENTS.md", path: join(homedir(), "AGENTS.md") },
     { label: "global AGENTS.md", path: join(configRoot, "AGENTS.md") },
     ...claudeGlobalCandidates(configRoot),
     { label: "project AGENTS.md", path: join(options.cwd, "AGENTS.md") },

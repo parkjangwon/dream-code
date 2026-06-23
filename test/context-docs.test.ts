@@ -10,32 +10,43 @@ import { loadContextDocs } from "../src/context-docs.js";
 test("loadContextDocs discovers global and project rules documents", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-rules-root-"));
   const project = await mkdtemp(join(tmpdir(), "dream-rules-project-"));
+  const home = await mkdtemp(join(tmpdir(), "dream-rules-home-"));
   const previousClaudeConfigDir = process.env["CLAUDE_CONFIG_DIR"];
+  const previousHome = process.env["HOME"];
   try {
     process.env["CLAUDE_CONFIG_DIR"] = join(root, "missing-claude");
+    process.env["HOME"] = home;
     await mkdir(root, { recursive: true });
+    await writeFile(join(home, "AGENTS.md"), "Homewide agent rules.", "utf8");
     await writeFile(join(root, "AGENTS.md"), "Global constitution.", "utf8");
     await writeFile(join(project, "DESIGN.md"), "Project design system.", "utf8");
 
     const docs = await loadContextDocs({ configRoot: root, cwd: project, prompt: "Polish the TUI" });
 
-    assert.equal(docs.rules.length, 1);
+    assert.equal(docs.rules.length, 2);
     assert.equal(docs.design.length, 1);
-    assert.match(docs.rules[0]?.content ?? "", /Global constitution/u);
+    assert.deepEqual(docs.rules.map((doc) => doc.label), ["home AGENTS.md", "global AGENTS.md"]);
+    assert.match(docs.rules[0]?.content ?? "", /Homewide agent rules/u);
+    assert.match(docs.rules[1]?.content ?? "", /Global constitution/u);
     assert.match(docs.design[0]?.content ?? "", /Project design system/u);
   } finally {
     restoreEnv("CLAUDE_CONFIG_DIR", previousClaudeConfigDir);
+    restoreEnv("HOME", previousHome);
     await rm(root, { recursive: true, force: true });
     await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });
 
 test("loadContextDocs discovers Claude Code memory and rule files", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-claude-root-"));
   const project = await mkdtemp(join(tmpdir(), "dream-claude-project-"));
+  const home = await mkdtemp(join(tmpdir(), "dream-claude-home-"));
   const previousClaudeConfigDir = process.env["CLAUDE_CONFIG_DIR"];
+  const previousHome = process.env["HOME"];
   try {
     process.env["CLAUDE_CONFIG_DIR"] = join(root, "missing-claude");
+    process.env["HOME"] = home;
     await mkdir(join(project, ".claude", "rules"), { recursive: true });
     await writeFile(join(root, "CLAUDE.md"), "Global Claude memory.", "utf8");
     await writeFile(join(project, "CLAUDE.md"), "Project Claude memory.", "utf8");
@@ -53,8 +64,10 @@ test("loadContextDocs discovers Claude Code memory and rule files", async () => 
     ]);
   } finally {
     restoreEnv("CLAUDE_CONFIG_DIR", previousClaudeConfigDir);
+    restoreEnv("HOME", previousHome);
     await rm(root, { recursive: true, force: true });
     await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });
 
