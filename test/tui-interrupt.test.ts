@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { nextEscInterruptState } from "../src/tui-interrupt.js";
+import { formatGuardedRunningOutput, nextEscInterruptState } from "../src/tui-interrupt.js";
 import { registerActor } from "../src/actor-store.js";
 import { drainInboxMessages } from "../src/inbox-store.js";
 import {
@@ -73,6 +73,30 @@ test("reduceRunningInputState edits and submits a running command line", () => {
   const submitted = reduceRunningInputState({ buffer: "/status", cursor: 7 }, "\r", { name: "return" });
   assert.deepEqual(submitted.effect, { kind: "submit", command: { kind: "status" } });
   assert.equal(submitted.state.buffer, "");
+});
+
+test("formatGuardedRunningOutput keeps agent output off the running input line", () => {
+  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", {
+    buffer: "/agents",
+    cursor: 7,
+  });
+
+  assert.match(rendered, /^\r\u001B\[2K/u);
+  assert.match(rendered, /Tool read src\/tui\.ts\n/u);
+  assert.match(rendered, /running >.*\/agents/u);
+  assert.doesNotMatch(rendered, /\/agentsTool read/u);
+});
+
+test("formatGuardedRunningOutput uses a reserved bottom input row when terminal height is known", () => {
+  const rendered = formatGuardedRunningOutput("Tool read src/tui.ts\n", {
+    buffer: "/agents",
+    cursor: 7,
+  }, 24);
+
+  assert.match(rendered, /^\u001B\[23;1H/u);
+  assert.match(rendered, /\u001B\[24;1H\r\u001B\[2K/u);
+  assert.match(rendered, /running >.*\/agents/u);
+  assert.doesNotMatch(rendered, /\/agentsTool read/u);
 });
 
 test("queueSteeringMessage sends to the current running main actor inbox", async () => {

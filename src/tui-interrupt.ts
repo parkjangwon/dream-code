@@ -20,26 +20,43 @@ export type EscInterruptUpdate = {
 
 export const escInterruptWindowMs = 1_500;
 
+export type RunningOutputWriter = (text: string) => void;
+
 export type EscInterruptOptions = {
-  readonly onRunningCommand?: (command: RunningCommand) => Promise<void> | void;
+  readonly onRunningCommand?: (command: RunningCommand, write: RunningOutputWriter) => Promise<void> | void;
 };
 
 export async function runWithEscInterrupt<T>(
-  task: (signal: AbortSignal) => Promise<T>,
+  task: (signal: AbortSignal, write: RunningOutputWriter) => Promise<T>,
   options: EscInterruptOptions = {},
 ): Promise<T> {
   const controller = new AbortController();
   if (input.isTTY !== true || output.isTTY !== true) {
-    return task(controller.signal);
+    return task(controller.signal, (text) => output.write(text));
   }
 
   let state: EscInterruptState = {};
   let runningInput = initialRunningInputState();
   let pendingCommand = Promise.resolve();
   const previousRawMode = input.isRaw;
+  const writeInternal = (text: string): void => {
+    output.write(text);
+  };
+  const writeGuardedOutput = (text: string): void => {
+    writeInternal(formatGuardedRunningOutput(text, runningInput, output.rows));
+  };
+  const renderPrompt = (): void => {
+    writeInternal(formatRunningPrompt(runningInput, output.rows));
+  };
+  const activateRegion = (): void => {
+    writeInternal(formatActivateRunningInputRegion(output.rows));
+  };
+  const deactivateRegion = (): void => {
+    writeInternal(formatDeactivateRunningInputRegion());
+  };
   const onKeypress = (value: string | undefined, key: Key): void => {
     if (key.ctrl === true && key.name === "c") {
-      output.write(interruptHint("interrupting agent run", ansi.red));
+      writeGuardedOutput(interruptHint("interrupting agent run", ansi.red));
       controller.abort();
       return;
     }
@@ -47,11 +64,10 @@ export async function runWithEscInterrupt<T>(
       const update = nextEscInterruptState(state, Date.now());
       state = update.state;
       if (update.effect === "arm") {
-        output.write(interruptHint("esc again to interrupt", ansi.yellow));
-        renderRunningPrompt(runningInput);
+        writeGuardedOutput(interruptHint("esc again to interrupt", ansi.yellow));
         return;
       }
-      output.write(interruptHint("interrupting agent run", ansi.red));
+      writeGuardedOutput(interruptHint("interrupting agent run", ansi.red));
       controller.abort();
       return;
     }
@@ -59,35 +75,43 @@ export async function runWithEscInterrupt<T>(
     const update = reduceRunningInputState(runningInput, value, key);
     runningInput = update.state;
     if (update.effect.kind === "render") {
-      renderRunningPrompt(runningInput);
+      renderPrompt();
       return;
     }
     if (update.effect.kind === "submit") {
       const command = update.effect.command;
-      output.write("\r\u001B[2K");
+      renderPrompt();
       pendingCommand = pendingCommand
-        .then(async () => dispatchRunningCommand(command, options, controller))
+        .then(async () => dispatchRunningCommand(command, options, controller, writeGuardedOutput))
         .catch((error: unknown) => {
-          output.write(interruptHint(error instanceof Error ? error.message : "running command failed", ansi.red));
+          writeGuardedOutput(interruptHint(error instanceof Error ? error.message : "running command failed", ansi.red));
         })
         .finally(() => {
-          renderRunningPrompt(runningInput);
+          renderPrompt();
         });
     }
+  };
+  const onResize = (): void => {
+    activateRegion();
+    renderPrompt();
   };
 
   emitKeypressEvents(input);
   input.setRawMode(true);
   input.resume();
   input.on("keypress", onKeypress);
-  output.write(interruptHint("esc interrupt · type steering text · /status /agents /interrupt", ansi.guide));
-  renderRunningPrompt(runningInput);
+  output.on("resize", onResize);
+  activateRegion();
+  writeGuardedOutput(interruptHint("esc interrupt · type steering text · /status /agents /interrupt", ansi.guide));
+  renderPrompt();
   try {
-    return await task(controller.signal);
+    return await task(controller.signal, writeGuardedOutput);
   } finally {
     input.off("keypress", onKeypress);
+    output.off("resize", onResize);
     await pendingCommand;
-    output.write("\r\u001B[2K");
+    writeInternal(formatClearRunningPrompt(output.rows));
+    deactivateRegion();
     input.setRawMode(previousRawMode);
     input.pause();
   }
@@ -112,27 +136,54 @@ async function dispatchRunningCommand(
   command: RunningCommand,
   options: EscInterruptOptions,
   controller: AbortController,
+  write: RunningOutputWriter,
 ): Promise<void> {
   if (command.kind === "ignore") {
     return;
   }
   if (command.kind === "interrupt") {
-    output.write(interruptHint("interrupting agent run", ansi.red));
+    write(interruptHint("interrupting agent run", ansi.red));
     controller.abort();
     return;
   }
-  await options.onRunningCommand?.(command);
+  await options.onRunningCommand?.(command, write);
   if (command.kind === "steer" && command.priority) {
-    output.write(interruptHint("priority steering queued; interrupting current run", ansi.yellow));
+    write(interruptHint("priority steering queued; interrupting current run", ansi.yellow));
     controller.abort();
   }
 }
 
-function renderRunningPrompt(state: RunningInputState): void {
+export function formatGuardedRunningOutput(text: string, state: RunningInputState, rows?: number): string {
+  const boundary = text.endsWith("\n") || text.endsWith("\r") ? "" : "\n";
+  return `${formatOutputCursor(rows)}${text}${boundary}${formatRunningPrompt(state, rows)}`;
+}
+
+function formatRunningPrompt(state: RunningInputState, rows?: number): string {
   const prefix = `${paint(".......", ansi.accent)}  ${paint("running >", ansi.guide)} `;
-  output.write(`\r\u001B[2K${prefix}${state.buffer}`);
+  const prompt = `${formatClearRunningPrompt(rows)}${prefix}${state.buffer}`;
   const suffixLength = state.buffer.length - state.cursor;
-  if (suffixLength > 0) {
-    output.write(`\u001B[${suffixLength}D`);
-  }
+  return suffixLength > 0 ? `${prompt}\u001B[${suffixLength}D` : prompt;
+}
+
+function formatActivateRunningInputRegion(rows?: number): string {
+  const region = runningInputRegion(rows);
+  return region === undefined ? "" : `\u001B[1;${region.outputRow}r\u001B[${region.outputRow};1H`;
+}
+
+function formatDeactivateRunningInputRegion(): string {
+  return "\u001B[r";
+}
+
+function formatOutputCursor(rows?: number): string {
+  const region = runningInputRegion(rows);
+  return region === undefined ? "\r\u001B[2K" : `\u001B[${region.outputRow};1H`;
+}
+
+function formatClearRunningPrompt(rows?: number): string {
+  const region = runningInputRegion(rows);
+  return region === undefined ? "\r\u001B[2K" : `\u001B[${region.inputRow};1H\r\u001B[2K`;
+}
+
+function runningInputRegion(rows?: number): { readonly outputRow: number; readonly inputRow: number } | undefined {
+  return rows === undefined || rows < 4 ? undefined : { outputRow: rows - 1, inputRow: rows };
 }

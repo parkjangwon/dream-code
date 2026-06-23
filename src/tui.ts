@@ -90,13 +90,13 @@ async function runInteractiveLoop(
     const questioner = interactiveQuestioner(config, options);
     const result = shouldUseEscInterrupt(answer.text)
       ? await runWithEscInterrupt(
-        (signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal),
+        (signal, write) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal, write),
         {
-          onRunningCommand: (command) => dispatchTuiRunningCommand(command, {
+          onRunningCommand: (command, write) => dispatchTuiRunningCommand(command, {
             config,
             oneShotYolo: options.oneShotYolo,
             sessionId: currentSessionId,
-            write: (text) => output.write(text),
+            write,
             ...(options.configRoot === undefined ? {} : { configRoot: options.configRoot }),
           }),
         },
@@ -142,6 +142,7 @@ export async function handleInput(
   questioner: Questioner,
   sessionRuntime?: SessionRuntime,
   signal?: AbortSignal,
+  write?: (text: string) => void,
 ): Promise<CommandResult> {
   if (text.length === 0) {
     return { config, shouldContinue: true };
@@ -152,7 +153,7 @@ export async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal);
+  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal, write);
 }
 
 function shouldUseEscInterrupt(text: string): boolean {

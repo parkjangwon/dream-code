@@ -22,7 +22,7 @@ import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import { renameCurrentSession, showSessionMenu, type SessionRuntime } from "./tui-session-commands.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
-import { formatPermissionMode, printHelp } from "./tui-render.js";
+import { formatPermissionMode } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
@@ -40,8 +40,9 @@ export async function runWorkspaceCommand(
   sessionRuntime?: SessionRuntime,
   cwd = currentWorkingDirectory(),
   signal?: AbortSignal,
+  write?: (text: string) => void,
 ): Promise<CommandResult> {
-  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd, signal);
+  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd, signal, write);
   await runHookEvent(configRoot, "postCommand", { command: text, ok: String(result.shouldContinue) });
   return result;
 }
@@ -55,6 +56,7 @@ async function runWorkspaceCommandBody(
   sessionRuntime: SessionRuntime | undefined,
   cwd: string,
   signal: AbortSignal | undefined,
+  write: ((text: string) => void) | undefined,
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
@@ -64,7 +66,16 @@ async function runWorkspaceCommandBody(
   }
 
   if (!text.startsWith("/")) {
-    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+    return runAgentTextPrompt({
+      text,
+      config,
+      configRoot,
+      questioner,
+      cwd,
+      ...(sessionRuntime === undefined ? {} : { sessionRuntime }),
+      ...(signal === undefined ? {} : { signal }),
+      ...(write === undefined ? {} : { write }),
+    });
   }
 
   const command = splitCommand(text);
@@ -73,9 +84,6 @@ async function runWorkspaceCommandBody(
   }
 
   switch (command.name) {
-    case "/help":
-      printHelp();
-      return { config, shouldContinue: true };
     case "/exit":
     case "/quit":
       output.write("Good night. Dream Code is ready when you are.\n");
@@ -212,7 +220,16 @@ async function runWorkspaceCommandBody(
         return { config, shouldContinue: true };
       }
       if (await isSkillInvocation(configRoot, cwd, command.name)) {
-        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+        return runAgentTextPrompt({
+          text,
+          config,
+          configRoot,
+          questioner,
+          cwd,
+          ...(sessionRuntime === undefined ? {} : { sessionRuntime }),
+          ...(signal === undefined ? {} : { signal }),
+          ...(write === undefined ? {} : { write }),
+        });
       }
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };

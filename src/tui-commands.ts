@@ -19,7 +19,6 @@ export const slashCommands = [
   { name: "/exit", summary: "Exit Dream Code", acceptsArgs: false },
   { name: "/export", summary: "Export current conversation", acceptsArgs: false },
   { name: "/goal", summary: "Start goal mode", acceptsArgs: true },
-  { name: "/help", summary: "Show commands", acceptsArgs: false },
   { name: "/hooks", summary: "Show hook settings", acceptsArgs: false },
   { name: "/interview", summary: "Align on implementation direction", acceptsArgs: false },
   { name: "/login", summary: "Login to a provider", acceptsArgs: true },
