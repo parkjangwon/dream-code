@@ -259,6 +259,14 @@ input {
   gap: 10px;
 }
 
+.process-card {
+  gap: 9px;
+}
+
+.process-card .user-bubble {
+  margin-bottom: 1px;
+}
+
 .bubble {
   min-width: 0;
   border-radius: 22px;
@@ -354,6 +362,22 @@ input {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.step-meter {
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2a2a2d;
+}
+
+.step-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #f2f2f7);
+  transition: width 180ms ease;
 }
 
 .live-output {
@@ -460,6 +484,9 @@ input {
 }
 
 .activity-list strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   color: var(--fg);
   font-size: 13px;
 }
@@ -476,6 +503,43 @@ input {
   margin-top: 6px;
   border-radius: 50%;
   background: var(--line);
+}
+
+.activity-kind {
+  flex: none;
+  min-width: 42px;
+  border: 1px solid #343437;
+  border-radius: 999px;
+  background: #1e1e21;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.activity-kind.tool {
+  border-color: rgb(96 211 148 / 34%);
+  background: rgb(96 211 148 / 12%);
+  color: var(--accent);
+}
+
+.activity-kind.command {
+  border-color: rgb(255 209 102 / 30%);
+  background: rgb(255 209 102 / 12%);
+  color: #ffd166;
+}
+
+.activity-kind.read {
+  border-color: rgb(100 181 246 / 28%);
+  background: rgb(100 181 246 / 11%);
+  color: #9bd1ff;
+}
+
+.activity-kind.write {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
 }
 
 .activity-list li.done .activity-dot {
@@ -539,6 +603,22 @@ input {
   display: grid;
   gap: 10px;
   margin-top: 10px;
+}
+
+.final-result {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  border-top: 1px solid #2a2a2d;
+  padding-top: 12px;
+}
+
+.final-result .markdown-result {
+  margin-top: 0;
+}
+
+.final-result.terminal pre {
+  margin: 0;
 }
 
 .markdown-result h1,
@@ -648,6 +728,94 @@ input {
 .dream-bubble {
   border: 1px solid var(--line);
   background: var(--chip);
+}
+
+.process-panel {
+  display: grid;
+  gap: 12px;
+  border-color: #343437;
+  background: linear-gradient(180deg, #171719 0%, #111113 100%);
+}
+
+.process-summary {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #303034;
+  border-radius: 16px;
+  background: #0d0d0f;
+  padding: 11px 12px;
+}
+
+.process-title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+}
+
+.process-status {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.process-status.queued,
+.process-status.running {
+  background: var(--accent);
+  box-shadow: 0 0 0 5px rgb(96 211 148 / 11%);
+}
+
+.process-status.failed {
+  background: var(--danger);
+}
+
+.process-status.cancelled {
+  background: #ffd166;
+}
+
+.process-kicker,
+.process-summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.process-insights span {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #303034;
+  border-radius: 999px;
+  background: #171719;
+  color: #d8d8dc;
+  padding: 5px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill {

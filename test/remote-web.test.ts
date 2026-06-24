@@ -155,6 +155,28 @@ test("remote web navigation does not cancel running commands on back navigation"
   assert.doesNotMatch(composer, /slice\(0, 8\)/u);
 });
 
+test("remote web shows command progress as mobile process cards", async () => {
+  const thread = await readFile("src/remote-web-thread.tsx", "utf8");
+  const activity = await readFile("src/remote-web-activity.tsx", "utf8");
+  const css = await readFile("src/remote-web.css", "utf8");
+
+  assert.match(thread, /process-card/u);
+  assert.match(thread, /ProcessSummary/u);
+  assert.match(thread, /PersistentProcessTimeline/u);
+  assert.match(thread, /FinalCommandResult/u);
+  assert.match(thread, /final-result/u);
+  assert.match(thread, /ActivityTimeline command=\{command\}/u);
+  assert.match(activity, /latestActivity/u);
+  assert.match(activity, /step-meter/u);
+  assert.match(activity, /activity-kind/u);
+  assert.match(activity, /process-insights/u);
+  assert.match(css, /\.process-card/u);
+  assert.match(css, /\.process-summary/u);
+  assert.match(css, /\.final-result/u);
+  assert.match(css, /\.activity-kind\.tool/u);
+  assert.match(css, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/u);
+});
+
 test("remote web slash menu hides interactive-only commands", async () => {
   const remoteSlash = await readFile("src/remote-slash-commands.ts", "utf8");
 

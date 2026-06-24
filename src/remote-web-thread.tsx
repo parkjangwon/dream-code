@@ -1,7 +1,7 @@
 import { h } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 
-import { ActivityTimeline } from "./remote-web-activity.js";
+import { ActivityTimeline, ProcessSummary } from "./remote-web-activity.js";
 import { MarkdownView } from "./remote-web-markdown.js";
 import type { CommandRecord, CommandStatus, SessionTurnDto } from "./remote-web-api.js";
 
@@ -42,19 +42,21 @@ export function CommandThread(props: {
           <TurnBubble turn={turn} />
         ))}
         {commands.map((command) => (
-          <article class="exchange" key={command.id}>
+          <article class={`exchange process-card ${command.status}`} key={command.id}>
             <div class="bubble user-bubble">
               <span class="bubble-label">You</span>
               <p>{command.prompt}</p>
             </div>
-            <div class="bubble dream-bubble">
+            <div class="bubble dream-bubble process-panel">
               <div class="bubble-head">
                 <span class={`pill ${command.status}`}>{statusLabel[command.status]}</span>
                 {isActive(command) ? (
                   <button class="stop-command" type="button" onClick={() => props.onCancel(command.id)}>Stop</button>
                 ) : null}
               </div>
-              {renderCommandBody(command)}
+              <ProcessSummary command={command} />
+              <PersistentProcessTimeline command={command} />
+              <FinalCommandResult command={command} />
             </div>
           </article>
         ))}
@@ -76,17 +78,28 @@ function TurnBubble(props: { readonly turn: SessionTurnDto }) {
   );
 }
 
-function renderCommandBody(command: CommandRecord) {
-  if (isActive(command) && command.output.trim().length > 0) {
-    return <LiveOutput command={command} />;
-  }
-  if (isWaiting(command)) {
-    return <ActivityTimeline command={command} />;
+function PersistentProcessTimeline(props: { readonly command: CommandRecord }) {
+  const command = props.command;
+  return <ActivityTimeline command={command} />;
+}
+
+function FinalCommandResult(props: { readonly command: CommandRecord }) {
+  const command = props.command;
+  if (isActive(command)) {
+    return command.output.trim().length > 0 ? <LiveOutput command={command} /> : null;
   }
   if (command.status === "done") {
-    return <MarkdownView markdown={commandText(command)} />;
+    return (
+      <div class="final-result">
+        <MarkdownView markdown={commandText(command)} />
+      </div>
+    );
   }
-  return <pre>{commandText(command)}</pre>;
+  return (
+    <div class="final-result terminal">
+      <pre>{commandText(command)}</pre>
+    </div>
+  );
 }
 
 function LiveOutput(props: { readonly command: CommandRecord }) {
@@ -142,10 +155,6 @@ function commandText(command: CommandRecord): string {
 
 function isActive(command: CommandRecord): boolean {
   return command.status === "queued" || command.status === "running";
-}
-
-function isWaiting(command: CommandRecord): boolean {
-  return isActive(command) && command.output.trim().length === 0 && command.error === undefined;
 }
 
 function isVisibleTurn(turn: SessionTurnDto): boolean {
