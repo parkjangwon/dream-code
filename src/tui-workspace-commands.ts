@@ -8,6 +8,7 @@ import {
   type DreamConfig,
 } from "./config.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
+import { runDriveCommand } from "./tui-drive-command.js";
 import { runHookEvent } from "./hooks.js";
 import { runLoopCommand } from "./tui-loop-command.js";
 import { showAgentsMenu } from "./tui-agent-commands.js";
@@ -85,6 +86,19 @@ async function runWorkspaceCommandBody(
       return { config, shouldContinue: true };
     case "/doctor":
       output.write(`${summarizeDoctor(await runDoctor())}\n`);
+      return { config, shouldContinue: true };
+    case "/drive":
+      await runDriveCommand({
+        config,
+        configRoot,
+        command: command.name,
+        rest: command.rest,
+        questioner,
+        cwd,
+        oneShotYolo,
+        ...(sessionRuntime === undefined ? {} : { sessionRuntime }),
+        ...(signal === undefined ? {} : { signal }),
+      });
       return { config, shouldContinue: true };
     case "/cron":
       await runCronCommand({ config, configRoot, args: command.rest, questioner, cwd });

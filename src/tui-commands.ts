@@ -16,6 +16,7 @@ export const slashCommands = [
   { name: "/copy", summary: "Copy last response", acceptsArgs: true },
   { name: "/cron", summary: "Manage scheduled agent work", acceptsArgs: true },
   { name: "/doctor", summary: "Check local tools", acceptsArgs: false },
+  { name: "/drive", summary: "Drive coding work to verified completion", acceptsArgs: true },
   { name: "/exit", summary: "Exit Dream Code", acceptsArgs: false },
   { name: "/export", summary: "Export current conversation", acceptsArgs: false },
   { name: "/goal", summary: "Start goal mode", acceptsArgs: true },

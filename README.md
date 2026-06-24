@@ -28,13 +28,14 @@ That direction shapes the runtime loop:
   then continue from a phone through a self-hosted web app over Tailscale.
 - **Smart resource use:** route work across providers and models so simple work
   stays cheap and hard work gets stronger models.
-- **Overdrive when needed:** use Dream Swarm for high-parallel work when the user
-  wants speed more than token thrift.
+- **Different gears for different work:** use Goal mode to drive one coding
+  objective to a verifiable result, Dream Swarm to review it from many angles,
+  and LoopSpec when a real command can judge pass/fail.
 - **Memory as trust:** preserve decisions, checkpoints, task progress, and
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.22)
+Dream Code (v0.1.23)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -192,8 +193,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.22
-git push origin v0.1.22
+git tag v0.1.23
+git push origin v0.1.23
 ```
 
 The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
@@ -202,7 +203,7 @@ The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.22 sh install.sh
+DREAM_CODE_VERSION=v0.1.23 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -224,11 +225,17 @@ DREAM_CODE_SOURCE=1 sh install.sh
   it.
 - **Provider cost control:** disable expensive env-detected providers with
   `/provider disable <provider>` and re-enable them when needed.
+- **Drive mode:** use `/drive <objective> --check <command>` when you want Dream
+  Code to keep editing and re-running a real verifier until the repo proves the
+  work is done.
+- **Goal mode:** use `/goal <objective>` for sustained coding work. Dream Code
+  saves the active goal, turns it into success criteria and next actions, and
+  keeps checking whether later turns actually satisfied it.
 - **Agents and swarm:** open the `/agents` board to inspect, peek, reply to, and
-  stop subagent sessions, or unleash Dream Swarm for high-parallel fan-out when
-  speed matters. Use `/swarm --deep` for adaptive coverage, `/swarm --overdrive`
-  for adversarial high-pressure review, or `/swarm --lanes N` when you want to
-  force a specific number of parallel lanes.
+  stop subagent sessions, or run Dream Swarm for parallel analysis and review.
+  Use `/swarm --deep` for adaptive coverage, `/swarm --overdrive` for
+  adversarial high-pressure review, or `/swarm --lanes N` when you want to force
+  a specific number of review lanes.
 - **Claude Code compatibility:** load `CLAUDE.md`, `CLAUDE.local.md`,
   `.claude/rules/*.md`, and `.claude/skills`, while keeping existing
   `AGENTS.md`, `DESIGN.md`, and Dream skills support.
@@ -255,7 +262,8 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **LoopSpec automation:** run guarded agent/evaluator loops with `/loop`, where
   a command evaluator decides whether each turn passed before Dream Code
   continues. Use it for checks with real pass/fail signals, not vague taste
-  work.
+  work. Use `/goal` when the success criteria need agent judgment rather than a
+  single command.
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
   `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
   templates.
@@ -286,10 +294,65 @@ qwen, custom-openai
 
 OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
 
+## Drive Mode
+
+`/drive` is the coding endgame mode: one objective, an optional real check
+command, repeated agent turns, saved loop evidence, and goal completion only
+after verification passes.
+
+```text
+/drive fix the failing provider tests --check npm test
+/drive ship the remote notification polish --turns 6 --check npm run check
+/drive harden the plugin installer before release
+```
+
+With `--check`, Drive Mode turns the objective into a temporary LoopSpec and
+uses the same command-evaluator engine as `/loop`: run an agent turn, execute the
+check, feed failures into the next turn, and stop when the command passes or the
+turn budget is exhausted. The check command goes through Dream Code's shell
+parser and executable allowlist, so `--check` does not become an unbounded shell.
+Passing checks complete the active goal and save a loop run under
+`~/.dream/loops/runs/`; failed or exhausted drives keep evidence on the goal for
+the next turn.
+
+Without `--check`, Drive Mode still starts a durable goal and asks the agent to
+make concrete progress instead of stopping at analysis. Use this when the
+strongest verifier needs human judgment, then follow with `/swarm --overdrive`
+or a concrete `/loop` once a command can judge the result.
+
+## Goal Mode
+
+`/goal` is the right gear for real coding work: one objective, persistent
+context, concrete next actions, and a skeptical judge that keeps the work from
+ending at analysis.
+
+```text
+/goal fix the failing provider tests and verify the suite
+/goal ship the remote notification polish
+/goal
+/goal done tests pass and the release note is updated
+/goal clear
+```
+
+When you start a goal, Dream Code records it in `~/.dream/goal.json`, appends it
+to the task/workflow notes, and starts an agent turn that asks for success
+criteria, risks, task breakdown, and the next concrete action. After normal
+agent turns, an independent goal judge reviews the latest transcript. If the
+judge sees enough evidence, the goal is marked complete. If not, Dream Code can
+add a synthetic continuation turn that says to keep going, take the next
+concrete action, update evidence, and report what remains.
+
+Use Goal mode when you want implementation, repair, refactoring, or verification
+to keep moving. Use Dream Swarm before or after Goal mode when you want broad
+review pressure instead of direct execution.
+
 ## Dream Swarm
 
-Dream Swarm fans a task out across multiple specialized agents, shows a live
-monitor, then merges the lanes into one final synthesis.
+Dream Swarm is the review and analysis gear. It fans a task out across multiple
+specialized agents, shows a live monitor, then merges the lanes into one final
+synthesis. It is best for architecture critique, release pressure tests,
+security/permissions review, regression hunting, UX review, test strategy, and
+finding risks before or after Goal mode does the implementation.
 
 ```text
 /swarm analyze this project
@@ -300,13 +363,22 @@ monitor, then merges the lanes into one final synthesis.
 ```
 
 Without options, Dream Code uses a standard adaptive fan-out and picks
-task-specific lanes from the goal. Use `--light`, `--standard`, `--deep`, or
-`--max` to increase coverage while still letting Dream choose the best lane mix.
-Use `--overdrive` for a sharper 10-lane adversarial pass with failure, security,
-regression, performance, integration, and final-judge lanes. Use `--lanes N`
-only when you want exactly `N` lanes; combining it with `--overdrive` is the
-hidden high-lane path for intentionally noisy stress runs. The older `--size N`
-spelling still works as a deprecated alias for cron and existing scripts.
+task-specific review lanes from the goal. Use `--light`, `--standard`, `--deep`,
+or `--max` to increase coverage while still letting Dream choose the best lane
+mix. Use `--overdrive` for a sharper 10-lane adversarial pass with failure,
+security, regression, performance, integration, and final-judge lanes. Use
+`--lanes N` only when you want exactly `N` lanes; combining it with `--overdrive`
+is the hidden high-lane path for intentionally noisy stress runs. The older
+`--size N` spelling still works as a deprecated alias for cron and existing
+scripts.
+
+A useful rhythm is:
+
+```text
+/swarm --deep analyze the design and risks for this change
+/drive implement the selected approach --check npm test
+/swarm --overdrive pressure-test the finished work before release
+```
 
 ## LoopSpec
 
@@ -466,6 +538,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /copy         Copy the latest assistant response
 /cron         Manage scheduled agent work
 /doctor       Check local tools
+/drive        Drive coding work to verified completion
 /exit         Exit Dream Code
 /export       Export the current conversation
 /goal         Start or inspect goal mode
@@ -490,7 +563,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /session      Open saved sessions
 /skills       Show and toggle installed skills
 /status       Show goal, tasks, and model health
-/swarm        Run high-parallel agent swarm
+/swarm        Run parallel analysis and review lanes
 /tasks        Show or update task ledger
 /verify       Plan verification checks
 /workday      Show edit-test-review readiness
@@ -534,7 +607,8 @@ Enter       Submit input or choose a menu item
   `CLAUDE.local.md`, and `.claude/rules/*.md`
 - Design-system context loading from `DESIGN.md`
 - `/context`, `/clear`, and `/restore` session/context recovery commands
-- Goal mode with judge-style continuation support
+- Drive mode for check-backed coding work that reuses the LoopSpec evaluator
+- Goal mode for sustained coding work with judge-style continuation support
 - Plan command with project-local `.dream/plans.md`
 - Read-only `plan` permission mode for no-mutation agent runs
 - Task ledger with todo/doing/done/blocked states
@@ -548,7 +622,7 @@ Enter       Submit input or choose a menu item
 - Installed plugin listing and uninstall cleanup through `/plugin list` and
   `/plugin uninstall <plugin>`
 - Custom agents and running-agent inboxes
-- Dream Swarm fan-out with live monitor
+- Dream Swarm review fan-out with live monitor
 - Swarm synthesis artifacts and memory absorption
 - Memory layers: project memory, checkpoint, task progress
 - Hidden memory writer for compact/checkpoint updates
