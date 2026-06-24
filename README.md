@@ -83,7 +83,7 @@ dream workday --dry-run --json
 Dream Remote is one of Dream Code's headline features: a self-hosted mobile web
 app for controlling the same Dream Code sessions and projects from your phone.
 It is designed for the common "leave the machine running, check and steer it
-from Android" workflow.
+from your smartphone" workflow.
 
 Start it from the machine that runs Dream Code:
 
@@ -166,7 +166,7 @@ dream remote start
 ```
 
 After HTTPS is active, open the Remote URL, tap `Install App`, and allow
-notifications when the browser asks. Android browsers can cache home-screen and
+notifications when the browser asks. Mobile browsers can cache home-screen and
 quick-access icons aggressively; if an old icon remains, remove the old shortcut
 or installed app and add it again.
 
