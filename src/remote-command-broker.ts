@@ -1,4 +1,11 @@
 import type { RemoteCommandActivityInput, RemoteCommandInput, RemoteCommandResult } from "./remote-command.js";
+import { appendRemoteAuditEvent } from "./remote-audit.js";
+import {
+  clearTemporaryRemoteCommandFields,
+  elapsedRemoteCommandMs,
+  isTerminalRemoteCommand,
+  nextRemoteActivity,
+} from "./remote-command-broker-utils.js";
 import { loadRemoteCommandRecords, saveRemoteCommandRecords } from "./remote-command-store.js";
 import { cleanupRemoteUploads, type RemoteUploadedFile } from "./remote-upload.js";
 
@@ -84,7 +91,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
     const now = new Date().toISOString();
     return patch(id, (record) => ({
       ...record,
-      activity: nextActivity(record.activity, {
+      activity: nextRemoteActivity(record.activity, {
         at: now,
         label: activity.label,
         ...(activity.detail === undefined ? {} : { detail: activity.detail }),
@@ -118,7 +125,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
     const controller = controllers.get(id);
     controller?.abort();
     const now = new Date().toISOString();
-    return patch(id, (record) => isTerminal(record)
+    return patch(id, (record) => isTerminalRemoteCommand(record)
       ? record
       : {
         ...record,
@@ -126,7 +133,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
         error: record.status === "queued" ? "Cancelled before it started." : "Cancelled by remote device.",
         cancelRequestedAt: now,
         completedAt: now,
-        durationMs: elapsedMs(record.createdAt, now),
+        durationMs: elapsedRemoteCommandMs(record.createdAt, now),
         updatedAt: now,
       });
   }
@@ -141,7 +148,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
         : {
           ...record,
           status: "running",
-          activity: nextActivity(record.activity, {
+          activity: nextRemoteActivity(record.activity, {
             at: startedAt,
             label: "Worker started",
             detail: "Starting the remote Dream Code run",
@@ -172,7 +179,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
           const now = new Date().toISOString();
           patch(id, (record) => ({
             ...record,
-            activity: nextActivity(record.activity, {
+            activity: nextRemoteActivity(record.activity, {
               at: now,
               label: "Output received",
               detail: "Dream Code produced visible text",
@@ -187,30 +194,43 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
         return;
       }
       const completedAt = new Date().toISOString();
+      await appendRemoteAuditEvent(configRoot, {
+        kind: "command_completed",
+        action: "command.completed",
+        commandId: id,
+        status: "done",
+      });
       patch(id, (record) => ({
         ...record,
         status: "done",
         output: result.output,
         sessionId: result.sessionId,
         completedAt,
-        durationMs: elapsedMs(record.createdAt, completedAt),
+        durationMs: elapsedRemoteCommandMs(record.createdAt, completedAt),
         updatedAt: completedAt,
       }));
     } catch (error) {
       const completedAt = new Date().toISOString();
+      await appendRemoteAuditEvent(configRoot, {
+        kind: "command_completed",
+        action: "command.completed",
+        commandId: id,
+        status: controller.signal.aborted ? "cancelled" : "failed",
+        message: error instanceof Error ? error.message : "Remote command failed.",
+      });
       patch(id, (record) => ({
         ...record,
         status: controller.signal.aborted ? "cancelled" : "failed",
         error: controller.signal.aborted ? "Cancelled by remote device." : error instanceof Error ? error.message : "Remote command failed.",
         completedAt,
-        durationMs: elapsedMs(record.createdAt, completedAt),
+        durationMs: elapsedRemoteCommandMs(record.createdAt, completedAt),
         updatedAt: completedAt,
       }));
     } finally {
       const latest = records.find((record) => record.id === id);
       if (latest?.temporaryUploads !== undefined && latest.temporaryUploads.length > 0) {
         await cleanupRemoteUploads(latest.temporaryUploads);
-        patch(id, clearTemporaryFields);
+        patch(id, clearTemporaryRemoteCommandFields);
       }
       controllers.delete(id);
     }
@@ -229,30 +249,4 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
     },
     flush: () => saveQueue,
   };
-}
-
-function isTerminal(record: RemoteCommandRecord): boolean {
-  return record.status === "done" || record.status === "failed" || record.status === "cancelled";
-}
-
-function elapsedMs(start: string, end: string): number {
-  const startMs = Date.parse(start);
-  const endMs = Date.parse(end);
-  return Number.isNaN(startMs) || Number.isNaN(endMs) ? 0 : Math.max(0, endMs - startMs);
-}
-
-function nextActivity(
-  current: readonly RemoteCommandActivity[],
-  entry: RemoteCommandActivity,
-): readonly RemoteCommandActivity[] {
-  const latest = current.at(-1);
-  if (latest?.label === entry.label && latest.detail === entry.detail) {
-    return current;
-  }
-  return [...current, entry].slice(-20);
-}
-
-function clearTemporaryFields(record: RemoteCommandRecord): RemoteCommandRecord {
-  const { runnerPrompt, temporaryUploads, ...rest } = record;
-  return { ...rest, updatedAt: new Date().toISOString() };
 }

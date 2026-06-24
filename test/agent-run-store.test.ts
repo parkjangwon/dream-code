@@ -32,7 +32,13 @@ test("agent run store persists state, output, and wire events", async () => {
     });
 
     run.write("hello ");
-    run.tool("read README.md");
+    run.tool("read README.md", {
+      ok: true,
+      durationMs: 12,
+      batchId: "batch-1",
+      sequence: 1,
+      risk: "read-only",
+    });
     run.write("world");
     await run.finish("done");
 
@@ -41,11 +47,109 @@ test("agent run store persists state, output, and wire events", async () => {
     assert.equal(records[0]?.status, "done");
     assert.equal(records[0]?.outputChars, "hello world".length);
     assert.equal(records[0]?.toolCalls, 1);
+    assert.equal(records[0]?.toolEvents[0]?.durationMs, 12);
+    assert.equal(records[0]?.toolEvents[0]?.batchId, "batch-1");
+    assert.equal(records[0]?.toolEvents[0]?.sequence, 1);
+    assert.equal(records[0]?.toolEvents[0]?.risk, "read-only");
 
     const output = await readFile(records[0]?.outputPath ?? "", "utf8");
     const wire = await readFile(records[0]?.transcriptPath ?? "", "utf8");
     assert.equal(output, "hello world");
     assert.match(wire, /"type":"tool"/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("formatAgentRunShowJson exposes audit telemetry for a run", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-audit-"));
+  try {
+    const run = await startAgentRun(root, {
+      id: "run-audit",
+      kind: "agent",
+      agentId: "dream",
+      agentName: "Dream",
+      prompt: "inspect project",
+    });
+    run.tool("grep TODO", {
+      ok: false,
+      durationMs: 25,
+      batchId: "batch-2",
+      sequence: 3,
+      risk: "read-only",
+      recovery: "Retry with a narrower glob.",
+    });
+    await run.finish("failed", { error: "grep failed" });
+
+    const { formatAgentRunShowJson } = await import("../src/agent-run-history.js");
+    const audit = await formatAgentRunShowJson(root, "run-audit");
+    const parsed: unknown = JSON.parse(audit);
+
+    assert.deepEqual(parsed, {
+      id: "run-audit",
+      status: "failed",
+      kind: "agent",
+      agent: "Dream",
+      prompt: "inspect project",
+      toolCalls: 1,
+      changedFiles: [],
+      checkpoints: 0,
+      error: "grep failed",
+      telemetry: {
+        failedTools: 1,
+        totalDurationMs: 25,
+        tools: [
+          {
+            label: "grep TODO",
+            ok: false,
+            durationMs: 25,
+            batchId: "batch-2",
+            sequence: 3,
+            risk: "read-only",
+            recovery: "Retry with a narrower glob.",
+          },
+        ],
+      },
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("formatAgentRunShow renders a timeline with telemetry and recovery", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-runs-timeline-"));
+  try {
+    const run = await startAgentRun(root, {
+      id: "run-timeline",
+      kind: "agent",
+      agentId: "dream",
+      agentName: "Dream",
+      prompt: "ship release check",
+    });
+    run.tool("read package.json", {
+      ok: true,
+      durationMs: 11,
+      batchId: "batch-1",
+      sequence: 1,
+      risk: "read-only",
+    });
+    run.tool("shell npm pack", {
+      ok: false,
+      durationMs: 31,
+      batchId: "batch-2",
+      sequence: 2,
+      risk: "external",
+      recovery: "retry npm pack after running npm run build",
+    });
+    await run.finish("failed", { error: "pack failed" });
+
+    const { formatAgentRunShow } = await import("../src/agent-run-history.js");
+    const output = await formatAgentRunShow(root, "run-timeline");
+
+    assert.match(output, /Timeline/u);
+    assert.match(output, /1\. read package\.json .*11ms .*batch-1 .*read-only/u);
+    assert.match(output, /2\. shell npm pack .*31ms .*batch-2 .*external/u);
+    assert.match(output, /recovery: retry npm pack after running npm run build/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -213,6 +213,47 @@ test("remote server restores command history after daemon restart", async () => 
     assert.match(text, /session-persisted/u);
   } finally {
     await secondServer.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote server writes auditable command action records", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-audit-"));
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "999999",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async () => ({ sessionId: "session-audit", output: "audit output", shouldContinue: true }),
+  });
+  try {
+    const unauthorized = await request(`${server.origin}/api/audit`);
+    assert.equal(unauthorized.statusCode, 401);
+
+    const token = await pairToken(server.origin, "999999");
+    const submitted = await submitCommand(server.origin, token, "audit me");
+    await waitForCommandStatus(server.origin, token, submitted.command?.id ?? "", "done");
+
+    const audit = await request(`${server.origin}/api/audit`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(audit.statusCode, 200);
+    const body = await audit.body.json() as {
+      readonly records?: readonly {
+        readonly action?: string;
+        readonly commandId?: string;
+        readonly status?: string;
+      }[];
+    };
+    assert.equal(body.records?.some((record) => record.action === "command.submitted" && record.commandId === submitted.command?.id), true);
+    assert.equal(body.records?.some((record) => record.action === "command.completed" && record.status === "done"), true);
+
+    const auditFile = await readFile(join(root, "webapp", "remote-audit.jsonl"), "utf8");
+    assert.match(auditFile, /command\.submitted/u);
+    assert.match(auditFile, /command\.completed/u);
+  } finally {
+    await server.close();
     await rm(root, { recursive: true, force: true });
   }
 });

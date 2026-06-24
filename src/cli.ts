@@ -5,6 +5,8 @@ import { defaultConfigRoot, loadConfig } from "./config.js";
 import { parseArgs } from "./cli-args.js";
 import { cliStartCache } from "./cli-start-cache.js";
 import { runDoctor, summarizeDoctor } from "./doctor.js";
+import { formatReleaseCheckReport, runReleaseCheck } from "./release-check.js";
+import { formatSmokeReport, runSmoke } from "./smoke.js";
 import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
 
 async function main(): Promise<void> {
@@ -23,6 +25,12 @@ async function main(): Promise<void> {
     case "remote":
       await runRemoteCommand(parsedArgs.rest);
       return;
+    case "route":
+      await runRouteCommand(parsedArgs.rest);
+      return;
+    case "runs":
+      await runRunsCommand(parsedArgs.rest);
+      return;
     case "prompt":
       await runPromptMode({
         prompt: parsedArgs.prompt ?? "",
@@ -34,6 +42,30 @@ async function main(): Promise<void> {
     case "doctor":
       console.log(summarizeDoctor(await runDoctor()));
       return;
+    case "smoke": {
+      const config = await loadConfig(defaultConfigRoot());
+      const report = await runSmoke({
+        cwd: process.cwd(),
+        configRoot: defaultConfigRoot(),
+        config,
+        oneShotYolo: parsedArgs.oneShotYolo,
+      });
+      console.log(parsedArgs.rest.includes("--json") ? JSON.stringify(report, undefined, 2) : formatSmokeReport(report));
+      process.exitCode = report.ok ? 0 : 1;
+      return;
+    }
+    case "release-check": {
+      const config = await loadConfig(defaultConfigRoot());
+      const report = await runReleaseCheck({
+        cwd: process.cwd(),
+        configRoot: defaultConfigRoot(),
+        config,
+        oneShotYolo: parsedArgs.oneShotYolo,
+      });
+      console.log(parsedArgs.rest.includes("--json") ? JSON.stringify(report, undefined, 2) : formatReleaseCheckReport(report));
+      process.exitCode = report.ok ? 0 : 1;
+      return;
+    }
     case "workday": {
       const config = await loadConfig(defaultConfigRoot());
       const plan = await createWorkdayPlan({
@@ -108,6 +140,20 @@ async function runRemoteCommand(rest: readonly string[]): Promise<void> {
   await runCliRemoteCommand(rest);
 }
 
+async function runRouteCommand(rest: readonly string[]): Promise<void> {
+  const { runProviderRouteCommand } = await import("./provider-routing-cli.js");
+  await runProviderRouteCommand(rest);
+}
+
+async function runRunsCommand(rest: readonly string[]): Promise<void> {
+  const { runRunsCommand: runWorkspaceRunsCommand } = await import("./tui-run-command.js");
+  process.stdout.write(await runWorkspaceRunsCommand({
+    configRoot: defaultConfigRoot(),
+    rest: rest.join(" "),
+    cwd: process.cwd(),
+  }));
+}
+
 function printHelp(): void {
   console.log([
     "Dream Code",
@@ -121,7 +167,11 @@ function printHelp(): void {
     "  dream cron list   list scheduled agent jobs",
     "  dream daemon run-once  execute due cron jobs once",
     "  dream remote start  start the Tailscale-only remote daemon on port 9999",
+    "  dream route \"prompt\" --json  preview provider routing diagnostics",
+    "  dream runs show latest --json  inspect the latest run audit record",
     "  dream doctor      check local tool availability",
+    "  dream smoke       run local production-readiness smoke checks",
+    "  dream release-check  run smoke and package readiness checks",
     "  dream workday --dry-run  show the edit-test-review release loop",
     "  dream init        initialize ~/.dream files",
     "  dream --version   print the version",

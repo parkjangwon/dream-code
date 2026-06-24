@@ -6,8 +6,10 @@ import { z } from "zod";
 const deviceRecordSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  role: z.enum(["viewer", "operator"]).default("operator"),
   tokenHash: z.string().min(1),
   pairedAt: z.string().min(1),
+  expiresAt: z.string().min(1).optional(),
   lastSeenAt: z.string().min(1).optional(),
 });
 
@@ -16,12 +18,13 @@ const deviceStoreSchema = z.object({
   devices: z.array(deviceRecordSchema),
 });
 
-type DeviceRecord = z.infer<typeof deviceRecordSchema>;
+export type DeviceRecord = z.infer<typeof deviceRecordSchema>;
 type DeviceStore = z.infer<typeof deviceStoreSchema>;
 
 export type PairDeviceInput = {
   readonly code: string;
   readonly deviceName: string;
+  readonly role?: "viewer" | "operator";
   readonly remoteAddress: string;
 };
 
@@ -35,15 +38,19 @@ export type RemoteAuth = {
   readonly authenticate: (token: string | undefined) => Promise<DeviceRecord | undefined>;
 };
 
+export type RemoteAuthOptions = {
+  readonly tokenTtlMs?: number;
+};
+
 type RateLimitBucket = {
   readonly attempts: readonly number[];
 };
 
-export function createRemoteAuth(root: string, pairingCode = generatePairingCode()): RemoteAuth {
+export function createRemoteAuth(root: string, pairingCode = generatePairingCode(), options: RemoteAuthOptions = {}): RemoteAuth {
   const rateLimits = new Map<string, RateLimitBucket>();
   return {
     pairingCode,
-    pairDevice: async (input) => pairDevice(root, pairingCode, rateLimits, input),
+    pairDevice: async (input) => pairDevice(root, pairingCode, rateLimits, input, options),
     authenticate: async (token) => authenticate(root, token),
   };
 }
@@ -52,11 +59,27 @@ export function remoteDevicesPath(root: string): string {
   return join(root, "remote", "devices.json");
 }
 
+export async function listRemoteDevices(root: string): Promise<readonly Omit<DeviceRecord, "tokenHash">[]> {
+  const store = await readDeviceStore(root);
+  return store.devices.map(publicDevice);
+}
+
+export async function revokeRemoteDevice(root: string, deviceId: string): Promise<boolean> {
+  const store = await readDeviceStore(root);
+  const nextDevices = store.devices.filter((device) => device.id !== deviceId);
+  if (nextDevices.length === store.devices.length) {
+    return false;
+  }
+  await writeDeviceStore(root, { version: 1, devices: nextDevices });
+  return true;
+}
+
 async function pairDevice(
   root: string,
   pairingCode: string,
   rateLimits: Map<string, RateLimitBucket>,
   input: PairDeviceInput,
+  options: RemoteAuthOptions,
 ): Promise<PairDeviceResult> {
   const deviceName = input.deviceName.trim();
   if (!/^\d{6}$/u.test(input.code) || deviceName.length === 0) {
@@ -74,8 +97,10 @@ async function pairDevice(
   const device: DeviceRecord = {
     id: `dev_${randomBytes(8).toString("hex")}`,
     name: deviceName,
+    role: input.role ?? "operator",
     tokenHash: hashToken(token),
     pairedAt: now,
+    ...(options.tokenTtlMs === undefined ? {} : { expiresAt: new Date(Date.now() + options.tokenTtlMs).toISOString() }),
   };
   const store = await readDeviceStore(root);
   await writeDeviceStore(root, { version: 1, devices: [...store.devices, device] });
@@ -88,7 +113,7 @@ async function authenticate(root: string, token: string | undefined): Promise<De
   }
   const tokenHash = hashToken(token);
   const store = await readDeviceStore(root);
-  return store.devices.find((device) => device.tokenHash === tokenHash);
+  return store.devices.find((device) => device.tokenHash === tokenHash && !isExpired(device));
 }
 
 async function readDeviceStore(root: string): Promise<DeviceStore> {
@@ -111,9 +136,15 @@ function publicDevice(device: DeviceRecord): Omit<DeviceRecord, "tokenHash"> {
   return {
     id: device.id,
     name: device.name,
+    role: device.role,
     pairedAt: device.pairedAt,
+    ...(device.expiresAt === undefined ? {} : { expiresAt: device.expiresAt }),
     ...(device.lastSeenAt === undefined ? {} : { lastSeenAt: device.lastSeenAt }),
   };
+}
+
+function isExpired(device: DeviceRecord): boolean {
+  return device.expiresAt !== undefined && Date.parse(device.expiresAt) <= Date.now();
 }
 
 function isPairingRateLimited(rateLimits: Map<string, RateLimitBucket>, remoteAddress: string): boolean {

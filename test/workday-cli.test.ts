@@ -28,6 +28,7 @@ test("workday dry-run prints actionable workday loop", async () => {
     assert.match(result.stdout, /Git/u);
     assert.match(result.stdout, /Diagnostics/u);
     assert.match(result.stdout, /Tests/u);
+    assert.match(result.stdout, /Smoke/u);
     assert.match(result.stdout, /Release/u);
   } finally {
     await rm(home, { recursive: true, force: true });
@@ -48,6 +49,7 @@ test("workday json dry-run emits parseable plan", async () => {
       "git",
       "diagnostics",
       "tests",
+      "smoke",
       "release",
       "next",
     ]);

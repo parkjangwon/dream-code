@@ -14,7 +14,7 @@ const packageJsonSchema = z.object({
   scripts: z.record(z.string(), z.string()).default({}),
 });
 
-export type WorkdayPlanSectionId = "mode" | "git" | "diagnostics" | "tests" | "release" | "next";
+export type WorkdayPlanSectionId = "mode" | "git" | "diagnostics" | "tests" | "smoke" | "release" | "next";
 
 export type WorkdayPlanSection = {
   readonly id: WorkdayPlanSectionId;
@@ -84,6 +84,15 @@ export async function createWorkdayPlan(options: WorkdayPlanOptions): Promise<Wo
         status: testCommand === undefined ? "not detected" : "ready",
         detail: testCommand === undefined ? "No package test/check script was found." : testCommand,
         command: testCommand,
+      },
+      {
+        id: "smoke",
+        label: "Smoke",
+        status: "ready",
+        detail: mode === "yolo"
+          ? "Run smoke after autonomous edits; saved YOLO stays active until you switch permission mode back."
+          : "Run smoke before handoff to prove local readiness beyond unit tests.",
+        command: "dream smoke",
       },
       {
         id: "release",

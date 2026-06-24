@@ -1,4 +1,4 @@
-export type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "prompt" | "remote" | "version" | "workday";
+export type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "help" | "init" | "prompt" | "release-check" | "remote" | "route" | "runs" | "smoke" | "version" | "workday";
 
 export type ParsedArgs = {
   readonly command: CliCommand;
@@ -35,6 +35,14 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
       case "doctor":
         command = "doctor";
         break;
+      case "smoke":
+        command = "smoke";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest, json, quiet };
+      case "release-check":
+        command = "release-check";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest, json, quiet };
       case "workday":
         command = "workday";
         rest.push(...args.slice(index + 1));
@@ -49,6 +57,14 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
         return { command, oneShotYolo, rest, json, quiet };
       case "remote":
         command = "remote";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest, json, quiet };
+      case "route":
+        command = "route";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest, json, quiet };
+      case "runs":
+        command = "runs";
         rest.push(...args.slice(index + 1));
         return { command, oneShotYolo, rest, json, quiet };
       case "init":

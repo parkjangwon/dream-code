@@ -36,6 +36,17 @@ jobs:
       - name: Check
         run: npm run check
 
+      - name: Smoke check
+        run: |
+          mkdir -p release
+          node dist/src/cli.js smoke --json > release/smoke.json
+
+      - name: Release readiness
+        run: node dist/src/cli.js release-check --json > release/release-check.json
+
+      - name: Pack dry run
+        run: npm pack --dry-run --json > release/pack-dry-run.json
+
       - name: Pack npm tarball
         run: |
           mkdir -p release
@@ -48,7 +59,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release/*.tgz release/SHA256SUMS --clobber
+            gh release upload "$RELEASE_TAG" release/*.tgz release/*.json release/SHA256SUMS --clobber
           else
-            gh release create "$RELEASE_TAG" release/*.tgz release/SHA256SUMS --generate-notes --title "$RELEASE_TAG"
+            gh release create "$RELEASE_TAG" release/*.tgz release/*.json release/SHA256SUMS --generate-notes --title "$RELEASE_TAG"
           fi

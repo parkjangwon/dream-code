@@ -2,8 +2,10 @@ import {
   formatAgentRunDiff,
   formatAgentRunResumeContext,
   formatAgentRunShow,
+  formatAgentRunShowJson,
   revertAgentRun,
 } from "./agent-run-history.js";
+import { formatAgentRunResumeJson } from "./agent-run-resume.js";
 
 export type RunCommandOptions = {
   readonly configRoot: string;
@@ -17,10 +19,13 @@ export async function runRunsCommand(options: RunCommandOptions): Promise<string
   const runId = args[1] ?? "latest";
   switch (action) {
     case "show":
-      return formatAgentRunShow(options.configRoot, runId);
+      return args.includes("--json") ? formatAgentRunShowJson(options.configRoot, runId) : formatAgentRunShow(options.configRoot, runId);
     case "diff":
       return formatAgentRunDiff(options.configRoot, runId, options.cwd);
     case "resume":
+      if (args.includes("--json")) {
+        return formatAgentRunResumeJson(options.configRoot, runId);
+      }
       return formatAgentRunResumeContext(options.configRoot, runId);
     case "revert":
       return revertAgentRun(options.configRoot, runId, options.cwd);

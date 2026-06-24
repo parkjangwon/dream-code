@@ -1,9 +1,11 @@
 import { copyFile, mkdir, readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { agentRunAudit } from "./agent-run-audit.js";
 import type { AgentRunCheckpoint, AgentRunRecord } from "./agent-run-record.js";
 import { agentRunsRoot, parseAgentRunRecord } from "./agent-run-record.js";
 import { saveFileCheckpoint } from "./file-history.js";
+import { redactJsonSecrets } from "./redaction.js";
 
 export async function formatAgentRunShow(root: string, runId: string): Promise<string> {
   const run = await readRun(root, runId);
@@ -18,8 +20,18 @@ export async function formatAgentRunShow(root: string, runId: string): Promise<s
     `tool calls: ${run.toolCalls}`,
     `changed files: ${run.changedFiles.length === 0 ? "none" : run.changedFiles.join(", ")}`,
     `checkpoints: ${run.checkpoints.length}`,
+    ...timelineLines(run),
+    ...resumeLines(run),
     "",
   ].join("\n");
+}
+
+export async function formatAgentRunShowJson(root: string, runId: string): Promise<string> {
+  const run = await readRun(root, runId);
+  if (run === undefined) {
+    return `${JSON.stringify({ error: `run not found: ${runId}` })}\n`;
+  }
+  return `${JSON.stringify(redactJsonSecrets(agentRunAudit(run)), undefined, 2)}\n`;
 }
 
 export async function formatAgentRunDiff(root: string, runId: string, workspaceRoot?: string): Promise<string> {
@@ -155,6 +167,42 @@ function oldestCheckpointPerPath(checkpoints: readonly AgentRunCheckpoint[]): re
     }
   }
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function timelineLines(run: AgentRunRecord): readonly string[] {
+  if (run.toolEvents.length === 0) {
+    return ["", "Timeline", "- no tool events recorded"];
+  }
+  return [
+    "",
+    "Timeline",
+    ...run.toolEvents.map((event, index) => {
+      const sequence = event.sequence ?? index + 1;
+      const status = event.ok ? "ok" : "failed";
+      const risk = event.risk ?? "unknown";
+      const duration = event.durationMs === undefined ? "duration unknown" : `${event.durationMs}ms`;
+      const batch = event.batchId ?? "batch unknown";
+      const failure = event.failureClass === undefined ? "" : ` failure ${event.failureClass}`;
+      return `${sequence}. ${event.label} ${status} ${duration} ${batch} risk ${risk}${failure}`;
+    }),
+    ...run.toolEvents.flatMap((event) => [
+      ...(event.recovery === undefined ? [] : [`  recovery: ${event.recovery}`]),
+      ...(event.nextAction === undefined ? [] : [`  next: ${event.nextAction}`]),
+    ]),
+  ];
+}
+
+function resumeLines(run: AgentRunRecord): readonly string[] {
+  const failedTools = run.toolEvents.filter((event) => !event.ok);
+  if (run.status === "done" && failedTools.length === 0) {
+    return ["", "Resume: no resume needed; run completed."];
+  }
+  const lastFailure = failedTools.at(-1);
+  return [
+    "",
+    `Resume: inspect ${run.id}, review checkpoints, then continue from the last safe prompt.`,
+    ...(lastFailure?.nextAction === undefined ? [] : [`Resume next action: ${lastFailure.nextAction}`]),
+  ];
 }
 
 function isAgentRunRecord(value: AgentRunRecord | undefined): value is AgentRunRecord {

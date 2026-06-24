@@ -16,6 +16,13 @@ const agentRunToolEventSchema = z.object({
   ok: z.boolean(),
   changedPath: z.string().min(1).optional(),
   checkpoints: z.array(agentRunCheckpointSchema).default([]),
+  durationMs: z.number().int().nonnegative().optional(),
+  batchId: z.string().min(1).optional(),
+  sequence: z.number().int().positive().optional(),
+  risk: z.enum(["read-only", "workspace-write", "external", "state", "unknown"]).optional(),
+  failureClass: z.enum(["retryable", "permission", "terminal", "unknown"]).optional(),
+  recovery: z.string().min(1).optional(),
+  nextAction: z.string().min(1).optional(),
 });
 
 export const agentRunRecordSchema = z.object({
@@ -81,6 +88,13 @@ export type AgentRunToolEventInput = {
   readonly ok?: boolean;
   readonly changedPath?: string;
   readonly checkpoints?: readonly (AgentRunCheckpoint | undefined)[];
+  readonly durationMs?: number;
+  readonly batchId?: string;
+  readonly sequence?: number;
+  readonly risk?: "read-only" | "workspace-write" | "external" | "state" | "unknown";
+  readonly failureClass?: "retryable" | "permission" | "terminal" | "unknown";
+  readonly recovery?: string;
+  readonly nextAction?: string;
 };
 
 export function agentRunsRoot(root: string): string {

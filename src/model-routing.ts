@@ -6,6 +6,7 @@ import {
   classifyPromptCategoryImpl,
   selectAutoCandidates,
 } from "./model-routing-selection.js";
+import { formatRouteDiagnostics } from "./model-routing-diagnostics.js";
 
 export const modelTierSchema = z.enum(["low", "mid", "high"]);
 export type ModelTier = z.infer<typeof modelTierSchema>;
@@ -183,6 +184,7 @@ export function formatRoutePreview(config: ModelConfig, prompt: string, options:
   const fallbacks = candidates.slice(1, 4).map((candidate) => `${candidate.provider}/${candidate.model}`).join(" -> ");
   return [
     `route: ${selected.agent ?? selected.category ?? "legacy"} -> ${selected.provider}/${selected.model} (${selected.reason})`,
+    formatRouteDiagnostics(selected),
     fallbacks.length === 0 ? "" : `fallbacks: ${fallbacks}`,
     skipped,
   ].filter((line) => line.length > 0).join("\n");

@@ -1,6 +1,7 @@
 import type { AgentToolName, AgentToolRequest } from "./agent-tool-schema.js";
 import { defaultConfigRoot, type PermissionMode } from "./config.js";
 import { formatReadOutput, formatSearchResults, formatToolProgress } from "./agent-tool-output.js";
+import { formatPermissionPreview } from "./agent-tool-permission-preview.js";
 import { saveFileCheckpoint, type FileCheckpoint } from "./file-history.js";
 import { callConfiguredMcpTool } from "./mcp-client.js";
 import { runDiagnosticsTool, runFetchTool } from "./agent-tool-external.js";
@@ -59,14 +60,14 @@ export async function runAgentToolRequest(
     return { request, ok: false, output: `Tool ${request.tool} is not allowed for this agent.` };
   }
   if (requestMutates(request) && policy.mode === "plan") {
-    return { request, ok: false, output: `Plan mode blocks ${toolLabel(request)}. Switch to ask, auto, or yolo before changing files or running mutating tools.` };
+    return { request, ok: false, output: `Plan mode blocks ${toolLabel(request)}. Switch to ask, auto, or yolo before changing files or running mutating tools.\n${formatPermissionPreview(request)}` };
   }
   if (requestMutates(request) && policy.mode !== "yolo") {
     if (policy.approveTool !== undefined && await policy.approveTool(request)) {
       return runApprovedAgentToolRequest(request, policy);
     }
     await notifyPermissionRequired(policy.configRoot ?? defaultConfigRoot(), toolLabel(request));
-    return { request, ok: false, output: "Permission required. Enable YOLO or run the command manually." };
+    return { request, ok: false, output: `Permission required. Enable YOLO or run the command manually.\n${formatPermissionPreview(request)}` };
   }
 
   return runApprovedAgentToolRequest(request, policy);

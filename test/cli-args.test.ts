@@ -27,3 +27,24 @@ test("parseArgs preserves prompt mode output flags after the prompt text", () =>
   assert.equal(parsed.json, true);
   assert.equal(parsed.quiet, true);
 });
+
+test("parseArgs routes smoke diagnostics with output flags", () => {
+  const parsed = parseArgs(["smoke", "--json"]);
+
+  assert.equal(parsed.command, "smoke");
+  assert.deepEqual(parsed.rest, ["--json"]);
+});
+
+test("parseArgs routes runs audit commands", () => {
+  const parsed = parseArgs(["runs", "show", "latest", "--json"]);
+
+  assert.equal(parsed.command, "runs");
+  assert.deepEqual(parsed.rest, ["show", "latest", "--json"]);
+});
+
+test("parseArgs routes release checks with output flags", () => {
+  const parsed = parseArgs(["release-check", "--json"]);
+
+  assert.equal(parsed.command, "release-check");
+  assert.deepEqual(parsed.rest, ["--json"]);
+});

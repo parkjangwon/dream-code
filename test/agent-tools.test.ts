@@ -113,10 +113,52 @@ test("runAgentToolRequest blocks mutating tools in plan mode", async () => {
 
     assert.equal(result.ok, false);
     assert.match(result.output, /Plan mode/u);
+    assert.match(result.output, /preview: write plan.txt \(2 chars\)/u);
+    assert.match(result.output, /risk: mutates workspace/u);
     await assert.rejects(readFile(join(project, "plan.txt"), "utf8"), { code: "ENOENT" });
   } finally {
     await rm(project, { recursive: true, force: true });
   }
+});
+
+test("runAgentToolRequest explains the next safest action when permission is required", async () => {
+  const project = await mkdtemp(join(tmpdir(), "dream-agent-preview-"));
+  try {
+    const result = await runAgentToolRequest(
+      { tool: "delete", path: "src/index.ts" },
+      { mode: "ask", workspaceRoot: project },
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.output, /preview: delete src\/index\.ts/u);
+    assert.match(result.output, /next: approve this tool, switch to yolo, or ask Dream Code for a non-mutating plan/u);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("permission preview explains shell command risk and safe next action", async () => {
+  const result = await runAgentToolRequest(
+    { tool: "shell", command: "npm install left-pad" },
+    { mode: "ask" },
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.output, /preview: shell npm install left-pad/u);
+  assert.match(result.output, /risk: external command can install packages or change machine state/u);
+  assert.match(result.output, /next: approve this tool, switch to yolo, or ask Dream Code for a non-mutating plan/u);
+});
+
+test("permission preview includes edit diff context", async () => {
+  const result = await runAgentToolRequest(
+    { tool: "edit", path: "src/index.ts", search: "oldValue", replace: "newValue" },
+    { mode: "plan" },
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.output, /preview: edit src\/index\.ts \(first match\)/u);
+  assert.match(result.output, /old: oldValue/u);
+  assert.match(result.output, /new: newValue/u);
 });
 
 test("runAgentToolRequest checkpoints existing files before mutating them", async () => {

@@ -6,16 +6,18 @@ import { join } from "node:path";
 
 import { defaultConfigRoot } from "./config.js";
 import { findRemoteDaemonPids, isProcessAlive, terminateRemoteDaemonPids } from "./remote-daemon-process.js";
+import { formatRemoteAudit, revokeRemoteDeviceById } from "./remote-cli-audit.js";
 import { startRemoteServer } from "./remote-server.js";
 import { checkTailscaleRunning, remoteTailscaleUrl, startTailscaleServe, stopTailscaleServe } from "./remote-tailscale.js";
 
-export type RemoteCommand = "start" | "serve" | "daemon" | "stop" | "status" | "help";
+export type RemoteCommand = "start" | "serve" | "daemon" | "stop" | "status" | "audit" | "revoke" | "help";
 
 export type RemoteCliOptions = {
   readonly command: RemoteCommand;
   readonly bindHost: string;
   readonly port: number;
   readonly unsafeAllowNonTailscale: boolean;
+  readonly rest: readonly string[];
 };
 
 export type RemoteBindValidation =
@@ -42,7 +44,7 @@ export function parseRemoteArgs(args: readonly string[]): RemoteCliOptions {
     }
   }
 
-  return { command, bindHost, port, unsafeAllowNonTailscale };
+  return { command, bindHost, port, unsafeAllowNonTailscale, rest: args.slice(1) };
 }
 
 export function validateRemoteBind(bindHost: string, unsafeAllowNonTailscale: boolean): RemoteBindValidation {
@@ -75,8 +77,14 @@ export async function runCliRemoteCommand(args: readonly string[], root = defaul
     case "status":
       await printRemoteStatus(root);
       return;
+    case "audit":
+      process.stdout.write(await formatRemoteAudit(root, args.includes("--json")));
+      return;
+    case "revoke":
+      process.stdout.write(await revokeRemoteDeviceById(root, options.rest.find((arg) => !arg.startsWith("--")) ?? "", args.includes("--json")));
+      return;
     case "help":
-      console.log("Usage: dream remote start|stop|status [--port 9999]");
+      console.log("Usage: dream remote start|stop|status|audit|revoke [--port 9999]");
       return;
     default:
       return assertNever(options.command);
@@ -182,6 +190,8 @@ function parseCommand(value: string): RemoteCommand {
     case "daemon":
     case "stop":
     case "status":
+    case "audit":
+    case "revoke":
     case "help":
       return value;
     default:

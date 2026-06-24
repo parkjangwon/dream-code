@@ -13,6 +13,13 @@ export function normalizeRunToolEvent(
       label,
       ok: eventOrChangedPath.ok ?? true,
       ...(eventOrChangedPath.changedPath === undefined ? {} : { changedPath: eventOrChangedPath.changedPath }),
+      ...(eventOrChangedPath.durationMs === undefined ? {} : { durationMs: Math.max(0, Math.round(eventOrChangedPath.durationMs)) }),
+      ...(eventOrChangedPath.batchId === undefined ? {} : { batchId: eventOrChangedPath.batchId }),
+      ...(eventOrChangedPath.sequence === undefined ? {} : { sequence: eventOrChangedPath.sequence }),
+      ...(eventOrChangedPath.risk === undefined ? {} : { risk: eventOrChangedPath.risk }),
+      ...(eventOrChangedPath.failureClass === undefined ? {} : { failureClass: eventOrChangedPath.failureClass }),
+      ...(eventOrChangedPath.recovery === undefined ? {} : { recovery: eventOrChangedPath.recovery }),
+      ...(eventOrChangedPath.nextAction === undefined ? {} : { nextAction: eventOrChangedPath.nextAction }),
       checkpoints,
     };
   }

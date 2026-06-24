@@ -7,6 +7,7 @@ import { connectedProviderIds, firstSelectedModel, tierForAgent } from "./agent-
 import { streamAgentWithFailover } from "./agent-model-stream.js";
 import { createAgentMessages } from "./agent-messages.js";
 import { isAgentToolName } from "./agent-runner-utils.js";
+import { runAgentToolGroups } from "./agent-runner-tool-execution.js";
 import { registerActor, updateActorStatus } from "./actor-store.js";
 import {
   startAgentRun,
@@ -20,9 +21,7 @@ import { formatLiveMcpContext } from "./mcp-context.js";
 import { formatMentionedReferencesForPrompt, loadMentionedReferences } from "./file-mention-context.js";
 import {
   extractAgentToolRequests,
-  formatToolProgress,
   formatToolResults,
-  runAgentToolRequest,
   type AgentToolResult,
   type AgentToolPolicy,
 } from "./agent-tools.js";
@@ -147,18 +146,11 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
       if (requests.length === 0) {
         return finalAssistantText;
       }
-      const results: AgentToolResult[] = [];
-      for (const request of requests) {
-        if (run.signal.aborted) {
-          finalStatus = "cancelled";
-          return finalAssistantText;
-        }
-        await runHookEvent(configRoot, "preTool", { tool: request.tool });
-        const result = await runAgentToolRequest(request, agentToolPolicy(options, run.signal));
-        run.tool(request.tool, result.changedPath, result.checkpoint);
-        await runHookEvent(configRoot, "postTool", { tool: request.tool, ok: String(result.ok) });
-        runOptions.write(formatToolProgress(result));
-        results.push(result);
+      const toolPolicy = agentToolPolicy(options, run.signal);
+      const results = await runAgentToolGroups({ configRoot, run, requests, policy: toolPolicy, write: runOptions.write });
+      if (run.signal.aborted) {
+        finalStatus = "cancelled";
+        return finalAssistantText;
       }
       messages = [
         ...messages,
