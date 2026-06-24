@@ -1,6 +1,9 @@
-import { request } from "undici";
-
 import { runCapturedCommand } from "./shell-command.js";
+import {
+  looksBlockedWebText,
+  requestJinaSearch,
+  requestWebText,
+} from "./web-retrieval.js";
 
 export type ResearchResult = {
   readonly ok: boolean;
@@ -12,7 +15,7 @@ export async function runResearch(query: string): Promise<ResearchResult> {
   if (command !== undefined && command.trim().length > 0) {
     return runResearchCommand(command, query);
   }
-  return runDuckDuckGoSearch(query);
+  return runSearchChain(query);
 }
 
 function runResearchCommand(command: string, query: string): Promise<ResearchResult> {
@@ -22,26 +25,44 @@ function runResearchCommand(command: string, query: string): Promise<ResearchRes
   });
 }
 
+async function runSearchChain(query: string): Promise<ResearchResult> {
+  const duckDuckGo = await runDuckDuckGoSearch(query);
+  if (duckDuckGo.ok) {
+    return duckDuckGo;
+  }
+  const jina = await runJinaSearch(query);
+  if (jina.ok) {
+    return jina;
+  }
+  return {
+    ok: false,
+    output: [
+      "No web research backend returned parseable results.",
+      "",
+      "DuckDuckGo:",
+      duckDuckGo.output,
+      "",
+      "Jina Search:",
+      jina.output,
+      "",
+      "Tip: set DREAM_RESEARCH_COMMAND for a paid/search-provider backend.",
+    ].join("\n"),
+  };
+}
+
 async function runDuckDuckGoSearch(query: string): Promise<ResearchResult> {
   try {
     const encodedQuery = encodeURIComponent(query);
-    const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
-    const response = await request(url, {
-      method: "GET",
-      headers: { "user-agent": "Mozilla/5.0" },
-      bodyTimeout: 10_000,
-      headersTimeout: 10_000,
-    });
-    const html = await response.body.text();
-    const output = parseDuckDuckGoResults(html);
-    if (response.statusCode >= 200 && response.statusCode < 300 && !noParsedResults(output)) {
+    const url = duckDuckGoSearchUrl(encodedQuery);
+    const response = await requestWebText(url, { timeoutMs: 10_000 });
+    const output = parseDuckDuckGoResults(response.text);
+    if (response.ok && !looksBlockedWebText(response) && !noParsedResults(output)) {
       return { ok: true, output };
     }
-    return runJinaDuckDuckGoSearch(encodedQuery);
+    return { ok: false, output: looksBlockedWebText(response) ? "DuckDuckGo returned a bot/blocked page." : output };
   } catch (error) {
     if (error instanceof Error) {
-      const fallback = await runJinaDuckDuckGoSearch(encodeURIComponent(query));
-      return fallback.ok ? fallback : { ok: false, output: error.message };
+      return { ok: false, output: error.message };
     }
     throw error;
   }
@@ -64,18 +85,11 @@ export function parseDuckDuckGoResults(html: string): string {
     : results.join("\n");
 }
 
-async function runJinaDuckDuckGoSearch(encodedQuery: string): Promise<ResearchResult> {
+async function runJinaSearch(query: string): Promise<ResearchResult> {
   try {
-    const target = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
-    const response = await request(`https://r.jina.ai/http://r.jina.ai/http://${target}`, {
-      method: "GET",
-      headers: { "user-agent": "Mozilla/5.0" },
-      bodyTimeout: 15_000,
-      headersTimeout: 15_000,
-    });
-    const markdown = await response.body.text();
-    const output = parseJinaSearchResults(markdown);
-    return { ok: response.statusCode >= 200 && response.statusCode < 300 && !noParsedResults(output), output };
+    const response = await requestJinaSearch(query);
+    const output = parseJinaSearchResults(response.text);
+    return { ok: response.ok && !looksBlockedWebText(response) && !noParsedResults(output), output };
   } catch (error) {
     if (error instanceof Error) {
       return { ok: false, output: error.message };
@@ -85,20 +99,30 @@ async function runJinaDuckDuckGoSearch(encodedQuery: string): Promise<ResearchRe
 }
 
 export function parseJinaSearchResults(markdown: string): string {
-  const results = [...markdown.matchAll(/^## \[(.*?)\]\((.*?)\)/gmu)]
+  const linkedHeadings = [...markdown.matchAll(/^## \[(.*?)\]\((.*?)\)/gmu)];
+  const sourceBlocks = [...markdown.matchAll(/^Title:\s*(.*?)\nURL Source:\s*(.*?)$/gmu)];
+  const matches = linkedHeadings.length > 0
+    ? linkedHeadings.map((match) => ({ title: match[1] ?? "result", url: match[2] ?? "" }))
+    : sourceBlocks.map((match) => ({ title: match[1] ?? "result", url: match[2] ?? "" }));
+  const results = matches
     .slice(0, 5)
     .map((match) => {
-      const title = cleanHtml(match[1] ?? "result");
-      const url = normalizeResultUrl(decodeHtml(match[2] ?? ""));
+      const title = cleanHtml(match.title);
+      const url = normalizeResultUrl(decodeHtml(match.url));
       return [`- ${title}`, `  ${url}`].join("\n");
     });
   return results.length === 0
-    ? "No web results parsed. Configure DREAM_RESEARCH_COMMAND for a custom search backend."
+    ? trimResearchText(markdown)
     : results.join("\n");
 }
 
 function noParsedResults(output: string): boolean {
   return output.startsWith("No web results parsed.");
+}
+
+function duckDuckGoSearchUrl(encodedQuery: string): string {
+  const baseUrl = process.env["DREAM_DUCKDUCKGO_SEARCH_BASE_URL"] ?? "https://html.duckduckgo.com/html/";
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}q=${encodedQuery}`;
 }
 
 function cleanHtml(text: string): string {
@@ -133,4 +157,11 @@ function snippetAfter(html: string, index: number): string {
   const match = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/u.exec(nearby)
     ?? /class="result__snippet"[^>]*>([\s\S]*?)<\/div>/u.exec(nearby);
   return cleanHtml(match?.[1] ?? "");
+}
+
+function trimResearchText(text: string): string {
+  const trimmed = text.replace(/\r\n/gu, "\n").trim();
+  return trimmed.length === 0
+    ? "No web results parsed. Configure DREAM_RESEARCH_COMMAND for a custom search backend."
+    : trimmed.slice(0, 6000);
 }

@@ -88,6 +88,42 @@ test("external expansion tools fetch exact urls and run diagnostics with bounded
   }
 });
 
+test("fetch tool falls back to Jina Reader when direct content is blocked", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tools-fetch-reader-"));
+  const blocked = await listenText("captcha: verify you are human");
+  const reader = await listenText("reader extracted article");
+  const previousReader = process.env["DREAM_JINA_READER_BASE_URL"];
+  try {
+    const blockedAddress = blocked.address() as AddressInfo | null;
+    if (blockedAddress === null) {
+      throw new Error("test server did not expose an address");
+    }
+    const readerAddress = reader.address() as AddressInfo | null;
+    if (readerAddress === null) {
+      throw new Error("reader server did not expose an address");
+    }
+    process.env["DREAM_JINA_READER_BASE_URL"] = `http://127.0.0.1:${readerAddress.port}`;
+
+    const fetched = await runAgentToolRequest(
+      { tool: "fetch", url: `http://127.0.0.1:${blockedAddress.port}/blocked` },
+      { mode: "ask", workspaceRoot: root },
+    );
+
+    assert.equal(fetched.ok, true);
+    assert.match(fetched.output, /source http:\/\/127\.0\.0\.1:\d+\/http:\/\/127\.0\.0\.1:\d+\/blocked/u);
+    assert.match(fetched.output, /reader extracted article/u);
+  } finally {
+    if (previousReader === undefined) {
+      delete process.env["DREAM_JINA_READER_BASE_URL"];
+    } else {
+      process.env["DREAM_JINA_READER_BASE_URL"] = previousReader;
+    }
+    blocked.close();
+    reader.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("state expansion tools persist artifacts and task ledger updates", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-tools-state-"));
   try {

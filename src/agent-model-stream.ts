@@ -113,8 +113,8 @@ async function streamAgentSilently(
   }
 }
 
-function nativeToolNames(): readonly Parameters<typeof nativeAgentToolDefinitions>[0][number][] {
-  return ["read", "list", "grep", "glob", "diff", "stat", "diagnostics", "shell", "write", "edit", "patch", "delete", "mkdir", "move", "copy", "artifact", "task", "mcp"];
+export function nativeToolNames(): readonly Parameters<typeof nativeAgentToolDefinitions>[0][number][] {
+  return ["read", "list", "search", "grep", "glob", "research", "fetch", "diff", "stat", "diagnostics", "shell", "write", "edit", "patch", "delete", "mkdir", "move", "copy", "artifact", "task", "mcp"];
 }
 
 function nativeToolBlock(request: AgentToolRequest): string {
