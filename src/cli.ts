@@ -20,6 +20,9 @@ async function main(): Promise<void> {
     case "daemon":
       await runDaemonCommand(parsedArgs.rest);
       return;
+    case "remote":
+      await runRemoteCommand(parsedArgs.rest);
+      return;
     case "prompt":
       await runPromptMode({
         prompt: parsedArgs.prompt ?? "",
@@ -100,6 +103,11 @@ async function runDaemonCommand(rest: readonly string[]): Promise<void> {
   await runCliDaemonCommand(rest);
 }
 
+async function runRemoteCommand(rest: readonly string[]): Promise<void> {
+  const { runCliRemoteCommand } = await import("./remote-cli.js");
+  await runCliRemoteCommand(rest);
+}
+
 function printHelp(): void {
   console.log([
     "Dream Code",
@@ -112,6 +120,7 @@ function printHelp(): void {
     "  dream -p \"prompt\" --json --quiet  script-friendly prompt mode",
     "  dream cron list   list scheduled agent jobs",
     "  dream daemon run-once  execute due cron jobs once",
+    "  dream remote start  start the Tailscale-only remote daemon on port 9999",
     "  dream doctor      check local tool availability",
     "  dream workday --dry-run  show the edit-test-review release loop",
     "  dream init        initialize ~/.dream files",

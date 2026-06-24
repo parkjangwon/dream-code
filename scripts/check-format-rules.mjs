@@ -39,5 +39,5 @@ function walkTextFiles(directory) {
 }
 
 function isTextFile(filePath) {
-  return /\.(?:ts|js|mjs|json|md|yml|yaml|toml|sh)$/u.test(filePath);
+  return /\.(?:ts|tsx|js|mjs|json|md|yml|yaml|toml|sh|css)$/u.test(filePath);
 }

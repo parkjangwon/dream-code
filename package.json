@@ -1,11 +1,11 @@
 {
   "name": "dream-code",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "Termux-first coding harness CLI. Even while you sleep, your dreams keep building.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "dream": "./dist/src/cli.js"
+    "dream": "dist/src/cli.js"
   },
   "files": [
     "dist/src",
@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true,maxRetries:5,retryDelay:100})\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
+    "build": "npm run clean && npm run build:remote-web && tsc -p tsconfig.json",
+    "build:remote-web": "node scripts/build-remote-web.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "format:check": "node scripts/check-format-rules.mjs",
     "audit:no-excuse": "node scripts/check-no-excuse-rules.mjs",
@@ -29,14 +30,30 @@
   },
   "dependencies": {
     "cli-highlight": "^2.1.11",
+    "preact": "^10.29.2",
     "undici": "^8.5.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "esbuild": "^0.28.1",
     "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parkjangwon/dream-code.git"
+  },
+  "keywords": [],
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/parkjangwon/dream-code/issues"
+  },
+  "homepage": "https://github.com/parkjangwon/dream-code#readme"
 }

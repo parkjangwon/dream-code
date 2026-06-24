@@ -5,6 +5,7 @@ import { cwd } from "node:process";
 import { defaultConfigRoot } from "./config.js";
 import { pruneEmptySessions } from "./session-gc.js";
 import { sessionDirFor, sessionIndexPath as layoutSessionIndexPath } from "./session-layout.js";
+import { rememberWorkspaceDir } from "./workspace-state.js";
 import {
   parseJsonLine,
   parseJsonText,
@@ -58,6 +59,7 @@ export async function startSession(root = defaultConfigRoot(), directory = cwd()
   await mkdir(sessionDir, { recursive: true, mode: 0o700 });
   await writeSessionState(sessionDir, session);
   await appendSessionIndexEntry(root, { sessionId: session.id, sessionDir, directory: resolve(directory) });
+  await rememberWorkspaceDir(root, directory, cwd());
   return session;
 }
 
@@ -128,6 +130,10 @@ export async function clearSessionTurns(root: string, sessionId: string): Promis
 export async function listSessions(root = defaultConfigRoot()): Promise<readonly DreamSession[]> {
   const store = await loadSessionStore(root);
   return [...store.sessions].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export async function readSession(root: string, sessionId: string): Promise<DreamSession | undefined> {
+  return findSession(root, sessionId);
 }
 
 async function appendSessionIndexEntry(root: string, entry: SessionIndexEntry): Promise<void> {

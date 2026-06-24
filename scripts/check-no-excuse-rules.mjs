@@ -83,7 +83,7 @@ if (failures.length > 0) {
 }
 
 function typeScriptFiles(directory) {
-  return walk(directory).filter((filePath) => filePath.endsWith(".ts"));
+  return walk(directory).filter((filePath) => /\.(?:ts|tsx)$/u.test(filePath));
 }
 
 function walk(directory) {

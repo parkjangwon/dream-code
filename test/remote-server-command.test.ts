@@ -1,0 +1,265 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { request } from "undici";
+
+import { startRemoteServer } from "../src/remote-server.js";
+
+test("remote server streams authenticated command output and keeps command history", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-command-"));
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "555555",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async (input) => {
+      input.onChunk?.("working");
+      return { sessionId: "session-remote", output: "working done", shouldContinue: true };
+    },
+  });
+  try {
+    const token = await pairToken(server.origin, "555555");
+    const events = await request(`${server.origin}/api/events?token=${encodeURIComponent(token)}`);
+    assert.equal(events.statusCode, 200);
+
+    const submitted = await request(`${server.origin}/api/commands`, {
+      method: "POST",
+      body: JSON.stringify({ prompt: "/status", cwd: "/tmp/project" }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+
+    assert.equal(submitted.statusCode, 202);
+    const submittedBody = await submitted.body.json() as { readonly command?: { readonly status?: string } };
+    assert.equal(submittedBody.command?.status, "queued");
+
+    const eventText = await readUntil(events.body, "status\":\"done\"");
+    assert.match(eventText, /event: command/u);
+    assert.match(eventText, /Worker started/u);
+    assert.match(eventText, /Output received/u);
+    assert.match(eventText, /working done/u);
+    assert.match(eventText, /session-remote/u);
+
+    const history = await request(`${server.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(history.statusCode, 200);
+    assert.match(await history.body.text(), /working done/u);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote server cancels queued commands before they run", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-cancel-"));
+  let releaseFirst: (() => void) | undefined;
+  const firstDone = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const started: string[] = [];
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "777777",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async (input) => {
+      started.push(input.prompt);
+      if (input.prompt === "first") {
+        await firstDone;
+      }
+      return { sessionId: `session-${input.prompt}`, output: input.prompt, shouldContinue: true };
+    },
+  });
+  try {
+    const token = await pairToken(server.origin, "777777");
+    await submitCommand(server.origin, token, "first");
+    const queued = await submitCommand(server.origin, token, "second");
+    assert.equal(queued.command?.status, "queued");
+
+    const cancelled = await request(`${server.origin}/api/commands/${queued.command.id}/cancel`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(cancelled.statusCode, 200);
+    const cancelledBody = await cancelled.body.json() as { readonly command?: { readonly status?: string } };
+    assert.equal(cancelledBody.command?.status, "cancelled");
+
+    releaseFirst?.();
+    await waitForCommandStatus(server.origin, token, queued.command.id ?? "", "cancelled");
+    assert.deepEqual(started, ["first"]);
+  } finally {
+    releaseFirst?.();
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote server propagates cancellation into running commands", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-running-cancel-"));
+  let markStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "222222",
+    unsafeAllowNonTailscale: true,
+    commandRunner: (input) => new Promise((resolve) => {
+      markStarted?.();
+      input.signal?.addEventListener("abort", () => {
+        resolve({ sessionId: "session-cancelled", output: "aborted", shouldContinue: true });
+      }, { once: true });
+    }),
+  });
+  try {
+    const token = await pairToken(server.origin, "222222");
+    const submitted = await submitCommand(server.origin, token, "long task");
+    await started;
+
+    const cancelled = await request(`${server.origin}/api/commands/${submitted.command?.id ?? ""}/cancel`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(cancelled.statusCode, 200);
+
+    await waitForCommandStatus(server.origin, token, submitted.command?.id ?? "", "cancelled");
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote server keeps running commands alive after they are assigned to a session", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-session-running-"));
+  let releaseCommand: (() => void) | undefined;
+  const commandDone = new Promise<void>((resolve) => {
+    releaseCommand = resolve;
+  });
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "444444",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async (input) => {
+      input.onSession?.("session-running");
+      input.onActivity?.({ label: "Tool shell npm test", detail: "Dream Code executed a local tool" });
+      await commandDone;
+      return { sessionId: "session-running", output: "finished later", shouldContinue: true };
+    },
+  });
+  try {
+    const token = await pairToken(server.origin, "444444");
+    const submitted = await submitCommand(server.origin, token, "long async task");
+    await waitForCommandStatus(server.origin, token, submitted.command?.id ?? "", "running");
+
+    const running = await request(`${server.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const body = await running.body.json() as {
+      readonly commands?: readonly {
+        readonly id?: string;
+        readonly sessionId?: string;
+        readonly activity?: readonly { readonly label?: string }[];
+      }[];
+    };
+    const command = body.commands?.find((entry) => entry.id === submitted.command?.id);
+    assert.equal(command?.sessionId, "session-running");
+    assert.equal(command?.activity?.some((entry) => entry.label === "Tool shell npm test"), true);
+
+    releaseCommand?.();
+    await waitForCommandStatus(server.origin, token, submitted.command?.id ?? "", "done");
+  } finally {
+    releaseCommand?.();
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote server restores command history after daemon restart", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-persist-"));
+  const options = {
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "888888",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async () => ({ sessionId: "session-persisted", output: "persisted output", shouldContinue: true }),
+  } as const;
+  const firstServer = await startRemoteServer(options);
+  try {
+    const token = await pairToken(firstServer.origin, "888888");
+    const submitted = await submitCommand(firstServer.origin, token, "/status");
+    await waitForCommandStatus(firstServer.origin, token, submitted.command?.id ?? "", "done");
+  } finally {
+    await firstServer.close();
+  }
+
+  const secondServer = await startRemoteServer(options);
+  try {
+    const token = await pairToken(secondServer.origin, "888888");
+    const history = await request(`${secondServer.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(history.statusCode, 200);
+    const text = await history.body.text();
+    assert.match(text, /persisted output/u);
+    assert.match(text, /session-persisted/u);
+  } finally {
+    await secondServer.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function readUntil(body: NodeJS.ReadableStream, needle: string): Promise<string> {
+  let text = "";
+  for await (const chunk of body) {
+    text = `${text}${Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk)}`;
+    if (text.includes(needle)) {
+      return text;
+    }
+  }
+  return text;
+}
+
+async function pairToken(origin: string, code: string): Promise<string> {
+  const pair = await request(`${origin}/api/pair`, {
+    method: "POST",
+    body: JSON.stringify({ code, deviceName: "android phone" }),
+    headers: { "content-type": "application/json" },
+  });
+  assert.equal(pair.statusCode, 200);
+  const paired = await pair.body.json() as { readonly token?: string };
+  assert.equal(typeof paired.token, "string");
+  return paired.token ?? "";
+}
+
+async function submitCommand(origin: string, token: string, prompt: string): Promise<{ readonly command?: { readonly id?: string; readonly status?: string } }> {
+  const submitted = await request(`${origin}/api/commands`, {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+  });
+  assert.equal(submitted.statusCode, 202);
+  return await submitted.body.json() as { readonly command?: { readonly id?: string; readonly status?: string } };
+}
+
+async function waitForCommandStatus(origin: string, token: string, id: string, status: string): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const history = await request(`${origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const body = await history.body.json() as { readonly commands?: readonly { readonly id?: string; readonly status?: string }[] };
+    if (body.commands?.some((command) => command.id === id && command.status === status) === true) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail(`Timed out waiting for command ${id} to become ${status}`);
+}

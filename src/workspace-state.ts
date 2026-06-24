@@ -16,10 +16,19 @@ export async function addWorkspaceDir(root: string, inputPath: string, cwd: stri
   }
   const directory = resolvePath(trimmed, cwd);
   await mkdir(directory, { recursive: true, mode: 0o700 });
+  await rememberWorkspaceDir(root, directory, cwd);
+  return `added workspace dir: ${directory}`;
+}
+
+export async function rememberWorkspaceDir(root: string, inputPath: string, cwd: string): Promise<void> {
+  const trimmed = inputPath.trim();
+  if (trimmed.length === 0) {
+    return;
+  }
+  const directory = resolvePath(trimmed, cwd);
   const paths = await loadWorkspaceDirs(root);
   const next = [...new Set([...paths, directory])].sort((left, right) => left.localeCompare(right));
   await saveWorkspaceDirs(root, next);
-  return `added workspace dir: ${directory}`;
 }
 
 export async function loadWorkspaceDirs(root: string): Promise<readonly string[]> {

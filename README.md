@@ -24,6 +24,8 @@ That direction shapes the runtime loop:
   choose safe next steps, and verify before claiming success.
 - **Mobile-first operations:** stay fast and readable on Termux and small
   terminals, with collapsed tool output and concise status surfaces.
+- **Remote control as a first-class surface:** start work on a laptop or server,
+  then continue from a phone through a self-hosted web app over Tailscale.
 - **Smart resource use:** route work across providers and models so simple work
   stays cheap and hard work gets stronger models.
 - **Overdrive when needed:** use Dream Swarm for high-parallel work when the user
@@ -32,7 +34,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.21)
+Dream Code (v0.1.22)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -76,6 +78,98 @@ dream workday --dry-run
 dream workday --dry-run --json
 ```
 
+## Dream Remote
+
+Dream Remote is one of Dream Code's headline features: a self-hosted mobile web
+app for controlling the same Dream Code sessions and projects from your phone.
+It is designed for the common "leave the machine running, check and steer it
+from Android" workflow.
+
+Start it from the machine that runs Dream Code:
+
+```sh
+dream remote start
+```
+
+Dream Remote requires Tailscale. `remote start` refuses to start if Tailscale is
+missing or stopped, launches a background daemon on localhost, exposes it with
+Tailscale Serve, and prints a URL plus a one-time pairing code:
+
+```text
+Dream Remote is ready.
+open: https://your-device.tailnet.ts.net:9999
+pairing code: 123456
+```
+
+Useful commands:
+
+```sh
+dream remote start              # start on the default 9999 port
+dream remote start --port 7777  # start on another port
+dream remote status             # print the URL and current pairing code
+dream remote stop               # stop the daemon and Tailscale Serve handler
+```
+
+Open the printed URL on another Tailscale device, enter the pairing code, and
+use the web app like a compact remote control surface: choose a project, open or
+rename a thread, start a new thread, send prompts, use remote-safe slash
+commands such as `/swarm`, upload files/images for a run, stop running commands,
+delete old sessions, and receive completion notifications.
+
+### How It Works
+
+Dream Remote is intentionally personal and self-hosted. There is no cloud relay
+and no Dream Code account system.
+
+The flow is:
+
+1. `dream remote start` starts a detached Dream Remote daemon.
+2. The daemon listens only on `127.0.0.1:<port>` by default.
+3. Tailscale Serve publishes that localhost server to your tailnet.
+4. The browser pairs once with the short pairing code and stores a local token.
+5. Prompts, slash commands, uploads, live output, sessions, and project lists go
+   through the remote daemon to the same local Dream Code runtime.
+
+Projects are remembered by absolute path from Dream Code sessions and workspace
+history. When you open a project in Remote, the actual agent work runs in that
+project directory, not in a fake UI-only workspace. Remote also refreshes project
+and session lists while it is running, so projects opened from the CLI can appear
+without restarting the remote daemon.
+
+Logs are written under:
+
+```text
+~/.dream/webapp/remote.log
+```
+
+The log rotates when it grows too large and keeps compressed archives so the
+remote daemon does not fill the disk.
+
+### HTTPS, PWA, And Notifications
+
+For the best mobile experience, use the `https://...tailnet...` URL printed by
+`dream remote start`.
+
+Browser notifications, notification-click navigation, and reliable PWA install
+behavior require a secure browser context. In practice that means HTTPS. Dream
+Remote asks Tailscale Serve for HTTPS first, then falls back to HTTP only when
+HTTPS is not available.
+
+If the printed URL starts with `http://`, the remote web app can still work over
+your tailnet, but browser notifications and PWA install prompts may be blocked or
+inconsistent. Enable HTTPS for Tailscale Serve/MagicDNS in your tailnet and
+restart:
+
+```sh
+dream remote stop
+dream remote start
+```
+
+After HTTPS is active, open the Remote URL, tap `Install App`, and allow
+notifications when the browser asks. Android browsers can cache home-screen and
+quick-access icons aggressively; if an old icon remains, remove the old shortcut
+or installed app and add it again.
+
 ## Uninstall
 
 Termux, macOS, and Linux:
@@ -98,8 +192,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.21
-git push origin v0.1.21
+git tag v0.1.22
+git push origin v0.1.22
 ```
 
 The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
@@ -108,12 +202,15 @@ The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.21 sh install.sh
+DREAM_CODE_VERSION=v0.1.22 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
 ## Core Features
 
+- **Dream Remote:** self-hosted web/PWA remote control over Tailscale, with
+  project/session navigation, live command output, `/swarm`, uploads, browser
+  notifications, PWA install support, and daemonized background operation.
 - **Fast TUI:** slash commands, slash skill autocomplete, `@` file mentions,
   history, menus, smooth streaming, and Esc double-tap interrupt.
 - **Autonomous by default:** Dream Code favors completion over clarification,
@@ -428,6 +525,9 @@ Enter       Submit input or choose a menu item
 - Provider login, logout, env detection, and credential storage
 - OpenAI API key and OAuth credential support
 - Sessions with append-only wire logs and a session picker
+- Dream Remote web app with Tailscale-only startup, localhost daemon binding,
+  project/thread navigation, uploads, live run output, browser notifications,
+  PWA icons, and stop/status commands
 - `/rename` for current session naming
 - Automatic and manual `/compact`
 - Project/global rules loading from `AGENTS.md`, `CLAUDE.md`,
@@ -489,6 +589,8 @@ app-owned secrets rather than hand-edited configuration.
 ~/.dream/model_catalog.json      cached live provider model lists
 ~/.dream/session_index.jsonl     session picker index
 ~/.dream/sessions/               session state and wire logs
+~/.dream/webapp/remote.log       Dream Remote daemon log
+~/.dream/webapp/remote-*.log.gz   compressed Dream Remote log archives
 ~/.dream/tasks.jsonl             task ledger
 ~/.dream/file-history/           plaintext file checkpoints for restore
 ~/.dream/model_telemetry.jsonl   model routing health log
