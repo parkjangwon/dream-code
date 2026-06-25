@@ -214,6 +214,9 @@ DREAM_CODE_SOURCE=1 sh install.sh
   notifications, PWA install support, and daemonized background operation.
 - **Fast TUI:** slash commands, slash skill autocomplete, `@` file mentions,
   history, menus, smooth streaming, and Esc double-tap interrupt.
+- **Running input dock:** keep typing while an agent is working. Plain text is
+  queued for the next turn, while `/steer` can redirect the active run at the
+  next safe model boundary.
 - **Autonomous by default:** Dream Code favors completion over clarification,
   uses research when a concept is unclear, and verifies before reporting
   success.
@@ -292,8 +295,8 @@ Supported provider targets:
 
 ```text
 openai, deepseek, opencode-go, opencode-zen, minimax, kimi, z-ai, gemini,
-xiaomi-mimo, openrouter, groq, xai, mistral, together, fireworks, cerebras,
-qwen, custom-openai
+xiaomi-mimo, openrouter, sakana, ollama, groq, xai, mistral, together,
+fireworks, cerebras, qwen, custom-openai
 ```
 
 OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
@@ -310,6 +313,19 @@ DREAM_CUSTOM_OPENAI_BASE_URL=http://127.0.0.1:4000/v1
 
 Dream Code fetches `GET {baseUrl}/models` after login and uses the discovered
 model IDs as the default low/mid/high tiers.
+
+For local Ollama, Dream Code uses the default OpenAI-compatible endpoint
+`http://127.0.0.1:11434/v1` and does not require an API key:
+
+```text
+/login ollama
+
+DREAM_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+```
+
+After login, Ollama model discovery reads the native `GET /api/tags` endpoint
+behind the same local server and uses installed model names such as
+`llama3.2:latest` or `qwen2.5-coder:7b`.
 
 ## Coding-Agent Quality
 
@@ -331,6 +347,42 @@ The eval includes a tiny reproduce-fix-verify fixture that exercises real
 workspace edit tools and a command evaluator. It also inspects the current git
 diff for broad or testless source changes; that check can warn without failing
 the command, so reviewers see risk without blocking useful local iteration.
+
+## Running Input, Queue, And Steering
+
+Dream Code keeps the input dock available while an agent is running. The layout
+is intentionally split into three stable regions: top session/status context, a
+middle transcript/agent viewport, and the bottom input/status dock. Agent
+responses, user prompts, swarm monitors, and progress animation stay in the
+middle viewport; the input dock remains anchored at the bottom.
+
+During a running turn, plain text plus `Enter` adds a queued follow-up for the
+next turn:
+
+```text
+also check the release workflow
+/q add a note about Termux install
+/queue list
+/queue edit 2 focus on mobile keyboard UX
+/queue rm 2
+/queue send 1
+/queue send all
+/queue clear
+```
+
+Use steering when the active agent is still thinking or streaming and you want
+to redirect it sooner than the next queued turn:
+
+```text
+/steer stop summarizing and inspect the failing test first
+/s ignore the broad audit and focus only on the cursor bug
+```
+
+Steering is injected as high-priority user guidance at the next safe model
+boundary. If a model stream is active, Dream Code interrupts that stream and
+starts the next model call with the steering message attached. This is not a
+destructive terminal interrupt; use `Esc Esc` or `Ctrl+C` when you want to stop
+the whole running agent instead.
 
 ## Drive Mode
 
@@ -584,6 +636,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /interview    Align on implementation direction
 /login        Connect a provider
 /logout       Forget provider credentials
+/loop         Run a LoopSpec until checks pass
 /lsp          Run project diagnostics
 /mcp          Show MCP settings and live tools
 /model        Choose model or model routing mode
@@ -597,6 +650,7 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /restore      Restore the latest file checkpoint for a path
 /review       Review current work
 /rules        Show loaded AGENTS.md, CLAUDE.md, and DESIGN.md context
+/runs         Inspect or revert agent runs
 /session      Open saved sessions
 /skills       Show and toggle installed skills
 /status       Show goal, tasks, and model health
@@ -623,6 +677,11 @@ Esc Esc     Interrupt a running agent
 Enter       Submit input or choose a menu item
 ```
 
+While an agent is running, the bottom dock accepts the same editing keys. Plain
+text plus `Enter` queues the next turn; `/steer ...` or `/s ...` steers the
+active run; `/queue ...` or `/q ...` lists, edits, removes, sends, or clears
+queued items.
+
 ## Feature List
 
 - Minimal TypeScript CLI core with a fast terminal UI
@@ -644,6 +703,7 @@ Enter       Submit input or choose a menu item
   `CLAUDE.local.md`, and `.claude/rules/*.md`
 - Design-system context loading from `DESIGN.md`
 - `/context`, `/clear`, and `/restore` session/context recovery commands
+- Running input dock with follow-up queue and live steering commands
 - Drive mode for check-backed coding work that reuses the LoopSpec evaluator
 - Goal mode for sustained coding work with judge-style continuation support
 - Plan command with project-local `.dream/plans.md`
