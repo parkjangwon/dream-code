@@ -35,7 +35,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.26)
+Dream Code (v0.1.27)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -51,6 +51,18 @@ curl -fsSL https://raw.githubusercontent.com/parkjangwon/dream-code/main/install
 Run the same command again to update. The installer uses the latest GitHub
 Release package when available, then falls back to a source build before the
 first release exists.
+
+After Dream Code is installed, update from the CLI with:
+
+```sh
+dream update
+dream update --check
+```
+
+`dream update` checks the latest GitHub Release and reuses the same installer
+path as a fresh install. On Termux, macOS, and Linux it runs the published
+`install.sh` flow; on Windows it installs the latest release tarball with npm.
+Use `--check` when you only want to see whether a newer release exists.
 
 Windows PowerShell:
 
@@ -193,8 +205,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.26
-git push origin v0.1.26
+git tag v0.1.27
+git push origin v0.1.27
 ```
 
 The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
@@ -203,7 +215,7 @@ The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.26 sh install.sh
+DREAM_CODE_VERSION=v0.1.27 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
@@ -222,6 +234,8 @@ DREAM_CODE_SOURCE=1 sh install.sh
   success.
 - **Termux-first:** built for Android Termux, with macOS, Linux, and Windows CLI
   support.
+- **Self-update:** run `dream update` to move to the latest GitHub Release, or
+  `dream update --check` to only check availability.
 - **Auto model routing:** use one provider by default, or switch on `/auto` to
   route each prompt, agent, and swarm lane across connected providers with
   fallback chains. Connect at least one provider with `/login` before enabling
@@ -694,6 +708,7 @@ queued items.
 - Provider login, logout, env detection, and credential storage
 - OpenAI API key and OAuth credential support
 - Sessions with append-only wire logs and a session picker
+- `dream update` and `dream update --check` for GitHub Release self-updates
 - Dream Remote web app with Tailscale-only startup, localhost daemon binding,
   project/thread navigation, uploads, live run output, browser notifications,
   PWA icons, and stop/status commands

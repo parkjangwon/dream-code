@@ -78,6 +78,16 @@ async function main(): Promise<void> {
       process.exitCode = report.ok ? 0 : 1;
       return;
     }
+    case "update": {
+      const { runUpdateCommand, formatUpdateReport } = await import("./update-command.js");
+      const report = await runUpdateCommand({
+        args: parsedArgs.rest,
+        outputMode: parsedArgs.rest.includes("--json") ? "stderr" : "inherit",
+      });
+      console.log(parsedArgs.rest.includes("--json") ? JSON.stringify(report, undefined, 2) : formatUpdateReport(report));
+      process.exitCode = report.ok ? 0 : 1;
+      return;
+    }
     case "workday": {
       const config = await loadConfig(defaultConfigRoot());
       const plan = await createWorkdayPlan({
@@ -185,6 +195,8 @@ function printHelp(): void {
     "  dream eval        run deterministic coding-agent quality checks",
     "  dream smoke       run local production-readiness smoke checks",
     "  dream release-check  run smoke and package readiness checks",
+    "  dream update      update Dream Code to the latest GitHub Release",
+    "  dream update --check  check whether a newer release exists",
     "  dream workday --dry-run  show the edit-test-review release loop",
     "  dream init        initialize ~/.dream files",
     "  dream --version   print the version",

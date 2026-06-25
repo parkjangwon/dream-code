@@ -1,4 +1,4 @@
-export type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "eval" | "help" | "init" | "prompt" | "release-check" | "remote" | "route" | "runs" | "smoke" | "version" | "workday";
+export type CliCommand = "tui" | "cron" | "daemon" | "doctor" | "eval" | "help" | "init" | "prompt" | "release-check" | "remote" | "route" | "runs" | "smoke" | "update" | "version" | "workday";
 
 export type ParsedArgs = {
   readonly command: CliCommand;
@@ -49,6 +49,10 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
         return { command, oneShotYolo, rest, json, quiet };
       case "workday":
         command = "workday";
+        rest.push(...args.slice(index + 1));
+        return { command, oneShotYolo, rest, json, quiet };
+      case "update":
+        command = "update";
         rest.push(...args.slice(index + 1));
         return { command, oneShotYolo, rest, json, quiet };
       case "cron":
