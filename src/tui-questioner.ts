@@ -7,6 +7,7 @@ import type { SkillManagerOptions } from "./tui-skill-manager.js";
 export type CommandResult = {
   readonly config: DreamConfig;
   readonly shouldContinue: boolean;
+  readonly queuedInputs?: readonly string[];
 };
 
 export type Questioner = {

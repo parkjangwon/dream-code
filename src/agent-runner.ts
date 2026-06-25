@@ -1,6 +1,7 @@
 import { cwd } from "node:process";
 
 import { actorRoleForRun } from "./agent-actor.js";
+import { appendSteeringMessages, type AgentSteering } from "./agent-steering.js";
 import { appendActorInboxMessages } from "./agent-inbox-context.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { connectedProviderIds, firstSelectedModel, tierForAgent } from "./agent-runner-routing.js";
@@ -28,6 +29,7 @@ import {
 import type { AgentToolRequest } from "./agent-tool-schema.js";
 import { maxToolCyclesForRun } from "./agent-tool-budget.js";
 import {
+  type ChatMessage,
   MissingProviderConfigError,
   ProviderProtocolError,
   ProviderRequestError,
@@ -58,6 +60,7 @@ export type AgentPromptOptions = {
   readonly runLabel?: string;
   readonly renderResponse?: boolean;
   readonly approveTool?: (request: AgentToolRequest) => Promise<boolean>;
+  readonly steering?: AgentSteering;
   readonly write: (text: string) => void;
 };
 
@@ -114,23 +117,26 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
   const compactContext = await formatCompactContext(configRoot, options.sessionId);
   const memoryContext = await formatMemoryContext(configRoot, activeCwd, options.sessionId, options.prompt);
   const recentMessages = await recentSessionMessages(configRoot, options.sessionId, options.prompt);
-  let messages = await appendActorInboxMessages(
-    configRoot,
-    actor.id,
-    createAgentMessages(
-      options.prompt,
-      skills,
-      options.agent,
-      contextDocs,
-      workspaceDirs,
-      mcpContext,
-      compactContext,
-      memoryContext,
-      activeCwd,
-      recentMessages,
-      mentionedContext,
-      formatModelRoutingContext(selectedModels),
+  let messages = appendSteeringMessages(
+    await appendActorInboxMessages(
+      configRoot,
+      actor.id,
+      createAgentMessages(
+        options.prompt,
+        skills,
+        options.agent,
+        contextDocs,
+        workspaceDirs,
+        mcpContext,
+        compactContext,
+        memoryContext,
+        activeCwd,
+        recentMessages,
+        mentionedContext,
+        formatModelRoutingContext(selectedModels),
+      ),
     ),
+    options.steering,
   );
 
   try {
@@ -139,10 +145,20 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
         finalStatus = "cancelled";
         return finalAssistantText;
       }
-      messages = await appendActorInboxMessages(configRoot, actor.id, messages);
+      messages = appendSteeringMessages(
+        await appendActorInboxMessages(configRoot, actor.id, messages),
+        options.steering,
+      );
       const assistantText = await streamAgentWithFailover(streamOptions(runOptions, configRoot), selectedModels, messages);
       finalAssistantText = assistantText;
       const requests = extractAgentToolRequests(assistantText);
+      const assistantMessage: ChatMessage = { role: "assistant", content: assistantText };
+      const messagesWithAssistant = [...messages, assistantMessage];
+      const nextMessages = appendSteeringMessages(messagesWithAssistant, options.steering);
+      if (nextMessages !== messagesWithAssistant) {
+        messages = nextMessages;
+        continue;
+      }
       if (requests.length === 0) {
         return finalAssistantText;
       }

@@ -50,6 +50,16 @@ export function cursorToPromptSequence(frame: CockpitFrame, terminalRows: number
   return `${sequence}\r${cursorToColumn(frame.promptCursorColumn)}`;
 }
 
+export function cursorToRenderedPromptSequence(frame: RenderedInputView | undefined): string {
+  if (frame === undefined) {
+    return "";
+  }
+  const startRow = frameStartRow(frame.lineCount, frame.terminalRows);
+  return startRow === undefined
+    ? ""
+    : `${cursorToRow(startRow + frame.promptLineIndex)}${cursorToColumn(frame.promptCursorColumn)}`;
+}
+
 function clearRenderedPromptAnchoredFrameSequence(frame: RenderedInputView): string {
   let sequence = "\r";
   if (frame.promptLineIndex > 0) {

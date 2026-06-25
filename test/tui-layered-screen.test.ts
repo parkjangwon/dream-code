@@ -59,17 +59,17 @@ test("createLayeredMainWriter keeps text in the middle viewport and passes monit
     writer.write("\u001B[?25l\u001B[8;1Hmonitor\u001B[?25h");
     writer.write("synthesis\n");
 
-    assert.match(chunks[0] ?? "", /^\u001B\[6;1Hheader/u);
-    assert.equal(chunks[1], "\u001B[?25l\u001B[8;1Hmonitor\u001B[?25h");
-    assert.match(chunks[2] ?? "", /^\u001B\[6;1H/u);
+    assert.match(chunks[0] ?? "", /^\u001B\[\?25l\u001B\[6;1H\u001B\[2K/u);
+    assert.equal(chunks[1], "\u001B[?25l\u001B[?25l\u001B[8;1Hmonitor\u001B[?25h\u001B[?25h");
+    assert.match(chunks[2] ?? "", /^\u001B\[\?25l\u001B\[6;1H/u);
     assert.match(chunks[2] ?? "", /\u001B\[2K/u);
-    assert.match(chunks[2] ?? "", /\u001B\[6;1Hsynthesis/u);
+    assert.match(chunks[2] ?? "", /\u001B\[6;1H\u001B\[2Ksynthesis/u);
   } finally {
     stdout.mock.restore();
   }
 });
 
-test("createLayeredMainWriter does not treat inline thinking animation frames as anchored monitors", () => {
+test("createLayeredMainWriter ignores inline thinking animation frames in layered mode", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -87,9 +87,61 @@ test("createLayeredMainWriter does not treat inline thinking animation frames as
     writer.write("\u001B[?25l\u001B[1A\r\u001B[2Kthinking.\n\u001B[?25h");
     writer.write("answer\n");
 
-    assert.equal(chunks[1], "\u001B[?25l\u001B[1A\r\u001B[2Kthinking.\n\u001B[?25h");
-    assert.doesNotMatch(chunks[2] ?? "", /\u001B\[2K/u);
-    assert.match(chunks[2] ?? "", /^\u001B\[7;1Hanswer/u);
+    assert.equal(chunks.length, 2);
+    assert.equal(chunks.some((chunk) => chunk.includes("\u001B[1A")), false);
+    assert.match(chunks[1] ?? "", /\u001B\[7;1H\u001B\[2Kanswer/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter wraps CJK text without writing raw newlines into the bottom dock", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter({
+      topRows: 5,
+      mainStartRow: 6,
+      mainRows: 3,
+      bottomRows: 6,
+    });
+
+    writer.write("대표 파일: 상태가 복잡하기 때문에 회귀 위험이 높습니다. ".repeat(8));
+
+    assert.equal(chunks.join("").includes("\n"), false);
+    assert.match(chunks.join(""), /\u001B\[6;1H/u);
+    assert.match(chunks.join(""), /\u001B\[7;1H/u);
+    assert.match(chunks.join(""), /\u001B\[8;1H/u);
+    assert.doesNotMatch(chunks.join(""), /\u001B\[9;1H/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter returns cursor ownership to the active input dock", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      {
+        topRows: 5,
+        mainStartRow: 6,
+        mainRows: 3,
+        bottomRows: 6,
+      },
+      { afterWrite: () => "\u001B[29;12H\u001B[?25h" },
+    );
+
+    writer.write("answer\n");
+
+    assert.match(chunks[0] ?? "", /\u001B\[6;1H\u001B\[2Kanswer/u);
+    assert.equal(chunks[0]?.endsWith("\u001B[29;12H\u001B[?25h\u001B[?25h"), true);
   } finally {
     stdout.mock.restore();
   }

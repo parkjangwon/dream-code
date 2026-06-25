@@ -2,10 +2,11 @@ import { stdout as output } from "node:process";
 
 import { ansi, clearScreen, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
-import { cockpitReservedRows, renderCockpitFrame } from "./tui-cockpit.js";
+import { cockpitReservedRows, fitVisible, renderCockpitFrame } from "./tui-cockpit.js";
 import { cursorToFrameStartSequence } from "./tui-input-frame.js";
 import { renderHeaderPanel } from "./tui-render.js";
-import { clearRowsFromCurrentPosition, cursorToRow } from "./terminal-frame.js";
+import { cursorToRow, withHiddenCursor } from "./terminal-frame.js";
+import { terminalVisibleWidth } from "./terminal-width.js";
 
 export type LayeredTerminalLayout = {
   readonly topRows: number;
@@ -26,6 +27,10 @@ export type LayeredScreenOptions = {
 
 export type LayeredMainWriter = {
   readonly write: (chunk: string) => boolean;
+};
+
+export type LayeredMainWriterOptions = {
+  readonly afterWrite?: () => string;
 };
 
 const topChromeRows = 5;
@@ -60,26 +65,28 @@ export function renderLayeredScreen(options: LayeredScreenOptions): LayeredTermi
   return layout;
 }
 
-export function createLayeredMainWriter(layout: LayeredTerminalLayout): LayeredMainWriter {
-  let nextTextRow = layout.mainStartRow;
+export function createLayeredMainWriter(
+  layout: LayeredTerminalLayout,
+  options: LayeredMainWriterOptions = {},
+): LayeredMainWriter {
+  let logicalLines: string[] = [""];
   let monitorRendered = false;
   return {
     write: (chunk) => {
       if (isAnchoredTerminalFrame(chunk)) {
         monitorRendered = true;
-        return output.write(chunk);
+        return output.write(withHiddenCursor(`${chunk}${options.afterWrite?.() ?? ""}`));
       }
       if (isInlineTerminalFrame(chunk)) {
-        return output.write(chunk);
+        const afterWrite = options.afterWrite?.() ?? "";
+        return afterWrite.length === 0 ? true : output.write(afterWrite);
       }
-      let prefix = cursorToRow(nextTextRow);
       if (monitorRendered) {
-        nextTextRow = layout.mainStartRow;
-        prefix = `${cursorToRow(layout.mainStartRow)}${clearRowsFromCurrentPosition(layout.mainRows)}${cursorToRow(layout.mainStartRow)}`;
+        logicalLines = [""];
         monitorRendered = false;
       }
-      output.write(`${prefix}${chunk}`);
-      nextTextRow = Math.min(layout.mainStartRow + layout.mainRows - 1, nextTextRow + logicalLineCount(chunk));
+      logicalLines = appendChunk(logicalLines, chunk).slice(-layout.mainRows * 4);
+      output.write(withHiddenCursor(`${renderMainViewport(layout, logicalLines, output.columns)}${options.afterWrite?.() ?? ""}`));
       return true;
     },
   };
@@ -123,7 +130,73 @@ function isInlineTerminalFrame(chunk: string): boolean {
   return chunk.startsWith("\u001B[?25l");
 }
 
-function logicalLineCount(text: string): number {
-  const trimmed = text.endsWith("\n") ? text.slice(0, -1) : text;
-  return Math.max(1, trimmed.split("\n").length);
+function appendChunk(lines: readonly string[], chunk: string): string[] {
+  const nextLines = lines.length === 0 ? [""] : [...lines];
+  const parts = chunk.replace(/\r/gu, "").split("\n");
+  for (let index = 0; index < parts.length; index += 1) {
+    const current = parts[index] ?? "";
+    const lastIndex = nextLines.length - 1;
+    nextLines[lastIndex] = `${nextLines[lastIndex] ?? ""}${current}`;
+    if (index < parts.length - 1) {
+      nextLines.push("");
+    }
+  }
+  return nextLines;
+}
+
+function renderMainViewport(
+  layout: LayeredTerminalLayout,
+  logicalLines: readonly string[],
+  terminalColumns: number | undefined,
+): string {
+  const columns = Math.max(1, terminalColumns ?? 80);
+  const visualLines = logicalLines.flatMap((line) => wrapVisibleLine(line, columns));
+  const visibleLines = visualLines.slice(-layout.mainRows);
+  const rows: string[] = [];
+  for (let index = 0; index < layout.mainRows; index += 1) {
+    const line = visibleLines[index] ?? "";
+    rows.push(`${cursorToRow(layout.mainStartRow + index)}\u001B[2K${fitVisible(line, columns)}`);
+  }
+  return rows.join("");
+}
+
+function wrapVisibleLine(line: string, width: number): readonly string[] {
+  if (line.length === 0) {
+    return [""];
+  }
+  const lines: string[] = [];
+  let current = "";
+  let currentWidth = 0;
+  let index = 0;
+
+  while (index < line.length) {
+    const escape = ansiEscapeAt(line, index);
+    if (escape !== undefined) {
+      current = `${current}${escape}`;
+      index += escape.length;
+      continue;
+    }
+    const codePoint = line.codePointAt(index);
+    if (codePoint === undefined) {
+      break;
+    }
+    const char = String.fromCodePoint(codePoint);
+    const charWidth = terminalVisibleWidth(char);
+    if (currentWidth > 0 && currentWidth + charWidth > width) {
+      lines.push(current);
+      current = "";
+      currentWidth = 0;
+    }
+    current = `${current}${char}`;
+    currentWidth += charWidth;
+    index += char.length;
+  }
+
+  lines.push(current);
+  return lines;
+}
+
+function ansiEscapeAt(text: string, index: number): string | undefined {
+  const match = /^\u001B\[[0-?]*[ -/]*[@-~]/u.exec(text.slice(index));
+  return match?.[0];
 }

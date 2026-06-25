@@ -14,6 +14,7 @@ import type { CommandResult, Questioner } from "./tui-questioner.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
+import { createRunningInputSession, type RunningInputSession } from "./tui-running-input.js";
 
 export type RunAgentTextPromptOptions = {
   readonly text: string;
@@ -32,47 +33,74 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
   }
   let assistantTranscript = "";
   const sessionId = options.sessionRuntime?.currentId();
-  const responseWriter = await agentResponseWriter(options);
-  responseWriter.write(`> ${options.text}\n`);
+  const runtime = await agentResponseRuntime(options);
+  runtime.steering?.start();
+  runtime.write(`> ${options.text}\n`);
+  const signal = agentSignal(options, runtime.steering);
   const agentPrompt = {
     config: options.config,
     configRoot: options.configRoot,
     prompt: options.text,
     cwd: options.cwd,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(signal === undefined ? {} : { signal }),
     approveTool: (request: AgentToolRequest) => approveAgentTool(request, options.questioner),
+    ...(runtime.steering === undefined ? {} : { steering: runtime.steering }),
     write: (chunk: string) => {
-      responseWriter.write(chunk);
+      runtime.write(chunk);
       assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
     },
   };
-  await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
-  await finishAgentTextPrompt(options, assistantTranscript, responseWriter.write);
-  return { config: options.config, shouldContinue: true };
+  let queuedInputs: readonly string[] = [];
+  try {
+    await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
+  } finally {
+    queuedInputs = runtime.steering?.stop() ?? [];
+  }
+  await finishAgentTextPrompt(options, assistantTranscript, runtime.write);
+  return queuedInputs.length === 0
+    ? { config: options.config, shouldContinue: true }
+    : { config: options.config, shouldContinue: true, queuedInputs };
 }
 
-async function agentResponseWriter(options: RunAgentTextPromptOptions): Promise<{ readonly write: (chunk: string) => boolean }> {
+type AgentResponseRuntime = {
+  readonly write: (chunk: string) => boolean;
+  readonly steering?: RunningInputSession;
+};
+
+async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise<AgentResponseRuntime> {
   const sessionId = options.sessionRuntime?.currentId();
   if (output.isTTY !== true || sessionId === undefined) {
     return { write: (chunk) => output.write(chunk) };
   }
 
+  const statusLines = await buildBottomStatusLines({
+    config: options.config,
+    configRoot: options.configRoot,
+    sessionId,
+    cwd: options.cwd,
+    oneShotYolo: options.oneShotYolo === true,
+  });
   const layout = renderLayeredScreen({
     config: options.config,
     oneShotYolo: options.oneShotYolo === true,
-    statusLines: await buildBottomStatusLines({
-      config: options.config,
-      configRoot: options.configRoot,
-      sessionId,
-      cwd: options.cwd,
-      oneShotYolo: options.oneShotYolo === true,
-    }),
+    statusLines,
     busyLabel: "thinking",
     guideLine: "esc interrupt · input resumes after this turn",
     terminalRows: output.rows,
     terminalColumns: output.columns,
   });
-  return createLayeredMainWriter(layout);
+  const steering = createRunningInputSession(statusLines);
+  return {
+    write: createLayeredMainWriter(layout, { afterWrite: steering.cursorSequence }).write,
+    steering,
+  };
+}
+
+function agentSignal(
+  options: RunAgentTextPromptOptions,
+  steering: RunningInputSession | undefined,
+): AbortSignal | undefined {
+  return options.signal ?? steering?.signal;
 }
 
 async function finishAgentTextPrompt(

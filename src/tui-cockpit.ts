@@ -52,7 +52,7 @@ function padVisible(text: string, width: number): string {
   return `${fitted}${" ".repeat(Math.max(0, width - terminalVisibleWidth(fitted)))}`;
 }
 
-function fitVisible(text: string, width: number): string {
+export function fitVisible(text: string, width: number): string {
   if (width <= 0) {
     return "";
   }

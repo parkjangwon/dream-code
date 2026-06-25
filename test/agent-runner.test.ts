@@ -308,6 +308,47 @@ test("runAgentPrompt can collect tokens without rendering response chrome", asyn
   }
 });
 
+test("runAgentPrompt injects steering instructions before model calls", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-steering-"));
+  let requestBody = "";
+  const server = createServer((request, response) => {
+    request.on("data", (chunk: Buffer) => {
+      requestBody = `${requestBody}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        "data: {\"choices\":[{\"delta\":{\"content\":\"steered\"}}]}",
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+
+    await runAgentPrompt({
+      config: defaultConfig(),
+      configRoot: root,
+      prompt: "start",
+      cwd: "/repo",
+      renderResponse: false,
+      steering: {
+        drain: () => ["prefer tests before edits"],
+      },
+      write: () => {},
+    });
+
+    assert.match(requestBody, /Live steering instructions were submitted/u);
+    assert.match(requestBody, /prefer tests before edits/u);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runAgentPrompt keeps the previous hard model for related session follow-up", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-agent-sticky-routing-"));
   const requestedModels: string[] = [];

@@ -14,7 +14,6 @@ import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
 import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
-import { runWithEscInterrupt } from "./tui-interrupt.js";
 import { readInteractivePicker } from "./tui-picker.js";
 import { readInteractiveProviderManager } from "./tui-provider-manager.js";
 import {
@@ -75,36 +74,50 @@ async function runInteractiveLoop(
     },
   };
   let shouldContinue = true;
+  let queuedInputs: readonly string[] = [];
   while (shouldContinue) {
     const configRoot = options.configRoot ?? defaultConfigRoot();
-    const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
-    const skills = await loadEnabledSkills(configRoot);
-    const fileMentions = await discoverFileMentionTargets(process.cwd());
-    const answer = await readInteractiveInput({
-      prompt: "> ",
-      history,
-      commands: slashCommands,
-      skills,
-      fileMentions,
-      statusLines,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
-    });
+    const queuedInput = queuedInputs[0];
+    const answer = queuedInput === undefined
+      ? await readRootInput(config, options, configRoot, currentSessionId, history)
+      : { kind: "submit", text: queuedInput } satisfies Awaited<ReturnType<typeof readInteractiveInput>>;
+    queuedInputs = queuedInput === undefined ? queuedInputs : queuedInputs.slice(1);
     if (answer.kind === "cancel") {
       await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
       return config;
     }
     history = appendHistory(history, answer.text);
     const questioner = interactiveQuestioner(config, options);
-    const result = shouldUseEscInterrupt(answer.text)
-      ? await runWithEscInterrupt((signal) => handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, signal))
-      : await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
+    const result = await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
     config = result.config;
     shouldContinue = result.shouldContinue;
+    queuedInputs = result.queuedInputs === undefined ? queuedInputs : [...queuedInputs, ...result.queuedInputs];
   }
   await finishInteractiveSessionDreaming(config, options, currentSessionId, (text) => output.write(text));
   return config;
+}
+
+async function readRootInput(
+  config: DreamConfig,
+  options: TuiOptions,
+  configRoot: string,
+  currentSessionId: string,
+  history: readonly string[],
+): Promise<Awaited<ReturnType<typeof readInteractiveInput>>> {
+  const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
+  const skills = await loadEnabledSkills(configRoot);
+  const fileMentions = await discoverFileMentionTargets(process.cwd());
+  return readInteractiveInput({
+    prompt: "> ",
+    history,
+    commands: slashCommands,
+    skills,
+    fileMentions,
+    statusLines,
+    redrawHeader: () => {
+      renderHeader(config, options.oneShotYolo);
+    },
+  });
 }
 
 async function runPipedLoop(
@@ -151,11 +164,6 @@ export async function handleInput(
   }
 
   return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal);
-}
-
-function shouldUseEscInterrupt(text: string): boolean {
-  const trimmed = text.trim();
-  return trimmed.length > 0 && !trimmed.startsWith("/") && !trimmed.startsWith("!");
 }
 
 function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questioner {
