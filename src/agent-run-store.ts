@@ -2,6 +2,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { stripAnsi } from "./ansi.js";
+import { recordAgentRunTelemetry, agentRunTelemetryPath } from "./agent-run-telemetry.js";
 import {
   agentRunsRoot,
   parseAgentRunRecord,
@@ -18,6 +19,8 @@ import {
   formatAgentRunResumeContext as formatRunResumeContext,
   revertAgentRunChanges as revertRunChanges,
 } from "./agent-run-history.js";
+
+export { agentRunTelemetryPath } from "./agent-run-telemetry.js";
 
 type ActiveRun = {
   readonly root: string;
@@ -157,6 +160,7 @@ export async function startAgentRun(root: string, input: StartAgentRunInput): Pr
           status,
           ...(options?.error === undefined ? {} : { error: options.error }),
         });
+        await recordAgentRunTelemetry(root, record);
         await persistState();
       });
       await pending;

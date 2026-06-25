@@ -43,7 +43,7 @@ export async function runLoopSpec(input: RunLoopSpecInput): Promise<LoopRunResul
 
   for (let turn = 1; turn <= input.spec.maxTurns; turn += 1) {
     try {
-      await runAgentTurn(input, turn, previousEvaluation, events);
+      await runAgentTurn(input, turn, previousEvaluation, repeatedFailureStreak(evaluations), events);
       const evaluation = await runEvaluator(input.workspace, input.spec.evaluator, turn, events, input);
       evaluations.push(evaluation);
       previousEvaluation = evaluation;
@@ -75,28 +75,35 @@ export async function runLoopSpec(input: RunLoopSpecInput): Promise<LoopRunResul
   };
 }
 
-function buildLoopPrompt(spec: LoopSpec, turn: number, previousEvaluation: LoopCommandEvaluation | undefined): string {
+function buildLoopPrompt(
+  spec: LoopSpec,
+  turn: number,
+  previousEvaluation: LoopCommandEvaluation | undefined,
+  failureStreak: number,
+): string {
   return [
     "Dream Code loop turn. Make concrete progress, then stop for evaluation.",
     `Loop: ${spec.name}`,
     `Goal: ${spec.goal}`,
     `Turn: ${turn} of ${spec.maxTurns}`,
     previousEvaluation === undefined ? "Previous evaluation: none" : formatPreviousEvaluation(previousEvaluation),
+    failureStreak >= 2 ? `Repeated evaluator failure: ${failureStreak} consecutive matches. Diagnose the shared failure signature and change strategy before trying again.` : "",
     "Task:",
     spec.prompt ?? spec.goal,
-  ].join("\n");
+  ].filter((line) => line.length > 0).join("\n");
 }
 
 async function runAgentTurn(
   input: RunLoopSpecInput,
   turn: number,
   previousEvaluation: LoopCommandEvaluation | undefined,
+  failureStreak: number,
   events: LoopRunEvent[],
 ): Promise<void> {
   const startedAt = Date.now();
   events.push({ type: "agent", turn, status: "started", elapsedMs: 0, summary: "agent turn started" });
   try {
-    const prompt = buildLoopPrompt(input.spec, turn, previousEvaluation);
+    const prompt = buildLoopPrompt(input.spec, turn, previousEvaluation, failureStreak);
     const transcript = await input.runAgent({
       spec: input.spec,
       turn,
@@ -184,6 +191,32 @@ function summarizeOutput(value: string): string {
   const lines = value.split(/\r?\n/u).filter((line) => line.length > 0);
   const tail = lines.slice(-12).join("\n");
   return tail.length > 1_200 ? tail.slice(tail.length - 1_200) : tail;
+}
+
+function repeatedFailureStreak(evaluations: readonly LoopCommandEvaluation[]): number {
+  const [latest] = [...evaluations].reverse();
+  if (latest === undefined || latest.passed || latest.cancelled) {
+    return 0;
+  }
+  const signature = failureSignature(latest);
+  let streak = 0;
+  for (const evaluation of [...evaluations].reverse()) {
+    if (evaluation.passed || evaluation.cancelled || failureSignature(evaluation) !== signature) {
+      break;
+    }
+    streak += 1;
+  }
+  return streak;
+}
+
+function failureSignature(evaluation: LoopCommandEvaluation): string {
+  return [
+    evaluation.command,
+    ...evaluation.args,
+    String(evaluation.exitCode ?? "signal"),
+    summarizeOutput(evaluation.stdout),
+    summarizeOutput(evaluation.stderr),
+  ].join("\u001f");
 }
 
 function oneLine(value: string): string {

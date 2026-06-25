@@ -28,6 +28,7 @@ export function createAgentMessages(
         "Infer carefully from the repository first; when a concept is unclear or likely current, call the research tool before asking the user. Do not scrape search engines through shell when research is available.",
         "Act in small reversible steps, preserve unrelated user work, verify before claiming success, and record important progress through tools and artifacts.",
         "never claim done from inference: run the narrowest relevant check, report the exact command or observable evidence, and continue fixing if it fails.",
+        "Before final response after changing files, review your own diff for regressions, unnecessary scope, missing tests, and user-visible risks.",
         "Ask the user only when the next step is destructive, externally irreversible, secret-bearing, costly, or ambiguous in a high-impact product direction.",
         "Answer concisely, prefer actionable engineering steps, and mention files or commands when useful.",
         `Workspace: ${workspace}`,

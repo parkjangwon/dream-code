@@ -22,15 +22,22 @@ export type ModelCatalogRefreshResult = {
   readonly fallbackProviders: number;
 };
 
+export type ModelCatalogRefreshOptions = {
+  readonly force?: boolean;
+};
+
 const modelListSchema = z.object({
   data: z.array(z.union([
     z.string(),
     z.object({ id: z.string().min(1) }),
+    z.object({ name: z.string().min(1) }),
+    z.object({ model: z.string().min(1) }),
   ])).optional(),
   models: z.array(z.union([
     z.string(),
     z.object({ id: z.string().min(1) }),
     z.object({ name: z.string().min(1) }),
+    z.object({ model: z.string().min(1) }),
   ])).optional(),
 });
 
@@ -40,11 +47,18 @@ export async function refreshModelCatalogForProviders(
   root: string,
   connectedProviders: ReadonlySet<string>,
   env: ProviderEnv,
+  options: ModelCatalogRefreshOptions = {},
 ): Promise<ModelCatalogRefreshResult> {
   const catalog = await loadModelCatalog(root);
   const definitions = listProviderDefinitions()
     .filter((definition) => connectedProviders.has(definition.id));
-  const entries = await Promise.all(definitions.map((definition) => catalogEntryForProvider(root, definition, catalog, env)));
+  const entries = await Promise.all(definitions.map((definition) => catalogEntryForProvider(
+    root,
+    definition,
+    catalog,
+    env,
+    options.force === true,
+  )));
   const nextCatalog = entries.reduce((current, entry) => upsertCatalogProvider(current, entry.provider), catalog);
   await saveModelCatalog(root, nextCatalog);
   return {
@@ -59,9 +73,10 @@ async function catalogEntryForProvider(
   definition: ProviderDefinition,
   catalog: ModelCatalog,
   env: ProviderEnv,
+  force: boolean,
 ): Promise<{ readonly live: boolean; readonly provider: ModelCatalog["providers"][string] }> {
   const cached = catalog.providers[definition.id];
-  if (cached !== undefined && catalogEntryIsFresh(cached)) {
+  if (!force && cached !== undefined && catalogEntryIsFresh(cached)) {
     return { live: false, provider: cached };
   }
 
@@ -136,14 +151,19 @@ export function parseModelList(raw: string): readonly string[] {
   return unique(values.flatMap(modelIdFromListItem));
 }
 
-function modelIdFromListItem(item: string | { readonly id: string } | { readonly name: string }): readonly string[] {
+function modelIdFromListItem(
+  item: string | { readonly id: string } | { readonly name: string } | { readonly model: string },
+): readonly string[] {
   if (typeof item === "string") {
     return [item];
   }
   if ("id" in item) {
     return [item.id];
   }
-  return [item.name];
+  if ("name" in item) {
+    return [item.name];
+  }
+  return [item.model];
 }
 
 function unique(values: readonly string[]): readonly string[] {

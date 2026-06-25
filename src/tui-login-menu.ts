@@ -1,6 +1,7 @@
 import { ansi, paint } from "./ansi.js";
 import type { ProviderCredential } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
+import { providerHasRequiredBaseUrl } from "./provider-base-url.js";
 import {
   apiKeyEnvKeys,
   baseUrlEnvKeys,
@@ -94,10 +95,14 @@ function loginSource(
   env: ProviderEnv,
 ): LoginChoice["source"] {
   if (authMode === "api-key") {
-    if (apiKeyEnvKeys(definition).some((key) => isNonEmptyString(env[key]))) {
+    if (apiKeyEnvKeys(definition).some((key) => isNonEmptyString(env[key]))
+      && providerHasRequiredBaseUrl(definition, credential, env)) {
       return "env";
     }
-    return isNonEmptyString(credential?.apiKey) ? "saved" : "missing";
+    return isNonEmptyString(credential?.apiKey)
+      && providerHasRequiredBaseUrl(definition, credential, env)
+      ? "saved"
+      : "missing";
   }
   if (authMode === "none") {
     if (baseUrlEnvKeys(definition).some((key) => isNonEmptyString(env[key]))) {

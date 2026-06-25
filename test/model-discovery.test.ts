@@ -23,6 +23,19 @@ test("parseModelList reads OpenAI-compatible model responses", () => {
   assert.deepEqual(models, ["gpt-fast", "gpt-pro", "custom-lite"]);
 });
 
+test("parseModelList tolerates OpenAI-compatible provider variants", () => {
+  const models = parseModelList(JSON.stringify({
+    object: "list",
+    data: [
+      { id: "provider-fast", object: "model" },
+      { name: "provider-balanced" },
+      { model: "provider-pro" },
+    ],
+  }));
+
+  assert.deepEqual(models, ["provider-fast", "provider-balanced", "provider-pro"]);
+});
+
 test("parseModelList reads Ollama tag responses", () => {
   const models = parseModelList(JSON.stringify({
     models: [

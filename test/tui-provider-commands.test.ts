@@ -1,4 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
@@ -200,6 +202,77 @@ test("loginProvider connects Ollama without prompting for an API key", async () 
   }
 });
 
+test("loginProvider accepts a custom-openai base URL argument and discovers models", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const server = await startOpenAiCompatibleModelServer([
+    "local-fast",
+    "local-balanced",
+    "local-pro",
+  ]);
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const prompts: string[] = [];
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: `custom-openai ${server.baseUrl}/v1`,
+      env: { CUSTOM_OPENAI_API_KEY: "sk-custom" },
+      questioner: {
+        question: async (prompt) => {
+          prompts.push(prompt);
+          return "";
+        },
+      },
+    });
+    const credential = await readProviderCredential("custom-openai", root);
+
+    assert.deepEqual(prompts, []);
+    assert.equal(nextConfig.model.single.provider, "custom-openai");
+    assert.deepEqual(nextConfig.model.single.models, {
+      low: "local-fast",
+      mid: "local-balanced",
+      high: "local-pro",
+    });
+    assert.deepEqual(credential, {
+      region: "custom",
+      baseUrl: `${server.baseUrl}/v1`,
+    });
+    assert.deepEqual(server.requests, ["/v1/models"]);
+  } finally {
+    stdout.mock.restore();
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("loginProvider prompts custom-openai for an OpenAI-compatible base URL", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const server = await startOpenAiCompatibleModelServer(["custom-balanced"]);
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const prompts: string[] = [];
+    await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "custom-openai",
+      env: { CUSTOM_OPENAI_API_KEY: "sk-custom" },
+      questioner: {
+        question: async (prompt) => {
+          prompts.push(prompt);
+          return `${server.baseUrl}/v1`;
+        },
+      },
+    });
+
+    assert.deepEqual(prompts, ["Base URL (include /v1 if required): "]);
+    assert.deepEqual(server.requests, ["/v1/models"]);
+  } finally {
+    stdout.mock.restore();
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("loginProvider connects OpenAI with Codex OAuth", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-login-"));
   const codexHome = await mkdtemp(join(tmpdir(), "dream-codex-home-"));
@@ -244,4 +317,53 @@ function fakeJwt(exp: number): string {
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
   const payload = Buffer.from(JSON.stringify({ exp })).toString("base64url");
   return `${header}.${payload}.signature`;
+}
+
+type OpenAiCompatibleModelServer = {
+  readonly baseUrl: string;
+  readonly requests: readonly string[];
+  readonly close: () => Promise<void>;
+};
+
+function startOpenAiCompatibleModelServer(models: readonly string[]): Promise<OpenAiCompatibleModelServer> {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url ?? "");
+    if (request.url === "/v1/models") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ data: models.map((id) => ({ id })) }));
+      return;
+    }
+    response.writeHead(404, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "not found" }));
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      const address = server.address();
+      if (!isAddressInfo(address)) {
+        reject(new Error("OpenAI-compatible model server did not expose a TCP port."));
+        return;
+      }
+      resolve({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        requests,
+        close: () => new Promise((closeResolve, closeReject) => {
+          server.close((error) => {
+            if (error !== undefined) {
+              closeReject(error);
+              return;
+            }
+            closeResolve();
+          });
+        }),
+      });
+    });
+  });
+}
+
+function isAddressInfo(value: string | AddressInfo | null): value is AddressInfo {
+  return typeof value === "object" && value !== null && "port" in value;
 }

@@ -33,3 +33,32 @@ test("loginChoices exposes Ollama as a keyless provider", () => {
   assert.deepEqual(ollamaChoices.map(authLabel), ["(none)"]);
   assert.deepEqual(ollamaChoices.map((choice) => choice.source), ["saved"]);
 });
+
+test("loginChoices requires a base URL for custom-openai", () => {
+  const onlyApiKey = customOpenAiSource({}, { CUSTOM_OPENAI_API_KEY: "sk-custom" });
+  const envBaseUrl = customOpenAiSource({}, {
+    CUSTOM_OPENAI_API_KEY: "sk-custom",
+    DREAM_CUSTOM_OPENAI_BASE_URL: "http://127.0.0.1:4000/v1",
+  });
+  const savedWithoutBaseUrl = customOpenAiSource({ "custom-openai": { apiKey: "sk-custom" } }, {});
+  const savedWithBaseUrl = customOpenAiSource({
+    "custom-openai": {
+      apiKey: "sk-custom",
+      baseUrl: "http://127.0.0.1:4000/v1",
+    },
+  }, {});
+
+  assert.equal(onlyApiKey, "missing");
+  assert.equal(envBaseUrl, "env");
+  assert.equal(savedWithoutBaseUrl, "missing");
+  assert.equal(savedWithBaseUrl, "saved");
+});
+
+function customOpenAiSource(
+  providers: Parameters<typeof loginChoices>[0],
+  env: Parameters<typeof loginChoices>[1],
+): ReturnType<typeof loginChoices>[number]["source"] | undefined {
+  return loginChoices(providers, env)
+    .find((choice) => choice.definition.id === "custom-openai" && choice.authMode === "api-key")
+    ?.source;
+}

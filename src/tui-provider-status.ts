@@ -2,10 +2,10 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import type { ProviderCredential } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
+import { firstProviderBaseUrlEnvKey, providerHasRequiredBaseUrl } from "./provider-base-url.js";
 import { providerIsEnabled } from "./provider-settings.js";
 import {
   apiKeyEnvKeys,
-  baseUrlEnvKeys,
   type ProviderDefinition,
 } from "./provider-registry.js";
 
@@ -70,10 +70,10 @@ function providerConnection(
   env: ProviderEnv,
 ): CredentialSource {
   const envKey = firstEnvKey(env, apiKeyEnvKeys(definition));
-  if (envKey !== undefined) {
+  if (envKey !== undefined && providerHasRequiredBaseUrl(definition, credential, env)) {
     return { kind: "env", key: envKey };
   }
-  const baseUrlEnvKey = firstEnvKey(env, baseUrlEnvKeys(definition));
+  const baseUrlEnvKey = firstProviderBaseUrlEnvKey(definition, env);
   if (definition.auth.includes("none") && baseUrlEnvKey !== undefined) {
     return { kind: "env", key: baseUrlEnvKey };
   }
@@ -83,7 +83,7 @@ function providerConnection(
   if (definition.auth.includes("none") && (credential?.authMode === "none" || credential?.baseUrl !== undefined)) {
     return { kind: "saved" };
   }
-  if (credential?.apiKey !== undefined) {
+  if (credential?.apiKey !== undefined && providerHasRequiredBaseUrl(definition, credential, env)) {
     return { kind: "saved" };
   }
   return { kind: "missing" };

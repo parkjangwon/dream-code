@@ -8,6 +8,8 @@ import {
   type ProviderCredential,
 } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
+import { configWithConnectedProvider } from "./provider-login-config.js";
+import { baseUrlArgFromLoginParts, regionArgFromLoginParts } from "./provider-login-args.js";
 import {
   apiKeyEnvKeys,
   baseUrlEnvKeys,
@@ -67,7 +69,7 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
     return connectOauth(definition, options);
   }
 
-  const regionArg = optionParts.find((part) => part !== "api-key");
+  const regionArg = regionArgFromLoginParts(optionParts);
   const region = await resolveLoginRegion(definition, regionArg, options.questioner);
   if (region === undefined) {
     output.write(`unknown region for ${definition.id}: ${regionArg ?? ""}\n`);
@@ -76,7 +78,13 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   }
 
   const envKey = firstEnvKey(env, apiKeyEnvKeys(definition));
-  const baseUrl = await resolveBaseUrl(definition, region, options.questioner, env);
+  const baseUrl = await resolveBaseUrl(
+    definition,
+    region,
+    options.questioner,
+    env,
+    baseUrlArgFromLoginParts(optionParts),
+  );
   if (baseUrl === undefined) {
     output.write("connection cancelled: missing base URL\n");
     return options.config;
@@ -87,7 +95,7 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
       region: region.id,
       baseUrl,
     });
-    const nextConfig = configWithProvider(options.config, definition);
+    const nextConfig = await configWithConnectedProvider(options.configRoot, options.config, definition, env);
     await saveConfig(options.configRoot, nextConfig);
     output.write(`connected ${definition.displayName} (${region.label})\n`);
     return nextConfig;
@@ -99,7 +107,7 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
   }
   await writeProviderCredential(options.configRoot, definition.id, credential);
 
-  const nextConfig = configWithProvider(options.config, definition);
+  const nextConfig = await configWithConnectedProvider(options.configRoot, options.config, definition, env);
   await saveConfig(options.configRoot, nextConfig);
   output.write(`connected ${definition.displayName} (${region.label})\n`);
   return nextConfig;
@@ -171,16 +179,20 @@ async function resolveBaseUrl(
   region: ProviderRegion,
   questioner: ProviderQuestioner,
   env: ProviderEnv,
+  suppliedBaseUrl: string | undefined,
 ): Promise<string | undefined> {
   const envBaseUrl = firstEnvValue(env, baseUrlEnvKeys(definition));
   if (envBaseUrl !== undefined) {
     return envBaseUrl.replace(/\/+$/u, "");
   }
+  if (suppliedBaseUrl !== undefined) {
+    return suppliedBaseUrl.replace(/\/+$/u, "");
+  }
   if (region.baseUrl.length > 0) {
     return region.baseUrl.replace(/\/+$/u, "");
   }
 
-  const answer = await questioner.question("Base URL: ");
+  const answer = await questioner.question(baseUrlPrompt(definition));
   const trimmed = answer.trim().replace(/\/+$/u, "");
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -204,23 +216,8 @@ async function credentialForConnection(
   return trimmedApiKey.length > 0 ? { apiKey: trimmedApiKey, region, baseUrl } : undefined;
 }
 
-function configWithProvider(config: DreamConfig, definition: ProviderDefinition): DreamConfig {
-  return {
-    ...config,
-    providers: {
-      ...config.providers,
-      [definition.id]: { enabled: true },
-    },
-    model: {
-      ...config.model,
-      mode: "single",
-      single: {
-        provider: definition.id,
-        models: { ...definition.defaultModels },
-        defaultTier: "mid",
-      },
-    },
-  };
+function baseUrlPrompt(definition: ProviderDefinition): string {
+  return definition.id === "custom-openai" ? "Base URL (include /v1 if required): " : "Base URL: ";
 }
 
 function firstEnvKey(env: ProviderEnv, keys: readonly string[]): string | undefined {

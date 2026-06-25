@@ -48,3 +48,10 @@ test("parseArgs routes release checks with output flags", () => {
   assert.equal(parsed.command, "release-check");
   assert.deepEqual(parsed.rest, ["--json"]);
 });
+
+test("parseArgs routes coding agent eval commands", () => {
+  const parsed = parseArgs(["eval", "--json"]);
+
+  assert.equal(parsed.command, "eval");
+  assert.deepEqual(parsed.rest, ["--json"]);
+});

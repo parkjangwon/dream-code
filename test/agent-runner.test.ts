@@ -25,6 +25,8 @@ test("createAgentMessages keeps prompts minimal for token-saving startup", () =>
   assert.match(messages[0]?.content ?? "", /verify before claiming success/u);
   assert.match(messages[0]?.content ?? "", /never claim done from inference/u);
   assert.match(messages[0]?.content ?? "", /run the narrowest relevant check/u);
+  assert.match(messages[0]?.content ?? "", /Before final response after changing files/u);
+  assert.match(messages[0]?.content ?? "", /review your own diff/u);
   assert.match(messages[0]?.content ?? "", /Model routing context/u);
 });
 

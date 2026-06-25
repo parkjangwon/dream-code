@@ -8,6 +8,7 @@ import { stripAnsi } from "../src/ansi.js";
 import { formatAgentBoard } from "../src/agent-board.js";
 import { formatAgentRuns } from "../src/agent-run-format.js";
 import {
+  agentRunTelemetryPath,
   formatAgentRunDiff,
   formatAgentRunResumeContext,
   listAgentRuns,
@@ -54,8 +55,12 @@ test("agent run store persists state, output, and wire events", async () => {
 
     const output = await readFile(records[0]?.outputPath ?? "", "utf8");
     const wire = await readFile(records[0]?.transcriptPath ?? "", "utf8");
+    const telemetry = await readFile(agentRunTelemetryPath(root), "utf8");
     assert.equal(output, "hello world");
     assert.match(wire, /"type":"tool"/u);
+    assert.match(telemetry, /"runId":"run-test"/u);
+    assert.match(telemetry, /"status":"done"/u);
+    assert.match(telemetry, /"toolCalls":1/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

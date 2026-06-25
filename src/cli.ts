@@ -42,6 +42,18 @@ async function main(): Promise<void> {
     case "doctor":
       console.log(summarizeDoctor(await runDoctor()));
       return;
+    case "eval": {
+      const config = await loadConfig(defaultConfigRoot());
+      const { runCodingAgentEval, formatCodingAgentEvalReport } = await import("./coding-agent-eval.js");
+      const report = await runCodingAgentEval({
+        cwd: process.cwd(),
+        configRoot: defaultConfigRoot(),
+        config,
+      });
+      console.log(parsedArgs.rest.includes("--json") ? JSON.stringify(report, undefined, 2) : formatCodingAgentEvalReport(report));
+      process.exitCode = report.ok ? 0 : 1;
+      return;
+    }
     case "smoke": {
       const config = await loadConfig(defaultConfigRoot());
       const report = await runSmoke({
@@ -170,6 +182,7 @@ function printHelp(): void {
     "  dream route \"prompt\" --json  preview provider routing diagnostics",
     "  dream runs show latest --json  inspect the latest run audit record",
     "  dream doctor      check local tool availability",
+    "  dream eval        run deterministic coding-agent quality checks",
     "  dream smoke       run local production-readiness smoke checks",
     "  dream release-check  run smoke and package readiness checks",
     "  dream workday --dry-run  show the edit-test-review release loop",

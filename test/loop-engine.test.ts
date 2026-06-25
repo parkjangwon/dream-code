@@ -125,6 +125,38 @@ test("loop engine summarizes evaluator output before the next agent turn", async
   }
 });
 
+test("loop engine flags repeated evaluator failures in the next agent prompt", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "dream-loop-repeat-"));
+  try {
+    const prompts: string[] = [];
+    const spec = parseLoopSpec(JSON.stringify({
+      version: 1,
+      name: "repeat-loop",
+      goal: "Break out of repeated failures",
+      maxTurns: 3,
+      evaluator: {
+        type: "command",
+        command: process.execPath,
+        args: ["-e", "console.error('same failure'); process.exit(2)"],
+      },
+    }));
+
+    await runLoopSpec({
+      workspace,
+      spec,
+      runAgent: async ({ prompt }) => {
+        prompts.push(prompt);
+        return "attempted";
+      },
+    });
+
+    assert.match(prompts[2] ?? "", /Repeated evaluator failure: 2 consecutive matches/u);
+    assert.match(prompts[2] ?? "", /change strategy before trying again/u);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("loop engine records failed events when an agent turn throws", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "dream-loop-agent-fail-"));
   try {

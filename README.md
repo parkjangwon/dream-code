@@ -267,6 +267,10 @@ DREAM_CODE_SOURCE=1 sh install.sh
 - **Workflow as code:** run project-local JavaScript workflows with `agent()`,
   `parallel()`, `pipeline()`, file helpers, globbing, traces, and starter
   templates.
+- **Coding-agent evals:** run deterministic readiness checks with `dream eval`
+  to verify permission guards, self-review discipline, loop retry context,
+  OpenAI-compatible model parsing, and agent-run telemetry without calling a
+  live LLM.
 - **Project awareness:** load `AGENTS.md`, `DESIGN.md`, plans, tasks, sessions,
   LSP diagnostics, live MCP tools, hooks, and local tool health.
 - **Workspace control:** let the agent list, search, grep with regex/globs,
@@ -293,6 +297,40 @@ qwen, custom-openai
 ```
 
 OpenAI supports API key credentials and Codex/ChatGPT OAuth-style credentials.
+For OpenAI-compatible endpoints, use `custom-openai` and pass the API root that
+serves `/models` and `/chat/completions`; include `/v1` when your server expects
+it:
+
+```text
+/login custom-openai http://127.0.0.1:4000/v1
+
+CUSTOM_OPENAI_API_KEY=sk-...
+DREAM_CUSTOM_OPENAI_BASE_URL=http://127.0.0.1:4000/v1
+```
+
+Dream Code fetches `GET {baseUrl}/models` after login and uses the discovered
+model IDs as the default low/mid/high tiers.
+
+## Coding-Agent Quality
+
+Use `dream eval` before large autonomous changes or releases. It returns a
+deterministic score and repair hints for the core coding-agent contract:
+
+```text
+dream eval
+dream eval --json
+```
+
+Agent runs also append structured JSONL telemetry under
+`~/.dream/agent_run_telemetry.jsonl` with status, duration, tool calls, changed
+file counts, and failed tool counts. Use it with `dream runs show latest --json`
+and `~/.dream/model_telemetry.jsonl` when investigating routing, provider
+health, or long-running task stability.
+
+The eval includes a tiny reproduce-fix-verify fixture that exercises real
+workspace edit tools and a command evaluator. It also inspects the current git
+diff for broad or testless source changes; that check can warn without failing
+the command, so reviewers see risk without blocking useful local iteration.
 
 ## Drive Mode
 
