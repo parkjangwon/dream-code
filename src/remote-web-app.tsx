@@ -3,24 +3,18 @@ import { useEffect, useState } from "preact/hooks";
 
 import { Composer } from "./remote-web-composer.js";
 import { LogoutDialog, SessionDeleteDialog } from "./remote-web-confirm.js";
-import { HomeView, ProjectView } from "./remote-web-home.js";
-import { InstallAppButton } from "./remote-web-install.js";
-import { PairPanel } from "./remote-web-pair.js";
-import { CommandThread } from "./remote-web-thread.js";
 import { RenameSessionDialog, ThreadActions } from "./remote-web-session-actions.js";
 import { useNotificationNavigation } from "./remote-web-notification-navigation.js";
 import { registerRemoteServiceWorker } from "./remote-web-notifications.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
-import { useRemoteNavigation, type RemoteNavigation } from "./remote-web-navigation.js";
-import type { RemoteScreen } from "./remote-web-screen.js";
+import { useRemoteNavigation } from "./remote-web-navigation.js";
 import { useCommandStream, useRemoteData, useRemoteWorkspaceRefresh } from "./remote-web-data.js";
+import { remoteLabels as t, remoteTokenKey } from "./remote-web-labels.js";
 import {
-  cancelCommand,
   deleteRemoteSession,
-  openSession,
-  projectForSession,
   renameRemoteSession,
 } from "./remote-web-session-ops.js";
+import { commandsForThread, renderAuthScreen } from "./remote-web-shell.js";
 import {
   type CommandRecord,
   type RemoteState,
@@ -28,35 +22,8 @@ import {
   type SessionDto,
 } from "./remote-web-api.js";
 
-const strings = {
-  en: {
-    askDreamCode: "Ask Dream Code",
-    back: "Back",
-    checkingConnection: "Checking connection...",
-    connect: "Connect",
-    deleteSession: "Delete",
-    deviceName: "Device name",
-    logoutDevice: "Logout",
-    newThread: "New Thread",
-    noProjects: "No projects yet.",
-    noRecentThreads: "No recent threads yet.",
-    noSessions: "No sessions yet.",
-    paired: "Paired",
-    pairDevice: "Pair this device",
-    pairingCode: "Pairing code",
-    projects: "Projects",
-    recentThreads: "Recent Threads",
-    remote: "Dream Code Remote",
-    threads: "Threads",
-    thread: "Thread",
-  },
-} as const;
-
-const t = strings.en;
-const tokenKey = "dream.remote.token";
-
 function App() {
-  const auth = useRemoteAuth(tokenKey);
+  const auth = useRemoteAuth(remoteTokenKey);
   const token = auth.state.kind === "paired" ? auth.state.token : "";
   const [state, setState] = useState<RemoteState>({ projects: [], sessions: [] });
   const [commands, setCommands] = useState<readonly CommandRecord[]>([]);
@@ -69,6 +36,9 @@ function App() {
   const [error, setError] = useState("");
   const navigation = useRemoteNavigation();
   const screen = navigation.screen;
+  const rememberCommand = (command: CommandRecord) => {
+    navigation.replace((current) => current.kind === "thread" ? { ...current, commandIds: [...current.commandIds, command.id] } : current);
+  };
 
   useEffect(() => registerRemoteServiceWorker(), []);
   useRemoteData(token, setState, setCommands, setError);
@@ -92,7 +62,19 @@ function App() {
             : <span class="top-spacer" aria-hidden="true" />}
         </header>
         <div class={`content page-transition page-${navigation.direction}`} key={screen.kind === "home" ? "home" : screen.kind === "project" ? `project-${screen.project.id}` : `thread-${screen.session?.id ?? screen.project?.id ?? "new"}`}>
-          {renderAuthScreen(auth, navigation, token, state, visibleCommands, setState, setDeleteTarget, setLogoutOpen, setMessage, setError)}
+          {renderAuthScreen({
+            auth,
+            navigation,
+            token,
+            state,
+            visibleCommands,
+            setState,
+            setDeleteTarget,
+            setLogoutOpen,
+            setMessage,
+            setError,
+            onCommand: rememberCommand,
+          })}
         </div>
         {error.length > 0 ? <p class="muted">{error}</p> : null}
       </main>
@@ -150,109 +132,12 @@ function App() {
           screen={screen}
           token={token}
           onMessage={setMessage}
-          onCommand={(command) => {
-            navigation.replace((current) => current.kind === "thread" ? { ...current, commandIds: [...current.commandIds, command.id] } : current);
-          }}
+          onCommand={rememberCommand}
           onError={setError}
         />
       ) : null}
     </div>
   );
-}
-
-function renderAuthScreen(
-  auth: ReturnType<typeof useRemoteAuth>,
-  navigation: RemoteNavigation,
-  token: string,
-  state: RemoteState,
-  visibleCommands: readonly CommandRecord[],
-  setState: (update: (current: RemoteState) => RemoteState) => void,
-  setDeleteTarget: (session: SessionDto) => void,
-  setLogoutOpen: (open: boolean) => void,
-  setMessage: (message: string) => void,
-  setError: (message: string) => void,
-) {
-  switch (auth.state.kind) {
-    case "checking":
-      return <p class="muted loading-text">{t.checkingConnection}</p>;
-    case "pairing":
-      return <PairPanel tokenKey={tokenKey} labels={t} onPaired={auth.pair} />;
-    case "paired":
-      return (
-        <div class="paired-shell">
-          <div class="connection">
-            <span><span class="status-dot" />{t.paired} · {auth.state.device.name}</span>
-            <span class="connection-actions">
-              <InstallAppButton />
-              <button type="button" onClick={() => setLogoutOpen(true)}>{t.logoutDevice}</button>
-            </span>
-          </div>
-          {renderScreen(navigation.screen, token, state, visibleCommands, navigation, setState, setDeleteTarget, setMessage, setError)}
-        </div>
-      );
-    default:
-      return assertNever(auth.state);
-  }
-}
-
-function renderScreen(
-  screen: RemoteScreen,
-  token: string,
-  state: RemoteState,
-  visibleCommands: readonly CommandRecord[],
-  navigation: RemoteNavigation,
-  setState: (update: (current: RemoteState) => RemoteState) => void,
-  setDeleteTarget: (session: SessionDto) => void,
-  setMessage: (message: string) => void,
-  setError: (message: string) => void,
-) {
-  switch (screen.kind) {
-    case "home":
-      return (
-        <HomeView
-          projects={state.projects}
-          recentSessions={state.sessions.slice(0, 12)}
-          labels={t}
-          onOpenProject={(project) => navigation.navigate({ kind: "project", project })}
-          onOpenSession={(session) => {
-            const project = projectForSession(state.projects, session);
-            if (project !== undefined) {
-              openSession(token, project, session, navigation, setError);
-            }
-          }}
-        />
-      );
-    case "project":
-      return (
-        <ProjectView
-          project={screen.project}
-          sessions={state.sessions}
-          labels={t}
-          onDeleteSession={setDeleteTarget}
-          onNewThread={() => navigation.navigate({ kind: "thread", project: screen.project, session: undefined, commandIds: [] })}
-          onOpenSession={(session) => openSession(token, screen.project, session, navigation, setError)}
-        />
-      );
-    case "thread":
-      return <CommandThread turns={screen.session?.turns ?? []} commands={visibleCommands} onCancel={(id) => cancelCommand(token, id, setError)} />;
-    default:
-      return assertNever(screen);
-  }
-}
-
-function commandsForThread(screen: Extract<RemoteScreen, { readonly kind: "thread" }>, commands: readonly CommandRecord[]): readonly CommandRecord[] {
-  if (screen.session !== undefined) {
-    return commands.filter((command) => screen.commandIds.includes(command.id) || (command.sessionId === screen.session?.id && isActive(command)));
-  }
-  return commands.filter((command) => screen.commandIds.includes(command.id));
-}
-
-function isActive(command: CommandRecord): boolean {
-  return command.status === "queued" || command.status === "running";
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected remote screen: ${String(value)}`);
 }
 
 render(<App />, document.querySelector("#app") ?? document.body);

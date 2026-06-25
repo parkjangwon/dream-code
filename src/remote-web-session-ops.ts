@@ -56,6 +56,20 @@ export function cancelCommand(token: string, id: string, setError: (message: str
   });
 }
 
+export function retryCommand(
+  token: string,
+  command: CommandRecord,
+  onCommand: (command: CommandRecord) => void,
+  setError: (message: string) => void,
+): void {
+  requestJson<CommandResponse>("POST", "/api/commands", retryCommandBody(command), token).then((result) => {
+    onCommand(result.command);
+    setError("");
+  }).catch((retryError: unknown) => {
+    setError(retryError instanceof Error ? retryError.message : "Command retry failed.");
+  });
+}
+
 export async function deleteRemoteSession(
   token: string,
   session: SessionDto,
@@ -104,4 +118,12 @@ export function projectForSession(projects: readonly ProjectDto[], session: Sess
 function projectFromPath(path: string): ProjectDto {
   const parts = path.split(/[\\/]/u).filter((part) => part.length > 0);
   return { id: path, name: parts.at(-1) ?? path, path };
+}
+
+function retryCommandBody(command: CommandRecord): { readonly prompt: string; readonly cwd: string; readonly sessionId?: string } {
+  return {
+    prompt: command.prompt,
+    cwd: command.cwd,
+    ...(command.sessionId === undefined ? {} : { sessionId: command.sessionId }),
+  };
 }

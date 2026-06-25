@@ -4,6 +4,7 @@ import { runAgentPrompt } from "./agent-runner.js";
 import { loadConfig } from "./config.js";
 import { appendSessionTurn, readSession, startSession, type DreamSession } from "./session-store.js";
 import { stripAnsi } from "./ansi.js";
+import { activityFromAgentProgress } from "./remote-command-activity.js";
 import { isRemoteSlashCommandAllowed } from "./remote-slash-commands.js";
 import { runWorkspaceCommand } from "./tui-workspace-commands.js";
 import type { Questioner } from "./tui-questioner.js";
@@ -100,15 +101,6 @@ export async function runRemoteCommand(input: RemoteCommandInput): Promise<Remot
   } finally {
     output.write = originalWrite;
   }
-}
-
-function activityFromAgentProgress(text: string): RemoteCommandActivityInput | undefined {
-  const clean = stripAnsi(text).trim();
-  const label = clean.match(/^\S+\s+Tool\s+(.+)$/u)?.[1];
-  if (label === undefined) {
-    return undefined;
-  }
-  return { label: `Tool ${label}`, detail: "Dream Code executed a local tool" };
 }
 
 function isSignalAborted(signal: AbortSignal | undefined): boolean {

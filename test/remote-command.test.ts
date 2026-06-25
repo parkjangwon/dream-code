@@ -70,18 +70,18 @@ test("runRemoteCommand reports agent tool progress as remote activity", async ()
   try {
     const baseUrl = await listen(server);
     await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
-    const activity: string[] = [];
+    const activity: { readonly label: string; readonly detail?: string }[] = [];
 
     const result = await runRemoteCommand({
       configRoot: root,
       prompt: "inspect project",
       cwd: project,
-      onActivity: (event) => activity.push(event.label),
+      onActivity: (event) => activity.push(event),
     });
 
     assert.equal(result.output, "tool loop complete");
     assert.equal(calls, 2);
-    assert.ok(activity.some((label) => label.startsWith("Tool list")));
+    assert.ok(activity.some((event) => event.label === "Listed ." && event.detail === "Inspecting workspace entries"));
   } finally {
     server.close();
     await rm(project, { recursive: true, force: true });

@@ -542,6 +542,12 @@ input {
   color: #fff;
 }
 
+.activity-kind.verify {
+  border-color: rgb(96 211 148 / 34%);
+  background: rgb(96 211 148 / 12%);
+  color: #c8ffd9;
+}
+
 .activity-list li.done .activity-dot {
   background: var(--accent);
 }
@@ -619,6 +625,107 @@ input {
 
 .final-result.terminal pre {
   margin: 0;
+}
+
+.command-freshness {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #303034;
+  border-radius: 999px;
+  background: #121214;
+  color: var(--muted);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.command-freshness span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stale-command {
+  border-color: rgb(255 209 102 / 32%);
+  background: rgb(255 209 102 / 10%);
+  color: #ffd166;
+}
+
+.command-outcome {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid #303034;
+  border-radius: 16px;
+  background: #111113;
+  padding: 12px;
+}
+
+.command-outcome.done {
+  border-color: rgb(96 211 148 / 26%);
+}
+
+.command-outcome.failed {
+  border-color: rgb(255 69 58 / 34%);
+}
+
+.command-outcome.cancelled {
+  border-color: rgb(255 209 102 / 32%);
+}
+
+.outcome-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.outcome-copy strong {
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.outcome-copy small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outcome-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.outcome-metrics span {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #2e2e31;
+  border-radius: 999px;
+  background: #18181a;
+  color: #d8d8dc;
+  padding: 5px 7px;
+  font-size: 11px;
+  font-weight: 850;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retry-command {
+  min-height: 38px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 13px;
+  background: #f2f2f7;
+  color: #050505;
+  padding: 8px 11px;
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .markdown-result h1,

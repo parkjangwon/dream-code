@@ -2,6 +2,7 @@ import { h } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 
 import { ActivityTimeline, ProcessSummary } from "./remote-web-activity.js";
+import { CommandOutcomeSummary } from "./remote-web-command-summary.js";
 import { MarkdownView } from "./remote-web-markdown.js";
 import type { CommandRecord, CommandStatus, SessionTurnDto } from "./remote-web-api.js";
 
@@ -17,6 +18,7 @@ export function CommandThread(props: {
   readonly commands: readonly CommandRecord[];
   readonly turns: readonly SessionTurnDto[];
   readonly onCancel: (id: string) => void;
+  readonly onRetry: (command: CommandRecord) => void;
 }) {
   const commands = [...props.commands].reverse();
   const empty = commands.length === 0 && props.turns.length === 0;
@@ -56,6 +58,7 @@ export function CommandThread(props: {
               </div>
               <ProcessSummary command={command} />
               <PersistentProcessTimeline command={command} />
+              <CommandOutcomeSummary command={command} onRetry={props.onRetry} />
               <FinalCommandResult command={command} />
             </div>
           </article>

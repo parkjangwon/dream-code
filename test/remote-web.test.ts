@@ -121,6 +121,7 @@ test("remote web app renders an English mobile-first control shell", () => {
 
 test("remote web navigation does not cancel running commands on back navigation", async () => {
   const app = await readFile("src/remote-web-app.tsx", "utf8");
+  const shell = await readFile("src/remote-web-shell.tsx", "utf8");
   const navigation = await readFile("src/remote-web-navigation.ts", "utf8");
   const thread = await readFile("src/remote-web-thread.tsx", "utf8");
   const composer = await readFile("src/remote-web-composer.tsx", "utf8");
@@ -135,11 +136,15 @@ test("remote web navigation does not cancel running commands on back navigation"
   assert.match(navigation, /setDirection\("forward"\)/u);
   assert.match(navigation, /setDirection\(nextIndex < indexRef\.current \? "back" : "forward"\)/u);
   assert.match(ops, /\/api\/commands\/.*\/cancel/u);
+  assert.match(ops, /retryCommand/u);
+  assert.match(ops, /\/api\/commands/u);
   assert.match(ops, /openSessionById/u);
   assert.match(notificationNavigation, /dream-notification-click/u);
   assert.match(notificationNavigation, /scrollTargetSessionId/u);
+  assert.match(app, /renderAuthScreen/u);
   assert.match(app, /renameRemoteSession/u);
-  assert.match(app, /projectForSession/u);
+  assert.match(shell, /projectForSession/u);
+  assert.match(shell, /onRetry/u);
   assert.match(thread, /MarkdownView markdown=\{props\.turn\.content\}/u);
   assert.match(thread, /LiveOutput/u);
   assert.match(thread, /latestSwarmFrame/u);
@@ -157,6 +162,7 @@ test("remote web navigation does not cancel running commands on back navigation"
 
 test("remote web shows command progress as mobile process cards", async () => {
   const thread = await readFile("src/remote-web-thread.tsx", "utf8");
+  const commandSummary = await readFile("src/remote-web-command-summary.tsx", "utf8");
   const activity = await readFile("src/remote-web-activity.tsx", "utf8");
   const css = await readFile("src/remote-web.css", "utf8");
 
@@ -164,7 +170,12 @@ test("remote web shows command progress as mobile process cards", async () => {
   assert.match(thread, /ProcessSummary/u);
   assert.match(thread, /PersistentProcessTimeline/u);
   assert.match(thread, /FinalCommandResult/u);
+  assert.match(thread, /CommandOutcomeSummary/u);
   assert.match(thread, /final-result/u);
+  assert.match(commandSummary, /CommandFreshness/u);
+  assert.match(commandSummary, /retry-command/u);
+  assert.match(commandSummary, /command-outcome/u);
+  assert.match(commandSummary, /stale-command/u);
   assert.match(thread, /ActivityTimeline command=\{command\}/u);
   assert.match(activity, /latestActivity/u);
   assert.match(activity, /step-meter/u);
@@ -173,7 +184,11 @@ test("remote web shows command progress as mobile process cards", async () => {
   assert.match(css, /\.process-card/u);
   assert.match(css, /\.process-summary/u);
   assert.match(css, /\.final-result/u);
+  assert.match(css, /\.command-outcome/u);
+  assert.match(css, /\.retry-command/u);
+  assert.match(css, /\.stale-command/u);
   assert.match(css, /\.activity-kind\.tool/u);
+  assert.match(css, /\.activity-kind\.verify/u);
   assert.match(css, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/u);
 });
 

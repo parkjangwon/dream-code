@@ -8,7 +8,7 @@ type ActivityLine = {
   readonly detail: string;
 };
 
-type ActivityKind = "agent" | "command" | "read" | "system" | "tool" | "write";
+type ActivityKind = "agent" | "command" | "read" | "system" | "tool" | "verify" | "write";
 
 const queuedLines: readonly ActivityLine[] = [
   { label: "Prompt received", detail: "Queued on the remote daemon" },
@@ -147,6 +147,9 @@ function activityKind(label: string): ActivityKind {
   if (normalized.includes("tool")) {
     return "tool";
   }
+  if (normalized.includes("build") || normalized.includes("check") || normalized.includes("test") || normalized.includes("verify")) {
+    return "verify";
+  }
   if (normalized.includes("read") || normalized.includes("loading")) {
     return "read";
   }
@@ -174,6 +177,8 @@ function activityKindLabel(kind: ActivityKind): string {
       return "SYS";
     case "tool":
       return "TOOL";
+    case "verify":
+      return "CHECK";
     case "write":
       return "WRITE";
     default:
