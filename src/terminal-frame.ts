@@ -15,6 +15,32 @@ export function clearPreviousFrame(frame: string, terminalColumns: number | unde
   return clearPreviousRow.repeat(renderedRowCount(frame, terminalColumns));
 }
 
+export function cursorToRow(row: number): string {
+  return `\u001B[${Math.max(1, row)};1H`;
+}
+
+export function clearFrameAtRow(
+  row: number,
+  frame: string,
+  terminalColumns: number | undefined,
+): string {
+  if (frame.length === 0) {
+    return "";
+  }
+  return `${cursorToRow(row)}${clearRowsFromCurrentPosition(renderedRowCount(frame, terminalColumns))}`;
+}
+
+export function clearRowsFromCurrentPosition(count: number): string {
+  let sequence = "";
+  for (let index = 0; index < count; index += 1) {
+    sequence = `${sequence}\u001B[2K`;
+    if (index < count - 1) {
+      sequence = `${sequence}\u001B[1B\r`;
+    }
+  }
+  return sequence;
+}
+
 function renderedRowCount(frame: string, terminalColumns: number | undefined): number {
   const lines = frameLines(frame);
   if (terminalColumns === undefined || terminalColumns <= 0) {

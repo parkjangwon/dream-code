@@ -1,3 +1,5 @@
+import { cockpitReservedRows } from "./tui-cockpit.js";
+
 export type SwarmMonitorWindowOption = {
   readonly maxVisibleLanes?: number;
 };
@@ -19,6 +21,11 @@ export function swarmMonitorWindowOption(
 
 export function maxVisibleSwarmLanes(terminalRows: number | undefined): number {
   const rows = terminalRows ?? fallbackTerminalRows;
-  const budget = Math.max(minimumVisibleLanes, rows - monitorChromeRows);
+  const viewportRows = Math.max(0, rows - cockpitReservedRows);
+  return maxVisibleSwarmLanesForViewport(viewportRows);
+}
+
+export function maxVisibleSwarmLanesForViewport(viewportRows: number): number {
+  const budget = Math.max(minimumVisibleLanes, viewportRows - monitorChromeRows);
   return Math.min(maximumVisibleLanes, budget);
 }

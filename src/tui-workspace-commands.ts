@@ -65,7 +65,7 @@ async function runWorkspaceCommandBody(
   }
 
   if (!text.startsWith("/")) {
-    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
   }
 
   const command = splitCommand(text);
@@ -193,6 +193,7 @@ async function runWorkspaceCommandBody(
         args: command.rest,
         questioner,
         cwd,
+        oneShotYolo,
         ...(sessionRuntime === undefined ? {} : { sessionId: sessionRuntime.currentId() }),
       });
       return { config, shouldContinue: true };
@@ -223,7 +224,7 @@ async function runWorkspaceCommandBody(
         return { config, shouldContinue: true };
       }
       if (await isSkillInvocation(configRoot, cwd, command.name)) {
-        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
       }
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };

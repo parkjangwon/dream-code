@@ -6,6 +6,8 @@ import { notifySwarmComplete } from "./notifications.js";
 import { parseSwarmArgs, type SwarmArgs } from "./swarm-args.js";
 import { saveSwarmArtifact } from "./swarm-artifacts.js";
 import { runAgentSwarm } from "./swarm-runner.js";
+import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
+import { buildBottomStatusLines } from "./tui-status-bar.js";
 
 export type SwarmQuestioner = {
   readonly question: (prompt: string) => Promise<string>;
@@ -18,6 +20,7 @@ export type RunSwarmCommandOptions = {
   readonly questioner: SwarmQuestioner;
   readonly cwd?: string;
   readonly sessionId?: string;
+  readonly oneShotYolo?: boolean;
 };
 
 export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<void> {
@@ -34,15 +37,38 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
   }
 
   const replaceMonitor = output.isTTY === true;
+  const cwd = options.cwd ?? currentWorkingDirectory();
+  const layeredLayout = replaceMonitor && options.sessionId !== undefined
+    ? renderLayeredScreen({
+      config: options.config,
+      oneShotYolo: options.oneShotYolo === true,
+      statusLines: await buildBottomStatusLines({
+        config: options.config,
+        configRoot: options.configRoot,
+        sessionId: options.sessionId,
+        cwd,
+        oneShotYolo: options.oneShotYolo === true,
+      }),
+      busyLabel: "running",
+      guideLine: "monitor keys active · esc esc stop",
+      terminalRows: output.rows,
+      terminalColumns: output.columns,
+    })
+    : undefined;
+  const layeredWriter = layeredLayout === undefined ? undefined : createLayeredMainWriter(layeredLayout);
   const baseOptions = {
     config: options.config,
     configRoot: options.configRoot,
-    cwd: options.cwd ?? currentWorkingDirectory(),
+    cwd,
     goal,
-    write: (chunk: string) => output.write(chunk),
+    write: (chunk: string) => layeredWriter?.write(chunk) ?? output.write(chunk),
     replaceMonitor,
     monitorRows: output.rows,
     ...(output.columns === undefined ? {} : { monitorColumns: output.columns }),
+    ...(layeredLayout === undefined ? {} : {
+      monitorAnchorRow: layeredLayout.mainStartRow + 2,
+      monitorViewportRows: layeredLayout.mainRows,
+    }),
     ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   };
   const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
@@ -60,6 +86,8 @@ function swarmRunOptions(
     readonly write: (chunk: string) => boolean;
     readonly replaceMonitor: boolean;
     readonly monitorColumns?: number;
+    readonly monitorAnchorRow?: number;
+    readonly monitorViewportRows?: number;
   },
   parsed: SwarmArgs,
 ): Parameters<typeof runAgentSwarm>[0] {

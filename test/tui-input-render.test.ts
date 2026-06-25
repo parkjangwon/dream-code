@@ -1,7 +1,7 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
-import { ansi } from "../src/ansi.js";
+import { ansi, stripAnsi } from "../src/ansi.js";
 import {
   cursorUpToPromptLineCount,
   displayInputText,
@@ -9,6 +9,7 @@ import {
   formatFilePaletteLine,
   formatPaletteHeading,
   renderInputView,
+  renderInputViewLineCount,
   renderInputText,
   renderPaletteDescription,
   shouldShowInlineShortcutGuide,
@@ -16,9 +17,9 @@ import {
 import { terminalVisibleWidth } from "../src/terminal-width.js";
 import { createInputState } from "../src/tui-input-state.js";
 
-test("boxed input cursor lands on the prompt row instead of the top border", () => {
-  assert.equal(cursorUpToPromptLineCount(4), 2);
-  assert.equal(cursorUpToPromptLineCount(11), 9);
+test("cockpit input cursor lands on the prompt row above the footer", () => {
+  assert.equal(cursorUpToPromptLineCount(5, 0), 1);
+  assert.equal(cursorUpToPromptLineCount(7, 2), 3);
 });
 
 test("renderInputView batches redraw into one cursor-hidden frame", () => {
@@ -28,13 +29,78 @@ test("renderInputView batches redraw into one cursor-hidden frame", () => {
     return true;
   });
   try {
-    renderInputView(createInputState([], []), "> ", false, [], 3);
+    renderInputView(createInputState([], []), "> ", false, [], {
+      lineCount: 3,
+      promptLineIndex: 1,
+      promptCursorColumn: 2,
+      terminalRows: undefined,
+    });
 
     assert.equal(chunks.length, 1);
     assert.equal(chunks[0]?.startsWith("\u001B[?25l"), true);
     assert.equal(chunks[0]?.includes("\u001B[1A\r\u001B[2K"), true);
     assert.equal(chunks[0]?.endsWith("\u001B[?25h"), true);
   } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("renderInputView renders a compact cockpit dock instead of a boxed composer", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const lineCount = renderInputViewLineCount(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const rendered = stripAnsi(chunks.join(""));
+
+    assert.equal(lineCount, 7);
+    assert.doesNotMatch(rendered, /[┌┐└┘│]/u);
+    assert.match(rendered, /> /u);
+    assert.match(rendered, /\[model\] \| dream-code/u);
+    assert.match(rendered, /Context 0%/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("renderInputView clears from the previous cockpit top when auxiliary height changes", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const previous = renderInputView(createInputState([], []), "> ", false, []);
+    renderInputView(createInputState([], []), "> ", false, [], previous);
+
+    assert.match(chunks[1] ?? "", /\u001B\[3A\r/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("renderInputView pins the cockpit to the terminal bottom when rows are known", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  const rows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+  try {
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
+    const frame = renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+
+    assert.equal(frame.lineCount, 7);
+    assert.match(chunks[0] ?? "", /\u001B\[24;1H/u);
+    assert.match(chunks[0] ?? "", /\u001B\[27;1H/u);
+  } finally {
+    if (rows === undefined) {
+      Reflect.deleteProperty(process.stdout, "rows");
+    } else {
+      Object.defineProperty(process.stdout, "rows", rows);
+    }
     stdout.mock.restore();
   }
 });

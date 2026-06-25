@@ -218,6 +218,42 @@ test("createSwarmMonitor can redraw the same live panel in place", () => {
   assert.equal(chunks[1]?.includes("\u001B[1A\r\u001B[2K"), true);
 });
 
+test("createSwarmMonitor anchors live panels inside the middle viewport", () => {
+  const chunks: string[] = [];
+  const lanes: readonly SwarmLane[] = [
+    {
+      id: "lane-1",
+      title: "Technical Plan Lead",
+      agent: {
+        id: "technical-plan-lead",
+        name: "Technical Plan Lead",
+        summary: "Plan the work.",
+        model: "inherit",
+        tools: ["read"],
+        prompt: "Plan.",
+        source: "built-in",
+      },
+      prompt: "Plan.",
+    },
+  ];
+  const monitor = createSwarmMonitor({
+    goal: "Keep the monitor out of top and bottom chrome",
+    lanes,
+    replaceInPlace: true,
+    anchorRow: 8,
+    now: () => 1000,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+  });
+
+  monitor.start();
+  monitor.laneStarted("lane-1");
+
+  assert.match(chunks[0] ?? "", /\u001B\[8;1H/u);
+  assert.match(chunks[1] ?? "", /\u001B\[8;1H/u);
+});
+
 test("createSwarmMonitor clears wrapped visual rows in narrow terminals", () => {
   const chunks: string[] = [];
   const lanes: readonly SwarmLane[] = [

@@ -6,9 +6,8 @@ import type { DreamConfig } from "./config.js";
 import { writeSwarmMemory } from "./memory-writer.js";
 import { defaultSwarmAgentRunner } from "./swarm-agent-runner.js";
 import { createSwarmMonitor } from "./swarm-monitor.js";
-import { swarmMonitorWindowOption } from "./swarm-monitor-window.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
-import { monitorColumnsOption, monitorNowOption } from "./swarm-runner-options.js";
+import { monitorAnchorRowOption, monitorColumnsOption, monitorNowOption, monitorWindowOption } from "./swarm-runner-options.js";
 import {
   createFastSwarmSynthesis,
   shouldUseFastSwarmSynthesis,
@@ -71,6 +70,8 @@ export type SwarmRunOptions = {
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
   readonly monitorColumns?: number;
+  readonly monitorAnchorRow?: number;
+  readonly monitorViewportRows?: number;
   readonly signal?: AbortSignal;
   readonly sessionId?: string;
   readonly synthesisMode?: SwarmSynthesisMode;
@@ -103,7 +104,8 @@ export async function runAgentSwarmWithAgents(
     },
     ...monitorNowOption(options.now),
     ...monitorColumnsOption(options.monitorColumns),
-    ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
+    ...monitorAnchorRowOption(options.monitorAnchorRow),
+    ...monitorWindowOption(options.monitorRows, options.monitorViewportRows, options.replaceMonitor),
   } : {
     goal: options.goal,
     lanes: plan.lanes,
@@ -115,7 +117,8 @@ export async function runAgentSwarmWithAgents(
     },
     ...monitorNowOption(options.now),
     ...monitorColumnsOption(options.monitorColumns),
-    ...swarmMonitorWindowOption(options.monitorRows, options.replaceMonitor),
+    ...monitorAnchorRowOption(options.monitorAnchorRow),
+    ...monitorWindowOption(options.monitorRows, options.monitorViewportRows, options.replaceMonitor),
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced, plan.intensity));
   monitor.start();

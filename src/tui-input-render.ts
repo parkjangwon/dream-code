@@ -5,37 +5,66 @@ import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
 import { withHiddenCursor } from "./terminal-frame.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
+import { cockpitPromptRowOffsetFromBottom, renderCockpitFrame } from "./tui-cockpit.js";
+import {
+  clearRenderedInputViewSequence,
+  cursorToFrameStartSequence,
+  cursorToPromptSequence,
+  renderedInputViewFromCockpit,
+} from "./tui-input-frame.js";
+import type { RenderedInputView } from "./tui-input-frame.js";
 import { inputViewport } from "./tui-input-viewport.js";
 import type { InputState } from "./tui-input-state.js";
 import { shortcutGuideLines } from "./tui-shortcuts.js";
 
 const maxVisibleCommands = 8;
 
+export type { RenderedInputView } from "./tui-input-frame.js";
+
 export function renderInputView(
   state: InputState,
   prompt: string,
   secret = false,
   statusLines: readonly string[] = [],
-  previousLineCount = 0,
-): number {
+  previousFrame: RenderedInputView | undefined = undefined,
+): RenderedInputView {
   const width = Math.max(64, output.columns ?? 80);
-  const contentWidth = width - 4;
   const promptWidth = terminalVisibleWidth(prompt);
-  const viewport = inputViewport(state.text, state.cursor, Math.max(0, contentWidth - promptWidth));
+  const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - promptWidth));
   const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills, state.fileMentions)}`;
-  const lines = [
-    borderLine("top", width),
-    boxedLine(promptLine, contentWidth),
-    borderLine("bottom", width),
-    ...statusLines,
-    ...renderAuxiliaryLines(state, secret, width),
-  ];
+  const frame = renderCockpitFrame({
+    promptLine,
+    promptCursorColumn: promptWidth + viewport.cursorColumn,
+    width,
+    auxiliaryLines: renderAuxiliaryLines(state, secret, width),
+    footerLines: statusLines,
+  });
+  const renderedFrame = renderedInputViewFromCockpit(frame, output.rows);
   output.write(withHiddenCursor([
-    clearRenderedLinesSequence(previousLineCount),
-    lines.join("\n"),
-    cursorToPromptSequence(lines.length, 2 + promptWidth + viewport.cursorColumn),
+    clearRenderedInputViewSequence(previousFrame),
+    cursorToFrameStartSequence(frame.lines.length, output.rows),
+    frame.lines.join("\n"),
+    cursorToPromptSequence(frame, output.rows),
   ].join("")));
-  return lines.length;
+  return renderedFrame;
+}
+
+export function renderInputViewLineCount(
+  state: InputState,
+  prompt: string,
+  secret = false,
+  statusLines: readonly string[] = [],
+  previousFrame: RenderedInputView | undefined = undefined,
+): number {
+  return renderInputView(state, prompt, secret, statusLines, previousFrame).lineCount;
+}
+
+export function clearRenderedInputView(frame: RenderedInputView | undefined): void {
+  if (frame === undefined) {
+    return;
+  }
+
+  output.write(withHiddenCursor(clearRenderedInputViewSequence(frame)));
 }
 
 export function clearRenderedLines(count: number): void {
@@ -181,36 +210,12 @@ export function formatFilePaletteLine(target: FileMentionTarget, selected: boole
   return `${prefix}${paint(description, ansi.dim)}`;
 }
 
-function cursorToPromptSequence(lineCount: number, columns: number): string {
-  const linesToPrompt = cursorUpToPromptLineCount(lineCount);
-  let sequence = "";
-  if (linesToPrompt > 0) {
-    sequence = `${sequence}\u001B[${linesToPrompt}A`;
-  }
-  sequence = `${sequence}\r`;
-  if (columns > 0) {
-    sequence = `${sequence}\u001B[${columns}C`;
-  }
-  return sequence;
-}
-
-function borderLine(position: "top" | "bottom", width: number): string {
-  const left = position === "top" ? "┌" : "└";
-  const right = position === "top" ? "┐" : "┘";
-  return paint(`${left}${"─".repeat(width - 2)}${right}`, ansi.guide);
-}
-
-function boxedLine(content: string, width: number): string {
-  const padding = " ".repeat(Math.max(0, width - terminalVisibleWidth(content)));
-  return `${paint("│", ansi.guide)} ${content}${padding} ${paint("│", ansi.guide)}`;
-}
-
 function padVisible(text: string, width: number): string {
   return `${text}${" ".repeat(Math.max(0, width - terminalVisibleWidth(text)))}`;
 }
 
-export function cursorUpToPromptLineCount(lineCount: number): number {
-  return Math.max(0, lineCount - 2);
+export function cursorUpToPromptLineCount(_lineCount: number, footerLineCount = 0): number {
+  return cockpitPromptRowOffsetFromBottom(footerLineCount);
 }
 
 export function shouldShowInlineShortcutGuide(text: string): boolean {

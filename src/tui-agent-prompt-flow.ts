@@ -12,6 +12,8 @@ import { approveAgentTool } from "./tui-tool-approval.js";
 import type { AgentToolRequest } from "./agent-tool-schema.js";
 import type { CommandResult, Questioner } from "./tui-questioner.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
+import { buildBottomStatusLines } from "./tui-status-bar.js";
+import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
 
 export type RunAgentTextPromptOptions = {
   readonly text: string;
@@ -20,6 +22,7 @@ export type RunAgentTextPromptOptions = {
   readonly questioner: Questioner;
   readonly cwd: string;
   readonly sessionRuntime?: SessionRuntime;
+  readonly oneShotYolo?: boolean;
   readonly signal?: AbortSignal;
 };
 
@@ -29,6 +32,8 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
   }
   let assistantTranscript = "";
   const sessionId = options.sessionRuntime?.currentId();
+  const responseWriter = await agentResponseWriter(options);
+  responseWriter.write(`> ${options.text}\n`);
   const agentPrompt = {
     config: options.config,
     configRoot: options.configRoot,
@@ -37,23 +42,51 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     approveTool: (request: AgentToolRequest) => approveAgentTool(request, options.questioner),
     write: (chunk: string) => {
-      output.write(chunk);
+      responseWriter.write(chunk);
       assistantTranscript = `${assistantTranscript}${stripAnsi(chunk)}`;
     },
   };
   await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
-  await finishAgentTextPrompt(options, assistantTranscript);
+  await finishAgentTextPrompt(options, assistantTranscript, responseWriter.write);
   return { config: options.config, shouldContinue: true };
 }
 
-async function finishAgentTextPrompt(options: RunAgentTextPromptOptions, assistantTranscript: string): Promise<void> {
+async function agentResponseWriter(options: RunAgentTextPromptOptions): Promise<{ readonly write: (chunk: string) => boolean }> {
+  const sessionId = options.sessionRuntime?.currentId();
+  if (output.isTTY !== true || sessionId === undefined) {
+    return { write: (chunk) => output.write(chunk) };
+  }
+
+  const layout = renderLayeredScreen({
+    config: options.config,
+    oneShotYolo: options.oneShotYolo === true,
+    statusLines: await buildBottomStatusLines({
+      config: options.config,
+      configRoot: options.configRoot,
+      sessionId,
+      cwd: options.cwd,
+      oneShotYolo: options.oneShotYolo === true,
+    }),
+    busyLabel: "thinking",
+    guideLine: "esc interrupt · input resumes after this turn",
+    terminalRows: output.rows,
+    terminalColumns: output.columns,
+  });
+  return createLayeredMainWriter(layout);
+}
+
+async function finishAgentTextPrompt(
+  options: RunAgentTextPromptOptions,
+  assistantTranscript: string,
+  write: (chunk: string) => boolean,
+): Promise<void> {
   if (options.sessionRuntime !== undefined) {
     await appendSessionTurn(options.configRoot, options.sessionRuntime.currentId(), "assistant", assistantTranscript);
     await maybeAutoCompactSession(options.configRoot, options.sessionRuntime.currentId(), {
       summarizer: createLlmCompactSummarizer(options.config, options.configRoot),
     }).catch((error: unknown) => {
       if (error instanceof Error) {
-        output.write(`auto compact skipped: ${error.message}\n`);
+        write(`auto compact skipped: ${error.message}\n`);
         return;
       }
       throw error;
@@ -65,7 +98,7 @@ async function finishAgentTextPrompt(options: RunAgentTextPromptOptions, assista
     configRoot: options.configRoot,
     userText: options.text,
     assistantTranscript,
-    write: (chunk) => output.write(chunk),
+    write,
     cwd: options.cwd,
     ...(options.sessionRuntime === undefined ? {} : { sessionRuntime: options.sessionRuntime }),
   });

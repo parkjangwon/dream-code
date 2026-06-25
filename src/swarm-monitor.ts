@@ -15,7 +15,7 @@ import {
   wrapIndex,
 } from "./swarm-monitor-state.js";
 import type { SwarmLane } from "./swarm-plan.js";
-import { clearPreviousFrame, withHiddenCursor } from "./terminal-frame.js";
+import { clearFrameAtRow, clearPreviousFrame, cursorToRow, withHiddenCursor } from "./terminal-frame.js";
 
 export type SwarmMonitor = {
   readonly start: () => void;
@@ -40,6 +40,7 @@ type MonitorOptions = {
   readonly onAbort?: () => void;
   readonly maxVisibleLanes?: number;
   readonly terminalColumns?: number;
+  readonly anchorRow?: number;
   readonly now?: () => number;
 };
 
@@ -84,7 +85,10 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       synthesisFinishedAt,
     });
     if (options.replaceInPlace === true) {
-      options.write(withHiddenCursor(`${clearPreviousFrame(renderedSnapshot, options.terminalColumns)}${snapshot}`));
+      const anchoredFrame = options.anchorRow === undefined
+        ? `${clearPreviousFrame(renderedSnapshot, options.terminalColumns)}${snapshot}`
+        : `${clearFrameAtRow(options.anchorRow, renderedSnapshot, options.terminalColumns)}${cursorToRow(options.anchorRow)}${snapshot}`;
+      options.write(withHiddenCursor(anchoredFrame));
       renderedSnapshot = snapshot;
       return;
     }

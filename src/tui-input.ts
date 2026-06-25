@@ -3,7 +3,8 @@ import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
-import { clearRenderedLines, renderInputText, renderInputView } from "./tui-input-render.js";
+import { clearRenderedInputView, renderInputText, renderInputView } from "./tui-input-render.js";
+import type { RenderedInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
@@ -42,16 +43,17 @@ export function readInteractiveInput(
       cancelOnEmptyBackspace: options.cancelOnEmptyBackspace === true,
       fileMentions: options.fileMentions ?? [],
     });
-    let renderedLines = 0;
+    let renderedFrame: RenderedInputView | undefined;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
 
     const render = (): void => {
-      renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedLines);
+      renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
-      clearRenderedLines(renderedLines);
+      clearRenderedInputView(renderedFrame);
+      renderedFrame = undefined;
       cleanup();
       if (result.kind === "submit") {
         output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [], options.fileMentions ?? [])}\n`);
@@ -82,7 +84,7 @@ export function readInteractiveInput(
           return;
         case "redraw":
           options.redrawHeader();
-          renderedLines = 0;
+          renderedFrame = undefined;
           render();
           return;
         case "cancel":
@@ -97,9 +99,10 @@ export function readInteractiveInput(
               return;
             }
             lastCtrlCAt = now;
-            clearRenderedLines(renderedLines);
+            clearRenderedInputView(renderedFrame);
+            renderedFrame = undefined;
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            renderedLines = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
+            renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
           }
           return;
         default:
