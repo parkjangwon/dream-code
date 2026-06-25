@@ -367,12 +367,7 @@ test("runAgentPrompt interrupts an active model stream when steering arrives", a
       response.writeHead(200, { "content-type": "text/event-stream" });
       if (requestIndex === 1) {
         response.write("data: {\"choices\":[{\"delta\":{\"content\":\"old partial\"}}]}\n\n");
-        setTimeout(() => {
-          steering.pushSteer("stop the current analysis and focus on tests");
-        }, 0);
-        request.on("close", () => {
-          response.end();
-        });
+        steering.pushSteer("stop the current analysis and focus on tests");
         return;
       }
       response.end([
