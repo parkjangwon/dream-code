@@ -9,7 +9,6 @@ const remoteSlashCommandNames = [
   "/drive",
   "/export",
   "/goal",
-  "/help",
   "/loop",
   "/lsp",
   "/mcp",

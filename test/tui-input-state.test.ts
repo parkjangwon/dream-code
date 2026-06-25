@@ -52,6 +52,7 @@ test("slash input opens a command palette and enter submits the selected command
   assert.equal(names.includes("/edit"), false);
   assert.equal(names.includes("/shell"), false);
   assert.equal(names.includes("/goal"), true);
+  assert.equal(names.includes("/help"), false);
   assert.equal(names.includes("/plan"), true);
   assert.equal(names.includes("/swarm"), true);
   assert.equal(names.includes("/team"), false);
@@ -97,6 +98,26 @@ test("slash palette includes skills and inserts selected skill command", () => {
   assert.equal(opened.state.palette?.matches[0]?.name, "/cso");
   assert.equal(selected.effect.kind, "none");
   assert.equal(selected.state.text, "/cso ");
+});
+
+test("slash palette keeps skill-provided help without built-in help", () => {
+  const opened = reduceInputState(createInputState([], slashCommands, [{
+    name: "help",
+    description: "Guide on using oh-my-codex plugin.",
+    body: "Use oh-my-codex.",
+    path: "/tmp/help/SKILL.md",
+    source: "claude",
+  }]), {
+    kind: "insert",
+    value: "/help",
+  });
+
+  const builtInNames: readonly string[] = slashCommands.map((command) => command.name);
+  assert.equal(builtInNames.includes("/help"), false);
+  assert.equal(opened.state.palette?.kind, "command");
+  assert.equal(opened.state.palette?.matches.length, 1);
+  assert.equal(opened.state.palette?.matches[0]?.name, "/help");
+  assert.match(opened.state.palette?.matches[0]?.summary ?? "", /oh-my-codex/u);
 });
 
 test("slash skill autocomplete filters by skill name", () => {

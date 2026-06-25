@@ -17,36 +17,6 @@ export function renderHeader(config: DreamConfig, oneShotYolo: boolean): void {
   output.write("\n");
 }
 
-export function printHelp(): void {
-  output.write([
-    "Commands:",
-    "  /                       open command menu",
-    "  /status                 show goal, tasks, and model health",
-    "  /doctor                 check local tools",
-    "  /yolo                   toggle persisted unconditional bypass",
-    "  /model                  choose active model",
-    "  /provider               switch connected provider",
-    "  /login                  connect a provider account",
-    "  /permission <mode>      set ask, auto, plan, or yolo mode",
-    "  /session                open saved sessions",
-    "  /context                show loaded context and plaintext storage notes",
-    "  /clear                  clear the active session transcript",
-    "  /restore <path>         restore latest file checkpoint",
-    "  /rename                 rename current session",
-    "  !<cmd>                  run a shell command",
-    "  /quit                   exit",
-    "",
-    "Keys:",
-    "  Ctrl+L                  redraw the header without losing status",
-    "  Up/Down                 browse history or move command menu selection",
-    "  Left/Right              move cursor",
-    "  Ctrl+A / Ctrl+E         move to start/end of input",
-    "  Ctrl+U / Ctrl+K         clear before/after cursor",
-    "  Enter                   submit or choose a command menu item",
-  ].join("\n"));
-  output.write("\n");
-}
-
 export function printStatus(config: DreamConfig, oneShotYolo: boolean): void {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
   output.write(`permission: ${formatPermissionMode(mode, oneShotYolo)}\n`);

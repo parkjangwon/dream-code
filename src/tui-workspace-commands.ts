@@ -23,7 +23,7 @@ import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
 import { renameCurrentSession, showSessionMenu, type SessionRuntime } from "./tui-session-commands.js";
 import { showSkillMenu } from "./tui-skill-commands.js";
-import { formatPermissionMode, printHelp } from "./tui-render.js";
+import { formatPermissionMode } from "./tui-render.js";
 import { runSwarmCommand } from "./tui-swarm-commands.js";
 import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
@@ -74,9 +74,6 @@ async function runWorkspaceCommandBody(
   }
 
   switch (command.name) {
-    case "/help":
-      printHelp();
-      return { config, shouldContinue: true };
     case "/exit":
     case "/quit":
       output.write("Good night. Dream Code is ready when you are.\n");

@@ -86,12 +86,13 @@ test("runWorkspaceCommand handles shared slash commands from the palette", async
     assert.equal(sessions.find((session) => session.id === current.id)?.name, "Shared router");
     assert.equal(switchedSessionId, previous.id);
     assert.equal(exit.shouldContinue, false);
-    assert.match(outputText, /Commands:/u);
+    assert.doesNotMatch(outputText, /Commands:/u);
+    assert.match(outputText, /unknown command: \/help/u);
     assert.match(outputText, /Dream Status/u);
-    assert.match(outputText, /yolo/u);
+    assert.match(outputText, /YOLO/u);
     assert.match(outputText, /session: older-project/u);
     assert.match(outputText, /Good night/u);
-    assert.doesNotMatch(outputText, /unknown command/u);
+    assert.doesNotMatch(outputText, /unknown command: \/(?:status|yolo|rename|session|exit)/u);
   } finally {
     stdout.mock.restore();
     await rm(root, { recursive: true, force: true });

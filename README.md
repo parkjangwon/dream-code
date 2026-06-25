@@ -542,7 +542,6 @@ loop, so you can wrap it with the supervisor you already use on each platform.
 /exit         Exit Dream Code
 /export       Export the current conversation
 /goal         Start or inspect goal mode
-/help         Show commands
 /hooks        Show hook settings and recent runs
 /interview    Align on implementation direction
 /login        Connect a provider
