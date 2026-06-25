@@ -4,6 +4,7 @@ import { runAgentPrompt } from "./agent-runner.js";
 import type { DreamConfig } from "./config.js";
 import { runDreaming, type DreamingResult, type DreamingSummarizer } from "./dreaming.js";
 import { appendSessionTurn, startSession } from "./session-store.js";
+import { renderTerminalMarkdown } from "./terminal-markdown.js";
 
 export type PromptCommandOptions = {
   readonly config: DreamConfig;
@@ -36,7 +37,8 @@ export async function runPromptCommand(options: PromptCommandOptions): Promise<v
     options.write(`${JSON.stringify(promptOutput(session.id, assistantText, dreaming))}\n`);
     return;
   }
-  options.write(assistantText.endsWith("\n") ? assistantText : `${assistantText}\n`);
+  const renderedText = renderTerminalMarkdown(assistantText);
+  options.write(renderedText.endsWith("\n") ? renderedText : `${renderedText}\n`);
 }
 
 function promptOutput(sessionId: string, response: string, dreaming: DreamingResult): {

@@ -36,7 +36,7 @@ export type ChatMessage = {
 export type ProviderSettings = {
   readonly provider: string;
   readonly baseUrl: string;
-  readonly apiKey: string;
+  readonly apiKey?: string;
   readonly apiKeyHeader: ApiKeyHeader;
   readonly protocol: ProviderProtocol;
   readonly extraHeaders: Readonly<Record<string, string>>;
@@ -100,25 +100,25 @@ export function resolveProviderSettings(
 
   const requiredEnv = apiKeyEnvKeys(definition);
   const apiKey = firstEnv(env, requiredEnv) ?? credential?.apiKey;
-  if (apiKey === undefined) {
+  if (apiKey === undefined && !definition.auth.includes("none")) {
     throw new MissingProviderConfigError(definition.id, requiredEnv);
   }
 
   const region = regionForProvider(definition, credential?.region);
   const configuredBaseUrl = firstEnv(env, baseUrlEnvKeys(definition)) ?? credential?.baseUrl;
-  const baseUrl = configuredBaseUrl ?? region?.baseUrl;
-  if (baseUrl === undefined || baseUrl.length === 0) {
+  const rawBaseUrl = configuredBaseUrl ?? region?.baseUrl;
+  if (rawBaseUrl === undefined || rawBaseUrl.length === 0) {
     throw new ProviderProtocolError(`missing base URL for provider "${definition.id}"`);
   }
 
-  return {
+  const baseSettings = {
     provider: definition.id,
-    baseUrl: baseUrl.replace(/\/+$/u, ""),
-    apiKey,
+    baseUrl: normalizeProviderBaseUrl(definition.id, rawBaseUrl),
     apiKeyHeader: definition.apiKeyHeader,
     protocol: definition.protocol,
     extraHeaders: {},
   };
+  return apiKey === undefined ? baseSettings : { ...baseSettings, apiKey };
 }
 
 export async function resolveProviderSettingsForRequest(
@@ -215,6 +215,20 @@ function firstEnv(env: ProviderEnv, keys: readonly string[]): string | undefined
     }
   }
   return undefined;
+}
+
+function normalizeProviderBaseUrl(provider: string, baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/u, "");
+  if (provider !== "ollama") {
+    return trimmed;
+  }
+  if (trimmed.endsWith("/v1")) {
+    return trimmed;
+  }
+  if (trimmed.endsWith("/api")) {
+    return `${trimmed.slice(0, -4)}/v1`;
+  }
+  return `${trimmed}/v1`;
 }
 
 function assertNever(value: never): never {

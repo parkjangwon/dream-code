@@ -14,14 +14,20 @@ export function endpointFor(settings: ProviderSettings): string {
 }
 
 export function buildProviderRequestHeaders(settings: ProviderSettings): Record<string, string> {
-  const authHeader = settings.apiKeyHeader === "api-key"
-    ? { "api-key": settings.apiKey }
-    : { authorization: `Bearer ${settings.apiKey}` };
   return {
     ...settings.extraHeaders,
-    ...authHeader,
+    ...authHeaderFor(settings),
     "content-type": "application/json",
   };
+}
+
+function authHeaderFor(settings: ProviderSettings): Record<string, string> {
+  if (settings.apiKey === undefined) {
+    return {};
+  }
+  return settings.apiKeyHeader === "api-key"
+    ? { "api-key": settings.apiKey }
+    : { authorization: `Bearer ${settings.apiKey}` };
 }
 
 export function buildProviderRequestBody(

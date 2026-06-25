@@ -52,5 +52,12 @@ export async function promptProvider(
 }
 
 function authKeyword(choice: LoginChoice): string {
-  return choice.authMode === "oauth" ? "subscription" : "api";
+  switch (choice.authMode) {
+    case "api-key":
+      return "api";
+    case "oauth":
+      return "subscription";
+    case "none":
+      return "local";
+  }
 }

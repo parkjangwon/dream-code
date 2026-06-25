@@ -104,7 +104,7 @@ async function discoverProviderModels(
 ): Promise<readonly string[]> {
   const credential = await readProviderCredential(definition.id, root);
   const settings = await resolveProviderSettingsForRequest(definition.id, env, credential);
-  const response = await request(`${settings.baseUrl}/models`, {
+  const response = await request(modelDiscoveryEndpoint(settings.provider, settings.baseUrl), {
     method: "GET",
     headers: buildProviderRequestHeaders(settings),
     headersTimeout: 5_000,
@@ -114,6 +114,17 @@ async function discoverProviderModels(
     throw new ProviderProtocolError(`model discovery failed for ${definition.id}: HTTP ${response.statusCode}`);
   }
   return parseModelList(await response.body.text());
+}
+
+function modelDiscoveryEndpoint(provider: string, baseUrl: string): string {
+  if (provider !== "ollama") {
+    return `${baseUrl}/models`;
+  }
+  return `${ollamaNativeBaseUrl(baseUrl)}/api/tags`;
+}
+
+function ollamaNativeBaseUrl(baseUrl: string): string {
+  return baseUrl.endsWith("/v1") ? baseUrl.slice(0, -3) : baseUrl;
 }
 
 export function parseModelList(raw: string): readonly string[] {

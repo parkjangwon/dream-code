@@ -27,11 +27,11 @@ export type AgentResponseSessionOptions = {
   readonly thinkingAnimationIntervalMs?: number;
 };
 
-type MarkdownState =
+export type MarkdownState =
   | { readonly kind: "text" }
   | { readonly kind: "fence"; readonly language: string };
 
-type RenderedMarkdownLine = {
+export type RenderedMarkdownLine = {
   readonly text: string;
   readonly state: MarkdownState;
 };
@@ -166,7 +166,7 @@ function responseRail(): string {
   return `${paint("│", ansi.guide)} `;
 }
 
-function renderMarkdownLine(line: string, state: MarkdownState): RenderedMarkdownLine {
+export function renderMarkdownLine(line: string, state: MarkdownState): RenderedMarkdownLine {
   const fence = /^```([A-Za-z0-9_-]+)?\s*$/u.exec(line.trim());
   if (fence !== null) {
     return state.kind === "fence"
@@ -207,7 +207,7 @@ function renderMarkdownLineStart(segment: string): string {
   return segment;
 }
 
-function renderInlineMarkdown(segment: string): string {
+export function renderInlineMarkdown(segment: string): string {
   return segment
     .replace(/\*\*([^*\n]+)\*\*/gu, (_match, text: string) => paint(text, ansi.bold))
     .replace(/`([^`\n]+)`/gu, (_match, text: string) => renderInlineCode(text))

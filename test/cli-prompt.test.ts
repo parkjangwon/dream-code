@@ -48,6 +48,45 @@ test("runPromptCommand prints the final assistant text without opening the TUI",
   }
 });
 
+test("runPromptCommand renders markdown in plain CLI output", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-cli-prompt-markdown-"));
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.end([
+      "data: {\"choices\":[{\"delta\":{\"content\":\"# Result\\n- **fixed** `src/app.ts`\"}}]}",
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n"));
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+    const output: string[] = [];
+
+    await runPromptCommand({
+      config: defaultConfig(),
+      configRoot: root,
+      prompt: "hello from outside",
+      cwd: "/repo",
+      write: (text) => {
+        output.push(text);
+      },
+      writeError: () => {},
+    });
+
+    const rendered = output.join("");
+    assert.doesNotMatch(rendered, /^# Result/mu);
+    assert.doesNotMatch(rendered, /\*\*fixed\*\*/u);
+    assert.match(rendered, /Result/u);
+    assert.match(rendered, /•/u);
+    assert.match(rendered, /src\/app\.ts/u);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runPromptCommand can emit json and run dreaming after completion", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-cli-prompt-json-"));
   const server = createServer((_request, response) => {

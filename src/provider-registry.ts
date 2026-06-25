@@ -13,7 +13,7 @@ export type ProviderTierModels = {
   readonly high: string;
 };
 
-export type ProviderAuthMode = "api-key" | "oauth";
+export type ProviderAuthMode = "api-key" | "oauth" | "none";
 
 export type ProviderDefinition = {
   readonly id: string;
@@ -43,6 +43,7 @@ const providerAliases: Readonly<Record<string, string>> = {
   "openai-compatible": "custom-openai",
   opencodego: "opencode-go",
   opencodezen: "opencode-zen",
+  local: "ollama",
   xiaomi: "xiaomi-mimo",
   zai: "z-ai",
 };
@@ -141,6 +142,9 @@ export const providerDefinitions = [
   define("sakana", "Sakana Fugu", "chat-completions", "authorization", ["SAKANA_API_KEY"], [
     region("console", "Console endpoint", ""),
   ], "console", models("fugu", "fugu", "fugu-ultra"), ["api-key"], "https://sakana.ai/fugu/", sakanaModels),
+  define("ollama", "Ollama", "chat-completions", "authorization", [], [
+    region("local", "Local", "http://127.0.0.1:11434/v1"),
+  ], "local", models("llama3.2", "llama3.2", "llama3.2"), ["none"], "https://github.com/ollama/ollama/blob/main/docs/api.md"),
   define("groq", "Groq", "chat-completions", "authorization", ["GROQ_API_KEY"], [
     region("global", "Global", "https://api.groq.com/openai/v1"),
   ], "global", models("llama-3.3-70b-versatile", "openai/gpt-oss-20b", "openai/gpt-oss-120b"), ["api-key"], "https://console.groq.com/docs/models"),
@@ -185,6 +189,9 @@ export function providerEnvName(providerId: string): string {
 }
 
 export function apiKeyEnvKeys(definition: ProviderDefinition): readonly string[] {
+  if (!definition.auth.includes("api-key")) {
+    return [];
+  }
   return [`DREAM_${providerEnvName(definition.id)}_API_KEY`, ...definition.envKeys];
 }
 

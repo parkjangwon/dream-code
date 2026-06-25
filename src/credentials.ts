@@ -5,7 +5,7 @@ import { z } from "zod";
 import { defaultConfigRoot } from "./config.js";
 
 export type ProviderCredential = {
-  readonly authMode?: "api-key" | "oauth" | undefined;
+  readonly authMode?: "api-key" | "oauth" | "none" | undefined;
   readonly apiKey?: string | undefined;
   readonly baseUrl?: string | undefined;
   readonly region?: string | undefined;
@@ -18,7 +18,7 @@ export type DreamCredentials = {
 };
 
 const providerCredentialSchema = z.object({
-  authMode: z.enum(["api-key", "oauth"]).optional(),
+  authMode: z.enum(["api-key", "oauth", "none"]).optional(),
   apiKey: z.string().min(1).optional(),
   baseUrl: z.string().url().optional(),
   region: z.string().min(1).optional(),
@@ -132,7 +132,7 @@ export async function deleteProviderCredential(
 
 function compactCredential(credential: ProviderCredential): ProviderCredential {
   const result: {
-    authMode?: "api-key" | "oauth";
+    authMode?: "api-key" | "oauth" | "none";
     apiKey?: string;
     baseUrl?: string;
     region?: string;

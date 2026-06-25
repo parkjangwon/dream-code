@@ -5,6 +5,7 @@ import type { ProviderEnv } from "./llm-provider.js";
 import { providerIsEnabled } from "./provider-settings.js";
 import {
   apiKeyEnvKeys,
+  baseUrlEnvKeys,
   type ProviderDefinition,
 } from "./provider-registry.js";
 
@@ -72,8 +73,15 @@ function providerConnection(
   if (envKey !== undefined) {
     return { kind: "env", key: envKey };
   }
+  const baseUrlEnvKey = firstEnvKey(env, baseUrlEnvKeys(definition));
+  if (definition.auth.includes("none") && baseUrlEnvKey !== undefined) {
+    return { kind: "env", key: baseUrlEnvKey };
+  }
   if (credential?.authMode === "oauth") {
     return { kind: "oauth" };
+  }
+  if (definition.auth.includes("none") && (credential?.authMode === "none" || credential?.baseUrl !== undefined)) {
+    return { kind: "saved" };
   }
   if (credential?.apiKey !== undefined) {
     return { kind: "saved" };

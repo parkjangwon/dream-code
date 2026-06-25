@@ -3,15 +3,17 @@ import type { ProviderCredential } from "./credentials.js";
 import type { ProviderEnv } from "./llm-provider.js";
 import {
   apiKeyEnvKeys,
+  baseUrlEnvKeys,
   listProviderDefinitions,
   resolveProviderDefinition,
   type ProviderDefinition,
+  type ProviderAuthMode,
   type ProviderRegion,
 } from "./provider-registry.js";
 
 export type LoginChoice = {
   readonly definition: ProviderDefinition;
-  readonly authMode: "api-key" | "oauth";
+  readonly authMode: ProviderAuthMode;
   readonly source: "env" | "saved" | "missing";
 };
 
@@ -97,6 +99,12 @@ function loginSource(
     }
     return isNonEmptyString(credential?.apiKey) ? "saved" : "missing";
   }
+  if (authMode === "none") {
+    if (baseUrlEnvKeys(definition).some((key) => isNonEmptyString(env[key]))) {
+      return "env";
+    }
+    return credential?.authMode === "none" || isNonEmptyString(credential?.baseUrl) ? "saved" : "missing";
+  }
   return credential?.authMode === "oauth" ? "saved" : "missing";
 }
 
@@ -106,14 +114,11 @@ function choicesForDefinition(
   env: ProviderEnv,
 ): readonly LoginChoice[] {
   const credential = providers[definition.id];
-  const apiChoice = {
+  return definition.auth.map((authMode) => ({
     definition,
-    authMode: "api-key",
-    source: loginSource(definition, "api-key", credential, env),
-  } satisfies LoginChoice;
-  return definition.auth.includes("oauth")
-    ? [apiChoice, { ...apiChoice, authMode: "oauth", source: loginSource(definition, "oauth", credential, env) }]
-    : [apiChoice];
+    authMode,
+    source: loginSource(definition, authMode, credential, env),
+  }));
 }
 
 function resolveChoiceByText(
@@ -126,16 +131,38 @@ function resolveChoiceByText(
   if (definition === undefined) {
     return undefined;
   }
-  const requestedAuth = authPart === "oauth" || authPart === "subscription" ? "oauth" : "api-key";
+  const requestedAuth = requestedAuthMode(authPart, definition);
   return choices.find((choice) => choice.definition.id === definition.id && choice.authMode === requestedAuth);
 }
 
 export function loginChoiceValue(choice: LoginChoice): string {
+  if (choice.authMode === "none") {
+    return `${choice.definition.id}:none`;
+  }
   return choice.authMode === "oauth" ? `${choice.definition.id}:oauth` : choice.definition.id;
 }
 
 export function authLabel(choice: LoginChoice): string {
-  return choice.authMode === "oauth" ? "(oauth)" : "(api)";
+  switch (choice.authMode) {
+    case "api-key":
+      return "(api)";
+    case "oauth":
+      return "(oauth)";
+    case "none":
+      return "(none)";
+    default:
+      return assertNever(choice.authMode);
+  }
+}
+
+function requestedAuthMode(authPart: string | undefined, definition: ProviderDefinition): ProviderAuthMode {
+  if (authPart === "oauth" || authPart === "subscription") {
+    return "oauth";
+  }
+  if (authPart === "none" || authPart === "local" || authPart === "no-auth") {
+    return "none";
+  }
+  return definition.auth.includes("api-key") ? "api-key" : definition.auth[0] ?? "api-key";
 }
 
 function isNonEmptyString(value: string | undefined): value is string {

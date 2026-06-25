@@ -164,6 +164,42 @@ test("loginProvider prompts for region and stores a secret API key", async () =>
   }
 });
 
+test("loginProvider connects Ollama without prompting for an API key", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-login-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const prompts: string[] = [];
+    const nextConfig = await loginProvider({
+      config: defaultConfig(),
+      configRoot: root,
+      args: "ollama",
+      env: {},
+      questioner: {
+        question: async (prompt) => {
+          prompts.push(prompt);
+          return "";
+        },
+        secret: async (prompt) => {
+          prompts.push(prompt);
+          return "should-not-be-used";
+        },
+      },
+    });
+    const credential = await readProviderCredential("ollama", root);
+
+    assert.deepEqual(prompts, []);
+    assert.equal(nextConfig.model.single.provider, "ollama");
+    assert.deepEqual(credential, {
+      authMode: "none",
+      region: "local",
+      baseUrl: "http://127.0.0.1:11434/v1",
+    });
+  } finally {
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("loginProvider connects OpenAI with Codex OAuth", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-login-"));
   const codexHome = await mkdtemp(join(tmpdir(), "dream-codex-home-"));

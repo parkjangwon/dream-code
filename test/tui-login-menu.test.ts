@@ -24,3 +24,12 @@ test("loginChoices keeps OpenAI API and OAuth saved states independent", () => {
 
   assert.deepEqual(openAiChoices.map((choice) => choice.source), ["missing", "saved"]);
 });
+
+test("loginChoices exposes Ollama as a keyless provider", () => {
+  const choices = loginChoices({ ollama: { authMode: "none", baseUrl: "http://127.0.0.1:11434/v1" } }, {});
+  const ollamaChoices = choices.filter((choice) => choice.definition.id === "ollama");
+
+  assert.deepEqual(ollamaChoices.map(loginChoiceValue), ["ollama:none"]);
+  assert.deepEqual(ollamaChoices.map(authLabel), ["(none)"]);
+  assert.deepEqual(ollamaChoices.map((choice) => choice.source), ["saved"]);
+});

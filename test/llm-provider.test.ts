@@ -46,6 +46,25 @@ test("resolveProviderSettings supports Responses protocol providers", () => {
   assert.equal(settings.baseUrl, "https://opencode.ai/zen/v1");
 });
 
+test("resolveProviderSettings supports keyless Ollama defaults", () => {
+  const settings = resolveProviderSettings("ollama", {});
+
+  assert.equal(settings.provider, "ollama");
+  assert.equal(settings.baseUrl, "http://127.0.0.1:11434/v1");
+  assert.equal(settings.apiKey, undefined);
+  assert.deepEqual(buildProviderRequestHeaders(settings), {
+    "content-type": "application/json",
+  });
+});
+
+test("resolveProviderSettings normalizes Ollama native API base URLs", () => {
+  const settings = resolveProviderSettings("ollama", {
+    DREAM_OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+  });
+
+  assert.equal(settings.baseUrl, "http://127.0.0.1:11434/v1");
+});
+
 test("resolveProviderSettingsForRequest supports OpenAI OAuth through Codex auth", async () => {
   const home = await mkdtemp(join(tmpdir(), "dream-provider-oauth-"));
   try {

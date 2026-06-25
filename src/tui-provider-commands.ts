@@ -81,6 +81,17 @@ export async function loginProvider(options: LoginProviderOptions): Promise<Drea
     output.write("connection cancelled: missing base URL\n");
     return options.config;
   }
+  if (selectedChoice.authMode === "none") {
+    await writeProviderCredential(options.configRoot, definition.id, {
+      authMode: "none",
+      region: region.id,
+      baseUrl,
+    });
+    const nextConfig = configWithProvider(options.config, definition);
+    await saveConfig(options.configRoot, nextConfig);
+    output.write(`connected ${definition.displayName} (${region.label})\n`);
+    return nextConfig;
+  }
   const credential = await credentialForConnection(region.id, baseUrl, envKey, options.questioner);
   if (credential === undefined) {
     output.write("connection cancelled: missing API key\n");
@@ -99,11 +110,28 @@ function resolveChoiceFromArgs(
   optionParts: readonly string[],
   choices: ReturnType<typeof loginChoices>,
 ) {
-  const authSuffix = optionParts.includes("oauth") || optionParts.includes("subscription") ? ":oauth" : "";
+  const authSuffix = authSuffixFromArgs(optionParts);
   return choices.find((choice) => {
     return choice.definition.id === resolveProviderDefinition(providerArg)?.id
-      && (authSuffix === ":oauth" ? choice.authMode === "oauth" : choice.authMode === "api-key");
+      && loginChoiceMatchesSuffix(choice.authMode, authSuffix);
   });
+}
+
+function authSuffixFromArgs(optionParts: readonly string[]): ":oauth" | ":none" | "" {
+  if (optionParts.includes("oauth") || optionParts.includes("subscription")) {
+    return ":oauth";
+  }
+  return optionParts.includes("none") || optionParts.includes("local") || optionParts.includes("no-auth") ? ":none" : "";
+}
+
+function loginChoiceMatchesSuffix(authMode: ReturnType<typeof loginChoices>[number]["authMode"], suffix: ":oauth" | ":none" | ""): boolean {
+  if (suffix === ":oauth") {
+    return authMode === "oauth";
+  }
+  if (suffix === ":none") {
+    return authMode === "none";
+  }
+  return authMode === "api-key" || authMode === "none";
 }
 
 async function connectOauth(

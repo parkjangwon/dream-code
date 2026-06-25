@@ -95,6 +95,16 @@ test("Sakana Fugu is available as an OpenAI-compatible orchestration provider", 
   assert.equal(regionForProvider(sakana, "console")?.baseUrl, "");
 });
 
+test("Ollama is available as a keyless local OpenAI-compatible provider", () => {
+  const ollama = required(resolveProviderDefinition("ollama"));
+
+  assert.equal(ollama.protocol, "chat-completions");
+  assert.deepEqual(ollama.auth, ["none"]);
+  assert.deepEqual(apiKeyEnvKeys(ollama), []);
+  assert.deepEqual(baseUrlEnvKeys(ollama), ["DREAM_OLLAMA_BASE_URL"]);
+  assert.equal(regionForProvider(ollama, "local")?.baseUrl, "http://127.0.0.1:11434/v1");
+});
+
 test("providerModelIdForRequest normalizes existing OpenCode Go config model IDs", () => {
   assert.equal(
     providerModelIdForRequest("opencode-go", "opencode-go/kimi-k2.7-code"),
