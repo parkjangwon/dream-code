@@ -1,6 +1,6 @@
 import { stdout as output } from "node:process";
 
-import { ansi, clearScreen, paint } from "./ansi.js";
+import { ansi, clearScreen, paint, stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { cockpitReservedRows, fitVisible, renderCockpitFrame } from "./tui-cockpit.js";
 import { cursorToFrameStartSequence } from "./tui-input-frame.js";
@@ -78,8 +78,14 @@ export function createLayeredMainWriter(
         return output.write(withHiddenCursor(`${chunk}${options.afterWrite?.() ?? ""}`));
       }
       if (isInlineTerminalFrame(chunk)) {
-        const afterWrite = options.afterWrite?.() ?? "";
-        return afterWrite.length === 0 ? true : output.write(afterWrite);
+        const animationLine = inlineAnimationLine(chunk);
+        if (animationLine === undefined) {
+          const afterWrite = options.afterWrite?.() ?? "";
+          return afterWrite.length === 0 ? true : output.write(afterWrite);
+        }
+        logicalLines = replaceAnimatedLine(logicalLines, animationLine);
+        output.write(withHiddenCursor(`${renderMainViewport(layout, logicalLines, output.columns)}${options.afterWrite?.() ?? ""}`));
+        return true;
       }
       if (monitorRendered) {
         logicalLines = [""];
@@ -142,6 +148,23 @@ function appendChunk(lines: readonly string[], chunk: string): string[] {
     }
   }
   return nextLines;
+}
+
+function replaceAnimatedLine(lines: readonly string[], line: string): string[] {
+  const nextLines = lines.length === 0 ? [""] : [...lines];
+  const targetIndex = nextLines.at(-1) === "" && nextLines.length > 1 ? nextLines.length - 2 : nextLines.length - 1;
+  nextLines[targetIndex] = line;
+  return nextLines;
+}
+
+function inlineAnimationLine(chunk: string): string | undefined {
+  const cleaned = chunk
+    .replace(/\u001B\[\?25[lh]/gu, "")
+    .replace(/\u001B\[1A\r/gu, "")
+    .replace(/\u001B\[2K/gu, "")
+    .replace(/\r/gu, "");
+  const line = cleaned.split("\n").find((candidate) => stripAnsi(candidate).includes("Thinking"));
+  return line === undefined || line.length === 0 ? undefined : line;
 }
 
 function renderMainViewport(

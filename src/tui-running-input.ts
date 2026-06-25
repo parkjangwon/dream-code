@@ -28,6 +28,9 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
   let renderedFrame: RenderedInputView | undefined;
   let feedback = "";
   let escState: EscInterruptState = {};
+  let steeringAbort = new AbortController();
+  let streamActive = false;
+  let streamInterrupted = false;
   let previousRawMode = false;
   let started = false;
 
@@ -91,6 +94,18 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
       return queuedInputs;
     },
     cursorSequence: () => runningInputCursorSequence(renderedFrame),
+    streamSignal: () => {
+      streamActive = true;
+      return steeringAbort.signal;
+    },
+    finishStream: () => {
+      streamActive = false;
+    },
+    consumeInterrupt: () => {
+      const interrupted = streamInterrupted;
+      streamInterrupted = false;
+      return interrupted;
+    },
     drain: () => {
       const pending = steeringState.steering;
       if (pending.length === 0) {
@@ -108,6 +123,11 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
     steeringState = update.state;
     inputState = createInputState([], []);
     feedback = update.effect.message;
+    if (update.effect.kind === "steered" && streamActive) {
+      streamInterrupted = true;
+      steeringAbort.abort();
+      steeringAbort = new AbortController();
+    }
     render();
   }
 }

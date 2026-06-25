@@ -2,6 +2,9 @@ import type { ChatMessage } from "./llm-provider.js";
 
 export type AgentSteering = {
   readonly drain: () => readonly string[];
+  readonly streamSignal?: () => AbortSignal | undefined;
+  readonly finishStream?: () => void;
+  readonly consumeInterrupt?: () => boolean;
 };
 
 export function appendSteeringMessages(

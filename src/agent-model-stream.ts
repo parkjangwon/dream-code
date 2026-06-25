@@ -14,7 +14,7 @@ import { recordModelTelemetry } from "./model-telemetry.js";
 import type { SelectedModel } from "./model-routing.js";
 import { createAgentResponseSession } from "./tui-agent-response.js";
 
-type AgentModelStreamOptions = {
+export type AgentModelStreamOptions = {
   readonly configRoot?: string;
   readonly signal?: AbortSignal;
   readonly renderResponse?: boolean;

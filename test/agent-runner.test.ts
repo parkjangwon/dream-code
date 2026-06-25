@@ -10,6 +10,7 @@ import { bootstrapAutoModelConfig } from "../src/model-auto-bootstrap.js";
 import { defaultConfig } from "../src/config.js";
 import { writeProviderCredential } from "../src/credentials.js";
 import { startSession } from "../src/session-store.js";
+import type { AgentSteering } from "../src/agent-steering.js";
 import type { DreamSkill } from "../src/skills.js";
 
 test("createAgentMessages keeps prompts minimal for token-saving startup", () => {
@@ -349,6 +350,64 @@ test("runAgentPrompt injects steering instructions before model calls", async ()
   }
 });
 
+test("runAgentPrompt interrupts an active model stream when steering arrives", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-agent-steering-interrupt-"));
+  const steering = createTestSteering();
+  const requestBodies: string[] = [];
+  let requestCount = 0;
+  const server = createServer((request, response) => {
+    const requestIndex = requestCount + 1;
+    requestCount = requestIndex;
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body = `${body}${chunk.toString("utf8")}`;
+    });
+    request.on("end", () => {
+      requestBodies.push(body);
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      if (requestIndex === 1) {
+        response.write("data: {\"choices\":[{\"delta\":{\"content\":\"old partial\"}}]}\n\n");
+        setTimeout(() => {
+          steering.pushSteer("stop the current analysis and focus on tests");
+        }, 0);
+        request.on("close", () => {
+          response.end();
+        });
+        return;
+      }
+      response.end([
+        "data: {\"choices\":[{\"delta\":{\"content\":\"steered final\"}}]}",
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"));
+    });
+  });
+  try {
+    const baseUrl = await listen(server);
+    await writeProviderCredential(root, "openai", { apiKey: "sk-openai", region: "global", baseUrl });
+
+    const result = await runAgentPrompt({
+      config: defaultConfig(),
+      configRoot: root,
+      prompt: "start",
+      cwd: "/repo",
+      renderResponse: false,
+      steering,
+      write: () => {},
+    });
+
+    assert.equal(result, "steered final");
+    assert.equal(requestCount, 2);
+    assert.doesNotMatch(requestBodies[0] ?? "", /focus on tests/u);
+    assert.match(requestBodies[1] ?? "", /Live steering instructions were submitted/u);
+    assert.match(requestBodies[1] ?? "", /focus on tests/u);
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runAgentPrompt keeps the previous hard model for related session follow-up", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-agent-sticky-routing-"));
   const requestedModels: string[] = [];
@@ -421,4 +480,42 @@ function listen(server: ReturnType<typeof createServer>): Promise<string> {
       resolve(`http://127.0.0.1:${address.port}/v1`);
     });
   });
+}
+
+type TestSteering = AgentSteering & {
+  readonly pushSteer: (text: string) => void;
+};
+
+function createTestSteering(): TestSteering {
+  let pending: readonly string[] = [];
+  let controller = new AbortController();
+  let streamActive = false;
+  let interrupted = false;
+  return {
+    drain: () => {
+      const current = pending;
+      pending = [];
+      return current;
+    },
+    streamSignal: () => {
+      streamActive = true;
+      return controller.signal;
+    },
+    finishStream: () => {
+      streamActive = false;
+    },
+    consumeInterrupt: () => {
+      const current = interrupted;
+      interrupted = false;
+      return current;
+    },
+    pushSteer: (text) => {
+      pending = [...pending, text];
+      if (streamActive) {
+        interrupted = true;
+        controller.abort();
+        controller = new AbortController();
+      }
+    },
+  };
 }

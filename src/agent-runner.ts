@@ -5,7 +5,7 @@ import { appendSteeringMessages, type AgentSteering } from "./agent-steering.js"
 import { appendActorInboxMessages } from "./agent-inbox-context.js";
 import type { AgentDefinition } from "./agent-library.js";
 import { connectedProviderIds, firstSelectedModel, tierForAgent } from "./agent-runner-routing.js";
-import { streamAgentWithFailover } from "./agent-model-stream.js";
+import { streamAgentTurn, writeAgentFailure } from "./agent-runner-stream.js";
 import { createAgentMessages } from "./agent-messages.js";
 import { isAgentToolName } from "./agent-runner-utils.js";
 import { runAgentToolGroups } from "./agent-runner-tool-execution.js";
@@ -36,16 +36,15 @@ import {
 } from "./llm-provider.js";
 import { loadUnhealthyModelKeys } from "./model-telemetry.js";
 import { modelAvailableForCredential } from "./model-availability.js";
-import { selectModelCandidatesForPrompt, type SelectedModel } from "./model-routing.js";
+import { selectModelCandidatesForPrompt } from "./model-routing.js";
 import { formatModelRoutingContext } from "./model-routing-context.js";
-import { readStickyModel, writeStickyModel } from "./model-routing-state.js";
+import { readStickyModel } from "./model-routing-state.js";
 import { formatMemoryContext } from "./memory-store.js";
 import { notifyAgentComplete } from "./notifications.js";
 import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
 import { defaultSkillRoots, loadSkills } from "./skills.js";
 import { formatCompactContext } from "./session-actions.js";
 import { recentSessionMessages } from "./session-context.js";
-import { createAgentResponseSession } from "./tui-agent-response.js";
 import { loadWorkspaceDirs } from "./workspace-state.js";
 
 export type AgentPromptOptions = {
@@ -149,7 +148,15 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
         await appendActorInboxMessages(configRoot, actor.id, messages),
         options.steering,
       );
-      const assistantText = await streamAgentWithFailover(streamOptions(runOptions, configRoot), selectedModels, messages);
+      const streamResult = await streamAgentTurn(runOptions, configRoot, selectedModels, messages);
+      if (streamResult.kind === "steered") {
+        messages = appendSteeringMessages(
+          await appendActorInboxMessages(configRoot, actor.id, messages),
+          options.steering,
+        );
+        continue;
+      }
+      const assistantText = streamResult.text;
       finalAssistantText = assistantText;
       const requests = extractAgentToolRequests(assistantText);
       const assistantMessage: ChatMessage = { role: "assistant", content: assistantText };
@@ -186,8 +193,17 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
         content: "Tool loop budget reached. Stop requesting tools and summarize current progress, completed changes, unresolved risks, and the next safest action.",
       },
     ];
-    finalAssistantText = await streamAgentWithFailover(streamOptions(runOptions, configRoot), selectedModels, messages);
-    return finalAssistantText;
+    while (true) {
+      const streamResult = await streamAgentTurn(runOptions, configRoot, selectedModels, messages);
+      if (streamResult.kind === "completed") {
+        finalAssistantText = streamResult.text;
+        return finalAssistantText;
+      }
+      messages = appendSteeringMessages(
+        await appendActorInboxMessages(configRoot, actor.id, messages),
+        options.steering,
+      );
+    }
   } catch (error) {
     if (run.signal.aborted) {
       finalStatus = "cancelled";
@@ -222,22 +238,6 @@ export async function runAgentPrompt(options: AgentPromptOptions): Promise<strin
       await notifyAgentComplete(options.config, options.prompt, Date.now() - startedAt);
     }
   }
-}
-
-function writeAgentFailure(
-  options: AgentPromptOptions,
-  selectedModel: SelectedModel,
-  message: string,
-  tone: "warn" | "error",
-): void {
-  createAgentResponseSession({ selectedModel, write: options.write }).fail(message, tone);
-}
-
-function streamOptions(options: AgentPromptOptions, configRoot: string): Parameters<typeof streamAgentWithFailover>[0] {
-  return {
-    ...options,
-    onSelectedModel: (selectedModel) => writeStickyModel(configRoot, options.sessionId, selectedModel),
-  };
 }
 
 function agentToolPolicy(options: AgentPromptOptions, signal: AbortSignal): AgentToolPolicy {

@@ -69,7 +69,7 @@ test("createLayeredMainWriter keeps text in the middle viewport and passes monit
   }
 });
 
-test("createLayeredMainWriter ignores inline thinking animation frames in layered mode", () => {
+test("createLayeredMainWriter renders thinking animation through the middle viewport", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -83,13 +83,14 @@ test("createLayeredMainWriter ignores inline thinking animation frames in layere
       bottomRows: 6,
     });
 
-    writer.write("thinking\n");
-    writer.write("\u001B[?25l\u001B[1A\r\u001B[2Kthinking.\n\u001B[?25h");
+    writer.write("Thinking model\n");
+    writer.write("\u001B[?25l\u001B[1A\r\u001B[2KThinking. model\n\u001B[?25h");
     writer.write("answer\n");
 
-    assert.equal(chunks.length, 2);
+    assert.equal(chunks.length, 3);
     assert.equal(chunks.some((chunk) => chunk.includes("\u001B[1A")), false);
-    assert.match(chunks[1] ?? "", /\u001B\[7;1H\u001B\[2Kanswer/u);
+    assert.match(chunks[1] ?? "", /\u001B\[6;1H\u001B\[2KThinking\. model/u);
+    assert.match(chunks[2] ?? "", /\u001B\[7;1H\u001B\[2Kanswer/u);
   } finally {
     stdout.mock.restore();
   }
