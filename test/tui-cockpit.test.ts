@@ -18,6 +18,19 @@ test("renderCockpitFrame keeps every cockpit row inside the terminal width", () 
   assert.match(stripAnsi(frame.lines.join("\n")), /…/u);
 });
 
+test("renderCockpitFrame does not reserve a blank live status row by default", () => {
+  const frame = renderCockpitFrame({
+    promptLine: "> hello",
+    promptCursorColumn: 7,
+    width: 64,
+    auxiliaryLines: ["guide"],
+    footerLines: ["footer one", "footer two"],
+  });
+
+  assert.equal(frame.lines.length, 6);
+  assert.equal(frame.promptLineIndex, 2);
+});
+
 test("renderCockpitFrame keeps the prompt row offset stable below optional auxiliary rows", () => {
   const frame = renderCockpitFrame({
     promptLine: "> hello",

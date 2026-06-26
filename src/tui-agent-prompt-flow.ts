@@ -15,6 +15,7 @@ import type { SessionRuntime } from "./tui-session-commands.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
 import { createRunningInputSession, type RunningInputSession } from "./tui-running-input.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
 
 export type RunAgentTextPromptOptions = {
   readonly text: string;
@@ -25,6 +26,7 @@ export type RunAgentTextPromptOptions = {
   readonly sessionRuntime?: SessionRuntime;
   readonly oneShotYolo?: boolean;
   readonly signal?: AbortSignal;
+  readonly resize?: ResizeSubscriber;
 };
 
 export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Promise<CommandResult> {
@@ -89,9 +91,14 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     terminalRows: output.rows,
     terminalColumns: output.columns,
   });
-  const steering = createRunningInputSession(statusLines);
+  const steering = createRunningInputSession(statusLines, options.resize);
   return {
-    write: createLayeredMainWriter(layout, { afterWrite: steering.cursorSequence }).write,
+    write: createLayeredMainWriter(layout, {
+      afterWrite: steering.cursorSequence,
+      afterRender: steering.refreshAfterOutput,
+      terminalRows: () => output.rows,
+      terminalColumns: () => output.columns,
+    }).write,
     steering,
   };
 }

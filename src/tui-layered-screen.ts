@@ -31,14 +31,16 @@ export type LayeredMainWriter = {
 
 export type LayeredMainWriterOptions = {
   readonly afterWrite?: () => string;
+  readonly afterRender?: () => void;
+  readonly terminalRows?: () => number | undefined;
+  readonly terminalColumns?: () => number | undefined;
 };
 
 const topChromeRows = 5;
-const minimumMainRows = 4;
 
 export function layeredTerminalLayout(terminalRows: number | undefined): LayeredTerminalLayout {
   const rows = terminalRows ?? 24;
-  const mainRows = Math.max(minimumMainRows, rows - topChromeRows - cockpitReservedRows);
+  const mainRows = Math.max(1, rows - topChromeRows - cockpitReservedRows);
   return {
     topRows: topChromeRows,
     mainStartRow: topChromeRows + 1,
@@ -73,29 +75,48 @@ export function createLayeredMainWriter(
   let monitorRendered = false;
   return {
     write: (chunk) => {
+      const currentLayout = activeLayout(layout, options);
+      const currentColumns = activeColumns(options);
       if (isAnchoredTerminalFrame(chunk)) {
         monitorRendered = true;
-        return output.write(withHiddenCursor(`${chunk}${options.afterWrite?.() ?? ""}`));
+        return writeLayeredFrame(withHiddenCursor(`${chunk}${options.afterWrite?.() ?? ""}`), options);
       }
       if (isInlineTerminalFrame(chunk)) {
         const animationLine = inlineAnimationLine(chunk);
         if (animationLine === undefined) {
           const afterWrite = options.afterWrite?.() ?? "";
-          return afterWrite.length === 0 ? true : output.write(afterWrite);
+          return afterWrite.length === 0 ? true : writeLayeredFrame(afterWrite, options);
         }
         logicalLines = replaceAnimatedLine(logicalLines, animationLine);
-        output.write(withHiddenCursor(`${renderMainViewport(layout, logicalLines, output.columns)}${options.afterWrite?.() ?? ""}`));
+        writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns)}${options.afterWrite?.() ?? ""}`), options);
         return true;
       }
       if (monitorRendered) {
         logicalLines = [""];
         monitorRendered = false;
       }
-      logicalLines = appendChunk(logicalLines, chunk).slice(-layout.mainRows * 4);
-      output.write(withHiddenCursor(`${renderMainViewport(layout, logicalLines, output.columns)}${options.afterWrite?.() ?? ""}`));
-      return true;
+      logicalLines = appendChunk(logicalLines, chunk).slice(-currentLayout.mainRows * 4);
+      return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns)}${options.afterWrite?.() ?? ""}`), options);
     },
   };
+}
+
+function writeLayeredFrame(text: string, options: LayeredMainWriterOptions): boolean {
+  const written = output.write(text);
+  options.afterRender?.();
+  return written;
+}
+
+function activeLayout(
+  fallbackLayout: LayeredTerminalLayout,
+  options: LayeredMainWriterOptions,
+): LayeredTerminalLayout {
+  const rows = options.terminalRows?.();
+  return rows === undefined ? fallbackLayout : layeredTerminalLayout(rows);
+}
+
+function activeColumns(options: LayeredMainWriterOptions): number | undefined {
+  return options.terminalColumns?.() ?? output.columns;
 }
 
 function renderTopChrome(config: DreamConfig, oneShotYolo: boolean, columns: number): void {

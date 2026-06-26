@@ -5,9 +5,8 @@ import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
 import { writeSwarmMemory } from "./memory-writer.js";
 import { defaultSwarmAgentRunner } from "./swarm-agent-runner.js";
-import { createSwarmMonitor } from "./swarm-monitor.js";
 import { formatSwarmCancelled, formatSwarmHeader, formatSwarmSynthesis } from "./swarm-output.js";
-import { monitorAnchorRowOption, monitorColumnsOption, monitorNowOption, monitorWindowOption } from "./swarm-runner-options.js";
+import { createAgentSwarmMonitor } from "./swarm-runner-monitor.js";
 import {
   createFastSwarmSynthesis,
   shouldUseFastSwarmSynthesis,
@@ -21,6 +20,7 @@ import {
   type SwarmLane,
 } from "./swarm-plan.js";
 import type { SwarmIntensity } from "./swarm-intensity.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
 
 export type SwarmRunProgress = {
   readonly characters: number;
@@ -70,9 +70,13 @@ export type SwarmRunOptions = {
   readonly replaceMonitor?: boolean;
   readonly monitorRows?: number;
   readonly monitorColumns?: number;
+  readonly monitorColumnsProvider?: () => number | undefined;
   readonly monitorAnchorRow?: number;
+  readonly monitorAnchorRowProvider?: () => number | undefined;
   readonly monitorViewportRows?: number;
+  readonly monitorViewportRowsProvider?: () => number | undefined;
   readonly signal?: AbortSignal;
+  readonly resize?: ResizeSubscriber;
   readonly sessionId?: string;
   readonly synthesisMode?: SwarmSynthesisMode;
   readonly now?: () => number;
@@ -95,30 +99,8 @@ export async function runAgentSwarmWithAgents(
   const plan = createSwarmPlan(options.goal, options.agents, swarmPlanOptions(options));
   const runAgent = options.runAgent ?? defaultSwarmAgentRunner(options);
   const abortController = createSwarmAbortController(options.signal);
-  const monitor = createSwarmMonitor(options.replaceMonitor === undefined ? {
-    goal: options.goal,
-    lanes: plan.lanes,
-    write: options.write,
-    onAbort: () => {
-      abortController.abort();
-    },
-    ...monitorNowOption(options.now),
-    ...monitorColumnsOption(options.monitorColumns),
-    ...monitorAnchorRowOption(options.monitorAnchorRow),
-    ...monitorWindowOption(options.monitorRows, options.monitorViewportRows, options.replaceMonitor),
-  } : {
-    goal: options.goal,
-    lanes: plan.lanes,
-    write: options.write,
-    replaceInPlace: options.replaceMonitor,
-    interactive: options.replaceMonitor === true,
-    onAbort: () => {
-      abortController.abort();
-    },
-    ...monitorNowOption(options.now),
-    ...monitorColumnsOption(options.monitorColumns),
-    ...monitorAnchorRowOption(options.monitorAnchorRow),
-    ...monitorWindowOption(options.monitorRows, options.monitorViewportRows, options.replaceMonitor),
+  const monitor = createAgentSwarmMonitor(options, plan.lanes, () => {
+    abortController.abort();
   });
   options.write(formatSwarmHeader(plan.lanes.length, plan.forced, plan.intensity));
   monitor.start();

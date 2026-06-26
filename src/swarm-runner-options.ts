@@ -8,8 +8,20 @@ export function monitorColumnsOption(columns: number | undefined): { readonly te
   return columns === undefined ? {} : { terminalColumns: columns };
 }
 
+export function monitorColumnsProviderOption(
+  provider: (() => number | undefined) | undefined,
+): { readonly terminalColumnsProvider?: () => number | undefined } {
+  return provider === undefined ? {} : { terminalColumnsProvider: provider };
+}
+
 export function monitorAnchorRowOption(anchorRow: number | undefined): { readonly anchorRow?: number } {
   return anchorRow === undefined ? {} : { anchorRow };
+}
+
+export function monitorAnchorRowProviderOption(
+  provider: (() => number | undefined) | undefined,
+): { readonly anchorRowProvider?: () => number | undefined } {
+  return provider === undefined ? {} : { anchorRowProvider: provider };
 }
 
 export function monitorWindowOption(
@@ -24,4 +36,19 @@ export function monitorWindowOption(
     return { maxVisibleLanes: maxVisibleSwarmLanesForViewport(viewportRows) };
   }
   return swarmMonitorWindowOption(monitorRows, replaceMonitor);
+}
+
+export function monitorWindowProviderOption(
+  viewportRowsProvider: (() => number | undefined) | undefined,
+  replaceMonitor: boolean | undefined,
+): { readonly maxVisibleLanesProvider?: () => number | undefined } {
+  if (replaceMonitor !== true || viewportRowsProvider === undefined) {
+    return {};
+  }
+  return {
+    maxVisibleLanesProvider: () => {
+      const rows = viewportRowsProvider();
+      return rows === undefined ? undefined : maxVisibleSwarmLanesForViewport(rows);
+    },
+  };
 }

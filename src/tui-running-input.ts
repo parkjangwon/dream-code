@@ -1,4 +1,4 @@
-import { stdin as input } from "node:process";
+import { stdin as input, stdout as output } from "node:process";
 import { emitKeypressEvents, type Key } from "node:readline";
 
 import type { AgentSteering } from "./agent-steering.js";
@@ -8,6 +8,8 @@ import { actionForKey } from "./tui-input.js";
 import { createInputState, reduceInputState } from "./tui-input-state.js";
 import { renderRunningInputView, runningInputCursorSequence } from "./tui-running-input-render.js";
 import { nextEscInterruptState, type EscInterruptState } from "./tui-interrupt.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
+import { readStdoutTerminalSize, sameTerminalSize, startTerminalSizeWatcher, type TerminalSize } from "./terminal-size-watch.js";
 import {
   applySteeringInput,
   createSteeringInputState,
@@ -19,9 +21,13 @@ export type RunningInputSession = AgentSteering & {
   readonly start: () => void;
   readonly stop: () => readonly string[];
   readonly cursorSequence: () => string;
+  readonly refreshAfterOutput: () => void;
 };
 
-export function createRunningInputSession(statusLines: readonly string[]): RunningInputSession {
+export function createRunningInputSession(
+  statusLines: readonly string[],
+  onResize?: ResizeSubscriber,
+): RunningInputSession {
   const controller = new AbortController();
   let inputState = createInputState([], []);
   let steeringState = createSteeringInputState();
@@ -33,9 +39,17 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
   let streamInterrupted = false;
   let previousRawMode = false;
   let started = false;
+  let unsubscribeResize: (() => void) | undefined;
+  let stopSizeWatcher: (() => void) | undefined;
+  let lastRenderedSize: TerminalSize = readStdoutTerminalSize();
 
   const render = (): void => {
+    lastRenderedSize = readStdoutTerminalSize();
     renderedFrame = renderRunningInputView(inputState, steeringState.queue.length, feedback, statusLines, renderedFrame);
+  };
+  const repairAfterResize = (): void => {
+    renderedFrame = undefined;
+    render();
   };
   const onKeypress = (value: string | undefined, key: Key): void => {
     if (key.name === "escape") {
@@ -80,11 +94,17 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
       input.setRawMode(true);
       input.resume();
       input.on("keypress", onKeypress);
+      unsubscribeResize = onResize?.(repairAfterResize) ?? subscribeStdoutResize(repairAfterResize);
+      stopSizeWatcher = startTerminalSizeWatcher({ onChange: repairAfterResize });
       render();
     },
     stop: () => {
       if (started) {
         input.off("keypress", onKeypress);
+        unsubscribeResize?.();
+        unsubscribeResize = undefined;
+        stopSizeWatcher?.();
+        stopSizeWatcher = undefined;
         input.setRawMode(previousRawMode);
         input.pause();
       }
@@ -94,6 +114,11 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
       return queuedInputs;
     },
     cursorSequence: () => runningInputCursorSequence(renderedFrame),
+    refreshAfterOutput: () => {
+      if (renderedFrame === undefined || !sameTerminalSize(lastRenderedSize, readStdoutTerminalSize())) {
+        repairAfterResize();
+      }
+    },
     streamSignal: () => {
       streamActive = true;
       return steeringAbort.signal;
@@ -130,4 +155,11 @@ export function createRunningInputSession(statusLines: readonly string[]): Runni
     }
     render();
   }
+}
+
+function subscribeStdoutResize(callback: () => void): () => void {
+  output.on("resize", callback);
+  return () => {
+    output.off("resize", callback);
+  };
 }

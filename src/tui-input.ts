@@ -9,6 +9,8 @@ import { createInputState, reduceInputState, type InputAction } from "./tui-inpu
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
+import { startTerminalSizeWatcher } from "./terminal-size-watch.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
@@ -20,6 +22,8 @@ export type InteractiveInputOptions = {
   readonly secret?: boolean;
   readonly statusLines?: readonly string[];
   readonly cancelOnEmptyBackspace?: boolean;
+  readonly echoSubmitted?: boolean;
+  readonly onResize?: ResizeSubscriber;
 };
 
 export type InteractiveInputResult =
@@ -46,16 +50,23 @@ export function readInteractiveInput(
     let renderedFrame: RenderedInputView | undefined;
     let lastCtrlCAt: number | undefined;
     const previousRawMode = input.isRaw;
+    let unsubscribeResize: (() => void) | undefined;
+    let stopSizeWatcher: (() => void) | undefined;
 
     const render = (): void => {
       renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
+    };
+    const renderAfterResize = (): void => {
+      options.redrawHeader();
+      renderedFrame = undefined;
+      render();
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
       clearRenderedInputView(renderedFrame);
       renderedFrame = undefined;
       cleanup();
-      if (result.kind === "submit") {
+      if (result.kind === "submit" && options.echoSubmitted !== false) {
         output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [], options.fileMentions ?? [])}\n`);
       } else if (echoCancel) {
         output.write("^C\n");
@@ -112,6 +123,10 @@ export function readInteractiveInput(
 
     const cleanup = (): void => {
       input.off("keypress", onKeypress);
+      unsubscribeResize?.();
+      unsubscribeResize = undefined;
+      stopSizeWatcher?.();
+      stopSizeWatcher = undefined;
       input.setRawMode(previousRawMode);
       input.pause();
     };
@@ -120,8 +135,17 @@ export function readInteractiveInput(
     input.setRawMode(true);
     input.resume();
     input.on("keypress", onKeypress);
+    unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
+    stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });
     render();
   });
+}
+
+function subscribeStdoutResize(callback: () => void): () => void {
+  output.on("resize", callback);
+  return () => {
+    output.off("resize", callback);
+  };
 }
 
 export function actionForKey(value: string | undefined, key: Key): InputAction | undefined {

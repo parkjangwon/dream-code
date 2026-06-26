@@ -254,6 +254,54 @@ test("createSwarmMonitor anchors live panels inside the middle viewport", () => 
   assert.match(chunks[1] ?? "", /\u001B\[8;1H/u);
 });
 
+test("createSwarmMonitor re-anchors live panels after resize", () => {
+  const chunks: string[] = [];
+  let anchorRow = 8;
+  let resize = (): void => {};
+  const lanes: readonly SwarmLane[] = [
+    {
+      id: "lane-1",
+      title: "Technical Plan Lead",
+      agent: {
+        id: "technical-plan-lead",
+        name: "Technical Plan Lead",
+        summary: "Plan the work.",
+        model: "inherit",
+        tools: ["read"],
+        prompt: "Plan.",
+        source: "built-in",
+      },
+      prompt: "Plan.",
+    },
+  ];
+  const monitor = createSwarmMonitor({
+    goal: "Keep the monitor in the current middle viewport",
+    lanes,
+    replaceInPlace: true,
+    anchorRowProvider: () => anchorRow,
+    terminalColumns: 80,
+    now: () => 1000,
+    onResize: (callback) => {
+      resize = callback;
+      return () => {
+        resize = (): void => {};
+      };
+    },
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+  });
+
+  monitor.start();
+  anchorRow = 4;
+  resize();
+
+  const resizedFrame = chunks.at(-1) ?? "";
+  assert.match(chunks[0] ?? "", /\u001B\[8;1H/u);
+  assert.match(resizedFrame, /\u001B\[8;1H/u);
+  assert.match(resizedFrame, /\u001B\[4;1H/u);
+});
+
 test("createSwarmMonitor clears wrapped visual rows in narrow terminals", () => {
   const chunks: string[] = [];
   const lanes: readonly SwarmLane[] = [

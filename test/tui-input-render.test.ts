@@ -55,7 +55,7 @@ test("renderInputView renders a compact cockpit dock instead of a boxed composer
     const lineCount = renderInputViewLineCount(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
     const rendered = stripAnsi(chunks.join(""));
 
-    assert.equal(lineCount, 7);
+    assert.equal(lineCount, 6);
     assert.doesNotMatch(rendered, /[┌┐└┘│]/u);
     assert.match(rendered, /> /u);
     assert.match(rendered, /\[model\] \| dream-code/u);
@@ -92,8 +92,8 @@ test("renderInputView pins the cockpit to the terminal bottom when rows are know
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
     const frame = renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
 
-    assert.equal(frame.lineCount, 7);
-    assert.match(chunks[0] ?? "", /\u001B\[24;1H/u);
+    assert.equal(frame.lineCount, 6);
+    assert.match(chunks[0] ?? "", /\u001B\[25;1H/u);
     assert.match(chunks[0] ?? "", /\u001B\[27;1H/u);
   } finally {
     if (rows === undefined) {

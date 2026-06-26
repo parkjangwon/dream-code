@@ -29,6 +29,7 @@ import { runUtilityCommand } from "./tui-utility-commands.js";
 import { formatStatusDashboard } from "./status-dashboard.js";
 import { runPluginCommand } from "./tui-plugin-command.js";
 import { isSkillInvocation } from "./tui-skill-invocation.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import type { CommandResult, Questioner } from "./tui-questioner.js";
 export type { CommandResult, Questioner } from "./tui-questioner.js";
 
@@ -41,8 +42,9 @@ export async function runWorkspaceCommand(
   sessionRuntime?: SessionRuntime,
   cwd = currentWorkingDirectory(),
   signal?: AbortSignal,
+  resize?: ResizeSubscriber,
 ): Promise<CommandResult> {
-  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd, signal);
+  const result = await runWorkspaceCommandBody(text, config, oneShotYolo, questioner, configRoot, sessionRuntime, cwd, signal, resize);
   await runHookEvent(configRoot, "postCommand", { command: text, ok: String(result.shouldContinue) });
   return result;
 }
@@ -56,6 +58,7 @@ async function runWorkspaceCommandBody(
   sessionRuntime: SessionRuntime | undefined,
   cwd: string,
   signal: AbortSignal | undefined,
+  resize: ResizeSubscriber | undefined,
 ): Promise<CommandResult> {
   const mode = resolveEffectivePermissionMode(config, oneShotYolo);
 
@@ -65,7 +68,7 @@ async function runWorkspaceCommandBody(
   }
 
   if (!text.startsWith("/")) {
-    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+    return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }), ...(resize === undefined ? {} : { resize }) });
   }
 
   const command = splitCommand(text);
@@ -195,6 +198,7 @@ async function runWorkspaceCommandBody(
         cwd,
         oneShotYolo,
         ...(sessionRuntime === undefined ? {} : { sessionId: sessionRuntime.currentId() }),
+        ...(resize === undefined ? {} : { resize }),
       });
       return { config, shouldContinue: true };
     case "/read":
@@ -224,7 +228,7 @@ async function runWorkspaceCommandBody(
         return { config, shouldContinue: true };
       }
       if (await isSkillInvocation(configRoot, cwd, command.name)) {
-        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }) });
+        return runAgentTextPrompt({ text, config, configRoot, questioner, cwd, oneShotYolo, ...(sessionRuntime === undefined ? {} : { sessionRuntime }), ...(signal === undefined ? {} : { signal }), ...(resize === undefined ? {} : { resize }) });
       }
       output.write(`unknown command: ${command.name}\n`);
       return { config, shouldContinue: true };

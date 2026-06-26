@@ -6,8 +6,9 @@ import { notifySwarmComplete } from "./notifications.js";
 import { parseSwarmArgs, type SwarmArgs } from "./swarm-args.js";
 import { saveSwarmArtifact } from "./swarm-artifacts.js";
 import { runAgentSwarm } from "./swarm-runner.js";
-import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
+import { createLayeredMainWriter, layeredTerminalLayout, renderLayeredScreen } from "./tui-layered-screen.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
+import type { ResizeSubscriber } from "./tui-fullscreen.js";
 
 export type SwarmQuestioner = {
   readonly question: (prompt: string) => Promise<string>;
@@ -21,6 +22,7 @@ export type RunSwarmCommandOptions = {
   readonly cwd?: string;
   readonly sessionId?: string;
   readonly oneShotYolo?: boolean;
+  readonly resize?: ResizeSubscriber;
 };
 
 export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<void> {
@@ -55,7 +57,12 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
       terminalColumns: output.columns,
     })
     : undefined;
-  const layeredWriter = layeredLayout === undefined ? undefined : createLayeredMainWriter(layeredLayout);
+  const layeredWriter = layeredLayout === undefined
+    ? undefined
+    : createLayeredMainWriter(layeredLayout, {
+      terminalRows: () => output.rows,
+      terminalColumns: () => output.columns,
+    });
   const baseOptions = {
     config: options.config,
     configRoot: options.configRoot,
@@ -68,7 +75,11 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
     ...(layeredLayout === undefined ? {} : {
       monitorAnchorRow: layeredLayout.mainStartRow + 2,
       monitorViewportRows: layeredLayout.mainRows,
+      monitorColumnsProvider: () => output.columns,
+      monitorAnchorRowProvider: () => layeredTerminalLayout(output.rows).mainStartRow + 2,
+      monitorViewportRowsProvider: () => layeredTerminalLayout(output.rows).mainRows,
     }),
+    ...(options.resize === undefined ? {} : { resize: options.resize }),
     ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   };
   const summary = await runAgentSwarm(swarmRunOptions(baseOptions, parsed));
@@ -86,8 +97,12 @@ function swarmRunOptions(
     readonly write: (chunk: string) => boolean;
     readonly replaceMonitor: boolean;
     readonly monitorColumns?: number;
+    readonly monitorColumnsProvider?: () => number | undefined;
     readonly monitorAnchorRow?: number;
+    readonly monitorAnchorRowProvider?: () => number | undefined;
     readonly monitorViewportRows?: number;
+    readonly monitorViewportRowsProvider?: () => number | undefined;
+    readonly resize?: ResizeSubscriber;
   },
   parsed: SwarmArgs,
 ): Parameters<typeof runAgentSwarm>[0] {

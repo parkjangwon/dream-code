@@ -8,23 +8,20 @@ import {
 } from "./config.js";
 import { initializeDreamHome } from "./config-init.js";
 import { startSession, type DreamSession } from "./session-store.js";
-import { loadSkillSettings, skillEnabled } from "./skill-settings.js";
-import { loadSkills, type DreamSkill } from "./skills.js";
 import { dreamTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 import { slashCommands } from "./tui-commands.js";
-import { readInteractiveAgentView } from "./tui-agent-view.js";
 import { readInteractiveInput } from "./tui-input.js";
-import { readInteractivePicker } from "./tui-picker.js";
-import { readInteractiveProviderManager } from "./tui-provider-manager.js";
 import {
   renderHeader,
 } from "./tui-render.js";
+import { startFullscreenSession, type ResizeSubscriber } from "./tui-fullscreen.js";
 import { printShortcutGuide } from "./tui-shortcuts.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
-import { readInteractiveSkillManager } from "./tui-skill-manager.js";
 import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { finishInteractiveSessionDreaming } from "./tui-dreaming.js";
+import { loadEnabledSkills } from "./tui-enabled-skills.js";
 import { discoverFileMentionTargets } from "./file-mention-targets.js";
+import { interactiveQuestioner, nonInteractiveQuestioner } from "./tui-interactive-questioner.js";
 import {
   runWorkspaceCommand,
   type CommandResult,
@@ -41,12 +38,24 @@ export async function runTui(options: TuiOptions): Promise<void> {
   await initializeDreamHome(configRoot);
   let config = await loadConfig(configRoot);
   setTerminalTitle(output, dreamTerminalTitle);
-  renderHeader(config, options.oneShotYolo);
 
   const interactive = isInteractiveTerminal();
   if (interactive) {
-    await runInteractiveLoop(config, options);
+    let fullscreenConfig = config;
+    const fullscreen = startFullscreenSession({
+      repaint: () => {
+        renderHeader(fullscreenConfig, options.oneShotYolo);
+      },
+    });
+    try {
+      config = await runInteractiveLoop(config, options, (nextConfig) => {
+        fullscreenConfig = nextConfig;
+      }, fullscreen.onResize);
+    } finally {
+      fullscreen.dispose();
+    }
   } else {
+    renderHeader(config, options.oneShotYolo);
     const terminal = createInterface({ input, output, terminal: false });
     try {
       await runPipedLoop(config, options, terminal);
@@ -59,6 +68,8 @@ export async function runTui(options: TuiOptions): Promise<void> {
 async function runInteractiveLoop(
   initialConfig: DreamConfig,
   options: TuiOptions,
+  onConfigChange: (config: DreamConfig) => void = () => {},
+  onResize?: ResizeSubscriber,
 ): Promise<DreamConfig> {
   let config = initialConfig;
   let history: readonly string[] = [];
@@ -79,7 +90,7 @@ async function runInteractiveLoop(
     const configRoot = options.configRoot ?? defaultConfigRoot();
     const queuedInput = queuedInputs[0];
     const answer = queuedInput === undefined
-      ? await readRootInput(config, options, configRoot, currentSessionId, history)
+      ? await readRootInput(config, options, configRoot, currentSessionId, history, onResize)
       : { kind: "submit", text: queuedInput } satisfies Awaited<ReturnType<typeof readInteractiveInput>>;
     queuedInputs = queuedInput === undefined ? queuedInputs : queuedInputs.slice(1);
     if (answer.kind === "cancel") {
@@ -87,9 +98,10 @@ async function runInteractiveLoop(
       return config;
     }
     history = appendHistory(history, answer.text);
-    const questioner = interactiveQuestioner(config, options);
-    const result = await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime);
+    const questioner = interactiveQuestioner(config, options, onResize);
+    const result = await handleInput(answer.text.trim(), config, options, questioner, sessionRuntime, undefined, onResize);
     config = result.config;
+    onConfigChange(config);
     shouldContinue = result.shouldContinue;
     queuedInputs = result.queuedInputs === undefined ? queuedInputs : [...queuedInputs, ...result.queuedInputs];
   }
@@ -103,6 +115,7 @@ async function readRootInput(
   configRoot: string,
   currentSessionId: string,
   history: readonly string[],
+  onResize?: ResizeSubscriber,
 ): Promise<Awaited<ReturnType<typeof readInteractiveInput>>> {
   const statusLines = await buildBottomStatusLines({ config, configRoot, sessionId: currentSessionId, cwd: process.cwd(), oneShotYolo: options.oneShotYolo });
   const skills = await loadEnabledSkills(configRoot);
@@ -117,6 +130,8 @@ async function readRootInput(
     redrawHeader: () => {
       renderHeader(config, options.oneShotYolo);
     },
+    echoSubmitted: false,
+    ...(onResize === undefined ? {} : { onResize }),
   });
 }
 
@@ -136,12 +151,6 @@ async function runPipedLoop(
   }
 }
 
-function nonInteractiveQuestioner(): Questioner {
-  return {
-    question: async () => "",
-  };
-}
-
 function isInteractiveTerminal(): boolean {
   return input.isTTY === true && output.isTTY === true;
 }
@@ -153,6 +162,7 @@ export async function handleInput(
   questioner: Questioner,
   sessionRuntime?: SessionRuntime,
   signal?: AbortSignal,
+  resize?: ResizeSubscriber,
 ): Promise<CommandResult> {
   if (text.length === 0) {
     return { config, shouldContinue: true };
@@ -163,71 +173,7 @@ export async function handleInput(
     return { config, shouldContinue: true };
   }
 
-  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal);
-}
-
-function interactiveQuestioner(config: DreamConfig, options: TuiOptions): Questioner {
-  let wasCancelled = false;
-  return {
-    question: async (prompt) => {
-      if (wasCancelled) {
-        return "";
-      }
-      const answer = await readInteractiveInput({
-        prompt,
-        history: [],
-        commands: [],
-        redrawHeader: () => {
-          renderHeader(config, options.oneShotYolo);
-        },
-        cancelOnEmptyBackspace: true,
-      });
-      wasCancelled = answer.kind === "cancel";
-      return answer.kind === "submit" ? answer.text : "";
-    },
-    secret: async (prompt) => {
-      if (wasCancelled) {
-        return "";
-      }
-      const answer = await readInteractiveInput({
-        prompt,
-        history: [],
-        commands: [],
-        secret: true,
-        redrawHeader: () => {
-          renderHeader(config, options.oneShotYolo);
-        },
-        cancelOnEmptyBackspace: true,
-      });
-      wasCancelled = answer.kind === "cancel";
-      return answer.kind === "submit" ? answer.text : "";
-    },
-    wasCancelled: () => wasCancelled,
-    select: async (pickerOptions) => readInteractivePicker({
-      ...pickerOptions,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
-    }),
-    manageProviders: async (providerOptions) => readInteractiveProviderManager({
-      ...providerOptions,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
-    }),
-    manageSkills: async (skillOptions) => readInteractiveSkillManager({
-      ...skillOptions,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
-    }),
-    manageAgents: async (agentOptions) => readInteractiveAgentView({
-      ...agentOptions,
-      redrawHeader: () => {
-        renderHeader(config, options.oneShotYolo);
-      },
-    }),
-  };
+  return runWorkspaceCommand(text, config, options.oneShotYolo, questioner, options.configRoot, sessionRuntime, process.cwd(), signal, resize);
 }
 
 function appendHistory(history: readonly string[], text: string): readonly string[] {
@@ -246,9 +192,4 @@ function historyFromSession(session: DreamSession): readonly string[] {
     .filter((turn) => turn.role === "user")
     .map((turn) => turn.content)
     .slice(-100);
-}
-
-async function loadEnabledSkills(configRoot: string): Promise<readonly DreamSkill[]> {
-  const settings = await loadSkillSettings(configRoot);
-  return (await loadSkills()).filter((skill) => skillEnabled(settings, skill.name));
 }

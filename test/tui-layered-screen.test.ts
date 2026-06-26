@@ -14,6 +14,13 @@ test("layeredTerminalLayout reserves top chrome, middle viewport, and bottom doc
   });
 });
 
+test("layeredTerminalLayout never allocates more rows than a tiny terminal has", () => {
+  const layout = layeredTerminalLayout(12);
+
+  assert.equal(layout.topRows + layout.mainRows + layout.bottomRows <= 12, true);
+  assert.equal(layout.mainRows, 1);
+});
+
 test("renderLayeredScreen keeps the running dock passive instead of echoing input", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
@@ -143,6 +150,61 @@ test("createLayeredMainWriter returns cursor ownership to the active input dock"
 
     assert.match(chunks[0] ?? "", /\u001B\[6;1H\u001B\[2Kanswer/u);
     assert.equal(chunks[0]?.endsWith("\u001B[29;12H\u001B[?25h\u001B[?25h"), true);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter notifies after render so active docks can repair resize loss", () => {
+  let repairCount = 0;
+  const stdout = mock.method(process.stdout, "write", () => true);
+  try {
+    const writer = createLayeredMainWriter(
+      {
+        topRows: 5,
+        mainStartRow: 6,
+        mainRows: 3,
+        bottomRows: 6,
+      },
+      {
+        afterRender: () => {
+          repairCount += 1;
+        },
+      },
+    );
+
+    writer.write("answer\n");
+
+    assert.equal(repairCount, 1);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter recalculates the viewport when terminal rows shrink", () => {
+  const chunks: string[] = [];
+  let terminalRows = 30;
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      layeredTerminalLayout(terminalRows),
+      {
+        terminalRows: () => terminalRows,
+        terminalColumns: () => 80,
+      },
+    );
+
+    writer.write("one\ntwo\nthree\nfour\nfive\n");
+    terminalRows = 16;
+    writer.write("six\n");
+
+    const resizedFrame = chunks.at(-1) ?? "";
+    assert.match(resizedFrame, /\u001B\[6;1H/u);
+    assert.match(resizedFrame, /\u001B\[10;1H/u);
+    assert.doesNotMatch(resizedFrame, /\u001B\[11;1H/u);
   } finally {
     stdout.mock.restore();
   }

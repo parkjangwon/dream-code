@@ -22,9 +22,12 @@ export type CockpitFrame = {
 export function renderCockpitFrame(input: CockpitFrameInput): CockpitFrame {
   const width = Math.max(1, input.width);
   const footerLines = input.footerLines.map((line) => padVisible(line, width));
+  const liveStatusLines = input.liveStatusLine === undefined
+    ? []
+    : [padVisible(input.liveStatusLine, width)];
   const lines = [
     ...input.auxiliaryLines.map((line) => padVisible(line, width)),
-    padVisible(input.liveStatusLine ?? "", width),
+    ...liveStatusLines,
     separatorLine(width),
     padVisible(input.promptLine, width),
     separatorLine(width),
@@ -34,7 +37,7 @@ export function renderCockpitFrame(input: CockpitFrameInput): CockpitFrame {
   return {
     lines,
     promptCursorColumn: Math.min(input.promptCursorColumn, width),
-    promptLineIndex: input.auxiliaryLines.length + 2,
+    promptLineIndex: input.auxiliaryLines.length + liveStatusLines.length + 1,
     promptRowOffsetFromBottom: cockpitPromptRowOffsetFromBottom(footerLines.length),
   };
 }

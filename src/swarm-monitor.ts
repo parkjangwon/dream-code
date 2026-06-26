@@ -15,7 +15,8 @@ import {
   wrapIndex,
 } from "./swarm-monitor-state.js";
 import type { SwarmLane } from "./swarm-plan.js";
-import { clearFrameAtRow, clearPreviousFrame, cursorToRow, withHiddenCursor } from "./terminal-frame.js";
+import { createSwarmMonitorFrame } from "./swarm-monitor-frame.js";
+import { dynamicNumber, type MonitorOptions } from "./swarm-monitor-options.js";
 
 export type SwarmMonitor = {
   readonly start: () => void;
@@ -31,19 +32,6 @@ export type SwarmMonitor = {
   readonly stop: () => void;
 };
 
-type MonitorOptions = {
-  readonly goal: string;
-  readonly lanes: readonly SwarmLane[];
-  readonly write: (text: string) => void;
-  readonly replaceInPlace?: boolean;
-  readonly interactive?: boolean;
-  readonly onAbort?: () => void;
-  readonly maxVisibleLanes?: number;
-  readonly terminalColumns?: number;
-  readonly anchorRow?: number;
-  readonly now?: () => number;
-};
-
 const progressRenderStep = 512;
 const animationIntervalMs = 250;
 
@@ -53,22 +41,25 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
   let synthesisStatus: SwarmSynthesisStatus = "waiting";
   let synthesisStartedAt: number | undefined;
   let synthesisFinishedAt: number | undefined;
-  let renderedSnapshot = "";
   let frame = 0;
   let selectedIndex: number | undefined;
   let view: SwarmMonitorView = "monitor";
   let animationTimer: ReturnType<typeof setInterval> | undefined;
+  let unsubscribeResize: (() => void) | undefined;
   let abortArmedAt: number | undefined;
+  let started = false;
   const state = new Map<string, MutableLaneState>(options.lanes.map((lane) => [lane.id, {
     status: "queued",
     characters: 0,
     preview: "",
     startedAt: undefined,
-    finishedAt: undefined,
-    lastRenderedCharacters: 0,
-  }]));
+      finishedAt: undefined,
+      lastRenderedCharacters: 0,
+    }]));
+  const monitorFrame = createSwarmMonitorFrame(options);
   const render = (): void => {
     frame += 1;
+    const maxVisibleLanes = dynamicNumber(options.maxVisibleLanes, options.maxVisibleLanesProvider);
     const snapshot = renderSwarmMonitorSnapshot({
       goal: options.goal,
       startedAt,
@@ -79,20 +70,12 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       view,
       interactive: options.interactive === true,
       abortArmed: isAbortArmed(abortArmedAt, now()),
-      maxVisibleLanes: options.maxVisibleLanes,
+      maxVisibleLanes,
       synthesisStatus,
       synthesisStartedAt,
       synthesisFinishedAt,
     });
-    if (options.replaceInPlace === true) {
-      const anchoredFrame = options.anchorRow === undefined
-        ? `${clearPreviousFrame(renderedSnapshot, options.terminalColumns)}${snapshot}`
-        : `${clearFrameAtRow(options.anchorRow, renderedSnapshot, options.terminalColumns)}${cursorToRow(options.anchorRow)}${snapshot}`;
-      options.write(withHiddenCursor(anchoredFrame));
-      renderedSnapshot = snapshot;
-      return;
-    }
-    options.write(snapshot);
+    monitorFrame.render(snapshot);
   };
   const moveSelection = (direction: number): void => {
     const current = effectiveSelectedIndex(options.lanes, state, selectedIndex);
@@ -157,11 +140,18 @@ export function createSwarmMonitor(options: MonitorOptions): SwarmMonitor {
       clearInterval(animationTimer);
       animationTimer = undefined;
     }
+    unsubscribeResize?.();
+    unsubscribeResize = undefined;
     keys.stop();
   };
 
   return {
     start: () => {
+      if (started) {
+        return;
+      }
+      started = true;
+      unsubscribeResize = options.onResize?.(render);
       render();
       keys.start();
     },
