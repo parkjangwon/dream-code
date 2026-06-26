@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { emitKeypressEvents } from "node:readline";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 
 import { ctrlCExitWindowMs, shouldExitOnRepeatedCtrlC } from "../src/tui-input.js";
@@ -50,3 +52,75 @@ test("terminal mouse suppressor consumes keypress fragments after raw SGR mouse 
   );
   assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
 });
+
+test("terminal mouse suppressor consumes split SGR mouse input fragments", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+  suppressor.observe("\u001B[<64;19;42");
+
+  const firstFragments = ["6", "4", ";", "1", "9", ";", "4", "2"];
+  assert.equal(suppressor.shouldSuppressKeypress(undefined, { sequence: "\u001B[<" }), true);
+  assert.deepEqual(
+    firstFragments.map((fragment) => suppressor.shouldSuppressKeypress(fragment, { sequence: fragment })),
+    firstFragments.map(() => true),
+  );
+
+  suppressor.observe("M");
+  assert.equal(suppressor.shouldSuppressKeypress("M", { sequence: "M" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
+});
+
+test("terminal mouse suppressor consumes SGR mouse input split at every byte boundary", () => {
+  for (let splitIndex = 1; splitIndex < "\u001B[<64;19;42M".length; splitIndex += 1) {
+    const suppressor = createTerminalMouseInputSuppressor();
+    const report = "\u001B[<64;19;42M";
+    const first = report.slice(0, splitIndex);
+    const second = report.slice(splitIndex);
+    const fragments = ["6", "4", ";", "1", "9", ";", "4", "2", "M"];
+
+    suppressor.observe(first);
+    suppressor.observe(second);
+
+    assert.equal(suppressor.shouldSuppressKeypress(undefined, { sequence: "\u001B[<" }), true);
+    assert.deepEqual(
+      fragments.map((fragment) => suppressor.shouldSuppressKeypress(fragment, { sequence: fragment })),
+      fragments.map(() => true),
+      `split index ${splitIndex}`,
+    );
+    assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
+  }
+});
+
+test("terminal mouse suppressor preserves normal text after a partial non-mouse escape", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+  suppressor.observe("\u001B[");
+  suppressor.observe("A");
+
+  assert.equal(suppressor.shouldSuppressKeypress("A", { sequence: "A" }), false);
+});
+
+test("terminal mouse suppressor works with readline when SGR mouse input splits at every byte boundary", () => {
+  const report = "\u001B[<64;19;42M";
+  for (let splitIndex = 1; splitIndex < report.length; splitIndex += 1) {
+    assert.equal(insertedTextForTerminalChunks([report.slice(0, splitIndex), report.slice(splitIndex)]), "", `split index ${splitIndex}`);
+  }
+});
+
+function insertedTextForTerminalChunks(chunks: readonly string[]): string {
+  const input = new PassThrough();
+  const suppressor = createTerminalMouseInputSuppressor();
+  let inserted = "";
+  input.on("data", (chunk: Buffer | string) => {
+    suppressor.observe(typeof chunk === "string" ? chunk : chunk.toString("utf8"));
+  });
+  emitKeypressEvents(input);
+  input.on("keypress", (value: string | undefined, key: { readonly sequence?: string | undefined }) => {
+    if (suppressor.shouldSuppressKeypress(value, key)) {
+      return;
+    }
+    inserted = `${inserted}${value ?? key.sequence ?? ""}`;
+  });
+  for (const chunk of chunks) {
+    input.write(chunk);
+  }
+  return inserted;
+}
