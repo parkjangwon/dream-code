@@ -20,7 +20,6 @@ type KeypressFragment = {
 };
 
 const scrollStepLines = 3;
-const maxPendingSuppressChars = 512;
 const sgrMouseReportPrefix = "\u001B[<";
 const maxSgrMouseReportPrefixCarryChars = sgrMouseReportPrefix.length - 1;
 
@@ -78,12 +77,9 @@ export function scrollDeltaFromTerminalInput(text: string): number | undefined {
 }
 
 export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppressor {
-  let pending = "";
+  let pendingMouseReportTailChars = 0;
   let collectingMouseReport = false;
   let prefixCarry = "";
-  const appendPending = (text: string): void => {
-    pending = `${pending}${text}`.slice(-maxPendingSuppressChars);
-  };
   return {
     observe: (text) => {
       const observed = `${prefixCarry}${text}`;
@@ -101,7 +97,7 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
         }
 
         const tail = readSgrMouseReportTail(observed, index);
-        appendPending(tail.text);
+        pendingMouseReportTailChars += tail.text.length;
         index = tail.nextIndex;
         if (tail.completed) {
           collectingMouseReport = false;
@@ -113,16 +109,47 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
     },
     shouldSuppressKeypress: (value, key) => {
       if (key.sequence === sgrMouseReportPrefix) {
-        return collectingMouseReport || pending.length > 0;
+        return collectingMouseReport || pendingMouseReportTailChars > 0;
       }
       const fragment = value ?? key.sequence ?? "";
-      if (fragment.length === 0 || !pending.startsWith(fragment)) {
+      const completeReportTailLength = completeSgrMouseReportTailLength(fragment);
+      if (completeReportTailLength !== undefined && completeReportTailLength <= pendingMouseReportTailChars) {
+        pendingMouseReportTailChars -= completeReportTailLength;
+        return true;
+      }
+      if (
+        fragment.length === 0 ||
+        fragment.length > pendingMouseReportTailChars ||
+        !isSgrMouseReportTailFragment(fragment)
+      ) {
         return false;
       }
-      pending = pending.slice(fragment.length);
+      pendingMouseReportTailChars -= fragment.length;
       return true;
     },
   };
+}
+
+function completeSgrMouseReportTailLength(text: string): number | undefined {
+  if (!text.startsWith(sgrMouseReportPrefix)) {
+    return undefined;
+  }
+  const tail = readSgrMouseReportTail(text, sgrMouseReportPrefix.length);
+  if (!tail.completed || tail.nextIndex !== text.length) {
+    return undefined;
+  }
+  return tail.text.length;
+}
+
+function isSgrMouseReportTailFragment(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    const isDigit = code >= 48 && code <= 57;
+    if (!isDigit && code !== 59 && code !== 77 && code !== 109) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function trailingSgrMouseReportPrefix(text: string): string {

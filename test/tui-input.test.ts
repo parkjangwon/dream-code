@@ -105,6 +105,29 @@ test("terminal mouse suppressor works with readline when SGR mouse input splits 
   }
 });
 
+test("terminal mouse suppressor consumes coalesced SGR mouse input bursts", () => {
+  const burst = Array.from({ length: 200 }, (_, index) => `\u001B[<${index % 2 === 0 ? 65 : 64};44;25M`).join("");
+  assert.equal(insertedTextForTerminalChunks([burst]), "");
+});
+
+test("terminal mouse suppressor consumes full SGR mouse keypress fragments", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+  const report = "\u001B[<65;44;25M";
+  suppressor.observe(report);
+
+  assert.equal(suppressor.shouldSuppressKeypress(report, { sequence: report }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
+});
+
+test("terminal mouse suppressor preserves normal text after coalesced SGR mouse input", () => {
+  const burst = Array.from({ length: 200 }, (_, index) => `\u001B[<${index % 2 === 0 ? 65 : 64};44;25M`).join("");
+  assert.equal(insertedTextForTerminalChunks([burst, "hello"]), "hello");
+});
+
+test("terminal mouse suppressor does not poison later input after malformed mouse report", () => {
+  assert.equal(insertedTextForTerminalChunks(["\u001B[<64;19;42", "x123"]), "x123");
+});
+
 function insertedTextForTerminalChunks(chunks: readonly string[]): string {
   const input = new PassThrough();
   const suppressor = createTerminalMouseInputSuppressor();
