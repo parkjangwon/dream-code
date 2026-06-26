@@ -14,7 +14,6 @@ type CommandResponse = {
 export function Composer(props: {
   readonly message: string;
   readonly screen: Extract<RemoteScreen, { readonly kind: "thread" }>;
-  readonly token: string;
   readonly onMessage: (message: string) => void;
   readonly onCommand: (command: CommandRecord) => void;
   readonly onError: (message: string) => void;
@@ -34,7 +33,7 @@ export function Composer(props: {
       setUploading(true);
       const basePrompt = prompt.length > 0 ? prompt : "Please review the uploaded files.";
       pendingUploadPayloads(uploads).then((uploadPayloads) => {
-        return requestJson<CommandResponse>("POST", "/api/commands", commandBody(basePrompt, props.screen, uploadPayloads), props.token);
+        return requestJson<CommandResponse>("POST", "/api/commands", commandBody(basePrompt, props.screen, uploadPayloads));
       }).then((result) => {
         setUploads([]);
         props.onMessage("");

@@ -13,19 +13,50 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
-  release:
-    name: Build and publish release package
+  compatibility:
+    name: Compatibility check (Node ${{ matrix.node-version }})
     runs-on: ${{ vars.DREAM_RELEASE_RUNNER || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "22"
+          - "24"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check
+        run: npm run check
+
+  release:
+    name: Build and publish release package
+    needs: compatibility
+    runs-on: ${{ vars.DREAM_RELEASE_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: "24"
           cache: npm
@@ -35,6 +66,9 @@ jobs:
 
       - name: Check
         run: npm run check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
 
       - name: Smoke check
         run: |
@@ -52,6 +86,11 @@ jobs:
           mkdir -p release
           npm pack --pack-destination release
           shasum -a 256 release/*.tgz > release/SHA256SUMS
+
+      - name: Generate artifact attestation
+        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb
+        with:
+          subject-path: release/*.tgz
 
       - name: Publish GitHub release
         env:

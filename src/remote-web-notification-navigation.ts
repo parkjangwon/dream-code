@@ -10,19 +10,19 @@ type NotificationClickMessage = {
 };
 
 export function useNotificationNavigation(
-  token: string,
+  authReady: boolean,
   projects: readonly ProjectDto[],
   navigation: RemoteNavigation,
   setError: (message: string) => void,
 ): void {
   const scrollTargetSessionId = useRef(readSessionIdFromLocation());
   useEffect(() => {
-    if (token.length === 0) {
+    if (!authReady) {
       return;
     }
     const openTarget = (sessionId: string | undefined): void => {
       if (sessionId !== undefined && sessionId.length > 0) {
-        openSessionById(token, sessionId, projects, navigation, setError);
+        openSessionById(sessionId, projects, navigation, setError);
       }
     };
     openTarget(scrollTargetSessionId.current);
@@ -34,7 +34,7 @@ export function useNotificationNavigation(
     };
     navigator.serviceWorker?.addEventListener("message", onMessage);
     return () => navigator.serviceWorker?.removeEventListener("message", onMessage);
-  }, [token, projects, navigation, setError]);
+  }, [authReady, projects, navigation, setError]);
 }
 
 function readSessionIdFromLocation(): string | undefined {

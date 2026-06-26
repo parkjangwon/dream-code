@@ -9,7 +9,7 @@ import { registerRemoteServiceWorker } from "./remote-web-notifications.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
 import { useRemoteNavigation } from "./remote-web-navigation.js";
 import { useCommandStream, useRemoteData, useRemoteWorkspaceRefresh } from "./remote-web-data.js";
-import { remoteLabels as t, remoteTokenKey } from "./remote-web-labels.js";
+import { pairedStorageKey, remoteLabels as t } from "./remote-web-labels.js";
 import {
   deleteRemoteSession,
   renameRemoteSession,
@@ -23,8 +23,8 @@ import {
 } from "./remote-web-api.js";
 
 function App() {
-  const auth = useRemoteAuth(remoteTokenKey);
-  const token = auth.state.kind === "paired" ? auth.state.token : "";
+  const auth = useRemoteAuth(pairedStorageKey);
+  const authReady = auth.state.kind === "paired";
   const [state, setState] = useState<RemoteState>({ projects: [], sessions: [] });
   const [commands, setCommands] = useState<readonly CommandRecord[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<SessionDto | undefined>(undefined);
@@ -41,10 +41,10 @@ function App() {
   };
 
   useEffect(() => registerRemoteServiceWorker(), []);
-  useRemoteData(token, setState, setCommands, setError);
-  useRemoteWorkspaceRefresh(token, setState, setError);
-  useCommandStream(token, setCommands, setState, setError);
-  useNotificationNavigation(token, state.projects, navigation, setError);
+  useRemoteData(authReady, setState, setCommands, setError);
+  useRemoteWorkspaceRefresh(authReady, setState, setError);
+  useCommandStream(authReady, setCommands, setState, setError);
+  useNotificationNavigation(authReady, state.projects, navigation, setError);
 
   const visibleCommands = screen.kind === "thread" ? commandsForThread(screen, commands) : [];
   const title = screen.kind === "home" ? t.remote : screen.kind === "project" ? screen.project.name : screen.session?.name ?? screen.session?.summary ?? t.thread;
@@ -65,7 +65,6 @@ function App() {
           {renderAuthScreen({
             auth,
             navigation,
-            token,
             state,
             visibleCommands,
             setState,
@@ -89,7 +88,7 @@ function App() {
           }}
           onConfirm={() => {
             setDeletingSessionId(deleteTarget.id);
-            deleteRemoteSession(token, deleteTarget, setState, setError).then((deleted) => {
+            deleteRemoteSession(deleteTarget, setState, setError).then((deleted) => {
               if (deleted) {
                 setDeleteTarget(undefined);
               }
@@ -108,7 +107,7 @@ function App() {
           }}
           onConfirm={(name) => {
             setRenamingSessionId(renameTarget.id);
-            renameRemoteSession(token, renameTarget, name, setState, setError).then((renamed) => {
+            renameRemoteSession(renameTarget, name, setState, setError).then((renamed) => {
               if (renamed !== undefined) {
                 navigation.replace((current) => current.kind === "thread" ? { ...current, session: renamed } : current);
                 setRenameTarget(undefined);
@@ -126,11 +125,10 @@ function App() {
           }}
         />
       ) : null}
-      {token.length > 0 && screen.kind === "thread" ? (
+      {authReady && screen.kind === "thread" ? (
         <Composer
           message={message}
           screen={screen}
-          token={token}
           onMessage={setMessage}
           onCommand={rememberCommand}
           onError={setError}

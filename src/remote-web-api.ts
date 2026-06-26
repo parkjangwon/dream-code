@@ -67,7 +67,7 @@ export type UploadedFileDto = {
 };
 
 export type PairResponse = {
-  readonly token: string;
+  readonly device: DeviceDto;
 };
 
 export type DeviceDto = {
@@ -88,13 +88,13 @@ type CommandEvent = {
 
 type RemoteEvent = SnapshotEvent | CommandEvent;
 
-export function requestJson<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
+export function requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open(method, path);
     request.setRequestHeader("accept", "application/json");
-    if (token !== undefined) {
-      request.setRequestHeader("authorization", `Bearer ${token}`);
+    if (isStateChangingMethod(method)) {
+      request.setRequestHeader("x-dream-remote-csrf", "1");
     }
     if (body !== undefined) {
       request.setRequestHeader("content-type", "application/json");
@@ -112,13 +112,17 @@ export function requestJson<T>(method: string, path: string, body?: unknown, tok
   });
 }
 
+function isStateChangingMethod(method: string): boolean {
+  const normalized = method.toUpperCase();
+  return normalized !== "GET" && normalized !== "HEAD" && normalized !== "OPTIONS";
+}
+
 export function connectCommandEvents(
-  token: string,
   onSnapshot: (commands: readonly CommandRecord[]) => void,
   onCommand: (command: CommandRecord) => void,
   onError: (message: string) => void,
 ): () => void {
-  const events = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+  const events = new EventSource("/api/events");
   events.addEventListener("snapshot", (event) => {
     const parsed = parseRemoteEvent(event.data);
     if (parsed?.type === "snapshot") {

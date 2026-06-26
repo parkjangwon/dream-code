@@ -39,7 +39,7 @@ test("remote server pairs a device and serves authenticated project session run 
     const pair = await request(`${server.origin}/api/pair`, {
       method: "POST",
       body: JSON.stringify({ code: "123456", deviceName: "android phone" }),
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
     });
     assert.equal(pair.statusCode, 200);
     const paired = await pair.body.json() as { readonly token?: string };
@@ -164,7 +164,7 @@ test("remote projects include directories from existing Dream Code sessions", as
     const pair = await request(`${server.origin}/api/pair`, {
       method: "POST",
       body: JSON.stringify({ code: "454545", deviceName: "android phone" }),
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
     });
     const paired = await pair.body.json() as { readonly token?: string };
     const projects = await request(`${server.origin}/api/projects`, {
@@ -198,7 +198,7 @@ test("remote projects refresh workspace directories without restarting the daemo
     const pair = await request(`${server.origin}/api/pair`, {
       method: "POST",
       body: JSON.stringify({ code: "565656", deviceName: "android phone" }),
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
     });
     const paired = await pair.body.json() as { readonly token?: string };
 
@@ -236,7 +236,7 @@ test("remote server rejects unauthenticated API calls and malformed pairing", as
     const malformed = await request(`${server.origin}/api/pair`, {
       method: "POST",
       body: JSON.stringify({ code: "000000" }),
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
     });
     assert.equal(malformed.statusCode, 400);
   } finally {
@@ -258,10 +258,12 @@ test("remote server close tears down open event streams", async () => {
     const pair = await request(`${server.origin}/api/pair`, {
       method: "POST",
       body: JSON.stringify({ code: "121212", deviceName: "android phone" }),
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
     });
     const paired = await pair.body.json() as { readonly token?: string };
-    const events = await request(`${server.origin}/api/events?token=${encodeURIComponent(paired.token ?? "")}`);
+    const events = await request(`${server.origin}/api/events`, {
+      headers: { authorization: `Bearer ${paired.token ?? ""}` },
+    });
     assert.equal(events.statusCode, 200);
 
     const result = await Promise.race([

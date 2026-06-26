@@ -23,6 +23,6 @@ export const remoteStrings = {
 } as const;
 
 export const remoteLabels = remoteStrings.en;
-export const remoteTokenKey = "dream.remote.token";
+export const pairedStorageKey = "dream.remote.paired";
 
 export type RemoteLabels = typeof remoteLabels;

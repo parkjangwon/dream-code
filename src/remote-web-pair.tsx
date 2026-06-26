@@ -4,8 +4,7 @@ import { useState } from "preact/hooks";
 import { requestJson, type PairResponse } from "./remote-web-api.js";
 
 export function PairPanel(props: {
-  readonly onPaired: (token: string) => void;
-  readonly tokenKey: string;
+  readonly onPaired: () => void;
   readonly labels: {
     readonly connect: string;
     readonly deviceName: string;
@@ -21,9 +20,8 @@ export function PairPanel(props: {
       <h2 class="section-title">{props.labels.pairDevice}</h2>
       <form class="pair-form" onSubmit={(event) => {
         event.preventDefault();
-        requestJson<PairResponse>("POST", "/api/pair", { code, deviceName }).then((result) => {
-          window.localStorage.setItem(props.tokenKey, result.token);
-          props.onPaired(result.token);
+        requestJson<PairResponse>("POST", "/api/pair", { code, deviceName }).then(() => {
+          props.onPaired();
         }).catch((pairError: unknown) => {
           setError(pairError instanceof Error ? pairError.message : "Pairing failed.");
         });

@@ -20,6 +20,7 @@ import {
   type SessionTurn,
   type WireTurn,
 } from "./session-store-schema.js";
+import { createSessionId, isErrnoException, sentenceFromText } from "./session-store-utils.js";
 
 export type { DreamSession, SessionRole, SessionStore, SessionTurn } from "./session-store-schema.js";
 export { SessionStoreParseError } from "./session-store-schema.js";
@@ -238,24 +239,4 @@ async function readWireTurns(sessionDir: string): Promise<SessionTurn[]> {
 function updatedDreamSession(session: DreamSession, role: SessionRole, content: string, now: string): DreamSession {
   const summary = role === "user" ? sentenceFromText(content) : session.summary;
   return { ...session, summary, updatedAt: now, turns: [...session.turns, { role, content, createdAt: now }] };
-}
-
-function sentenceFromText(text: string): string {
-  const normalized = text.replace(/\s+/gu, " ").trim();
-  const withoutCommand = normalized.startsWith("/") ? normalized.slice(1) : normalized;
-  const firstSentence = /.+?[.!?。！？](?:\s|$)/u.exec(withoutCommand)?.[0].trim() ?? withoutCommand;
-  return firstSentence.length > 90 ? `${firstSentence.slice(0, 87)}...` : firstSentence;
-}
-
-function createSessionId(now: string): string {
-  const safeTime = now.replace(/[^0-9A-Za-z]/gu, "");
-  return `session_${safeTime}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-type ErrnoException = Error & {
-  readonly code: string;
-};
-
-function isErrnoException(error: unknown): error is ErrnoException {
-  return error instanceof Error && "code" in error && typeof error.code === "string";
 }

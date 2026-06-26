@@ -9,38 +9,12 @@ import {
   readMarketplaceText,
   resolveMarketplaceSource,
 } from "./plugin-marketplace-source.js";
-
-const marketplaceSourceObjectSchema = z.object({
-  source: z.string().min(1).optional(),
-  url: z.string().min(1).optional(),
-  path: z.string().min(1).optional(),
-  ref: z.string().min(1).optional(),
-  sha: z.string().min(1).optional(),
-}).passthrough();
-
-const marketplacePluginSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  source: z.union([z.string().min(1), marketplaceSourceObjectSchema]),
-}).passthrough();
-
-const marketplaceSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  plugins: z.array(marketplacePluginSchema),
-}).passthrough();
-
-const marketplaceRecordSchema = z.object({
-  name: z.string().min(1),
-  url: z.string().min(1),
-  ref: z.string().min(1).optional(),
-  addedAt: z.string().min(1),
-});
-
-const marketplaceRegistrySchema = z.object({
-  version: z.literal(1),
-  marketplaces: z.array(marketplaceRecordSchema),
-});
+import {
+  marketplacePluginSchema,
+  marketplaceRecordSchema,
+  marketplaceRegistrySchema,
+  marketplaceSchema,
+} from "./plugin-marketplace-schema.js";
 
 export type PluginMarketplaceRecord = z.infer<typeof marketplaceRecordSchema>;
 export type PluginMarketplaceEntry = z.infer<typeof marketplacePluginSchema> & {

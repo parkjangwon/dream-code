@@ -13,13 +13,12 @@ type CommandResponse = {
 };
 
 export function openSession(
-  token: string,
   project: ProjectDto,
   session: SessionDto,
   navigation: RemoteNavigation,
   setError: (message: string) => void,
 ): void {
-  requestJson<{ readonly session: SessionDetailDto }>("GET", `/api/sessions/${encodeURIComponent(session.id)}`, undefined, token).then((result) => {
+  requestJson<{ readonly session: SessionDetailDto }>("GET", `/api/sessions/${encodeURIComponent(session.id)}`).then((result) => {
     navigation.navigate({ kind: "thread", project, session: result.session, commandIds: [] });
     setError("");
   }).catch((loadError: unknown) => {
@@ -28,13 +27,12 @@ export function openSession(
 }
 
 export function openSessionById(
-  token: string,
   sessionId: string,
   projects: readonly ProjectDto[],
   navigation: RemoteNavigation,
   setError: (message: string) => void,
 ): void {
-  requestJson<{ readonly session: SessionDetailDto }>("GET", `/api/sessions/${encodeURIComponent(sessionId)}`, undefined, token).then((result) => {
+  requestJson<{ readonly session: SessionDetailDto }>("GET", `/api/sessions/${encodeURIComponent(sessionId)}`).then((result) => {
     const project = projectForSession(projects, result.session);
     if (project === undefined) {
       setError("Session project is no longer available.");
@@ -48,8 +46,8 @@ export function openSessionById(
   });
 }
 
-export function cancelCommand(token: string, id: string, setError: (message: string) => void): void {
-  requestJson<CommandResponse>("POST", `/api/commands/${encodeURIComponent(id)}/cancel`, undefined, token).then(() => {
+export function cancelCommand(id: string, setError: (message: string) => void): void {
+  requestJson<CommandResponse>("POST", `/api/commands/${encodeURIComponent(id)}/cancel`).then(() => {
     setError("");
   }).catch((cancelError: unknown) => {
     setError(cancelError instanceof Error ? cancelError.message : "Command cancel failed.");
@@ -57,12 +55,11 @@ export function cancelCommand(token: string, id: string, setError: (message: str
 }
 
 export function retryCommand(
-  token: string,
   command: CommandRecord,
   onCommand: (command: CommandRecord) => void,
   setError: (message: string) => void,
 ): void {
-  requestJson<CommandResponse>("POST", "/api/commands", retryCommandBody(command), token).then((result) => {
+  requestJson<CommandResponse>("POST", "/api/commands", retryCommandBody(command)).then((result) => {
     onCommand(result.command);
     setError("");
   }).catch((retryError: unknown) => {
@@ -71,13 +68,12 @@ export function retryCommand(
 }
 
 export async function deleteRemoteSession(
-  token: string,
   session: SessionDto,
   setState: (update: (current: RemoteState) => RemoteState) => void,
   setError: (message: string) => void,
 ): Promise<boolean> {
   try {
-    await requestJson<{ readonly ok: true }>("DELETE", `/api/sessions/${encodeURIComponent(session.id)}`, undefined, token);
+    await requestJson<{ readonly ok: true }>("DELETE", `/api/sessions/${encodeURIComponent(session.id)}`);
     setState((current) => ({ ...current, sessions: current.sessions.filter((item) => item.id !== session.id) }));
     setError("");
     return true;
@@ -88,14 +84,13 @@ export async function deleteRemoteSession(
 }
 
 export async function renameRemoteSession(
-  token: string,
   session: SessionDto,
   name: string,
   setState: (update: (current: RemoteState) => RemoteState) => void,
   setError: (message: string) => void,
 ): Promise<SessionDetailDto | undefined> {
   try {
-    const result = await requestJson<{ readonly session: SessionDetailDto }>("PATCH", `/api/sessions/${encodeURIComponent(session.id)}`, { name }, token);
+    const result = await requestJson<{ readonly session: SessionDetailDto }>("PATCH", `/api/sessions/${encodeURIComponent(session.id)}`, { name });
     setState((current) => ({
       ...current,
       sessions: current.sessions.map((item) => item.id === result.session.id ? result.session : item),

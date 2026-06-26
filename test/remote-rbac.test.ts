@@ -50,7 +50,7 @@ async function pairToken(origin: string, role: "viewer" | "operator"): Promise<s
   const paired = await request(`${origin}/api/pair`, {
     method: "POST",
     body: JSON.stringify({ code: "222222", deviceName: `${role}-device`, role }),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-dream-remote-token-response": "body" },
   });
   assert.equal(paired.statusCode, 200);
   const body = await paired.body.json() as { readonly token?: string; readonly device?: { readonly role?: string } };

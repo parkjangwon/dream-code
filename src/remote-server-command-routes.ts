@@ -1,10 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 
 import { appendRemoteAuditEvent } from "./remote-audit.js";
 import type { RemoteCommandBroker } from "./remote-command-broker.js";
 import { sendJson, readJson } from "./remote-http.js";
+import { listRemoteProjects } from "./remote-projects.js";
 import { appendUploadedFiles, saveRemoteUploads } from "./remote-upload.js";
+import { readSession } from "./session-store.js";
 
 const commandRequestSchema = z.object({
   prompt: z.string().min(1),
@@ -47,7 +50,12 @@ export async function handleRemoteCommand(
     sendJson(response, 400, { error: "Prompt is required." });
     return;
   }
-  const cwd = parsed.data.cwd ?? workspaceRoot;
+  const cwdResult = await resolveRemoteCommandCwd(root, workspaceRoot, parsed.data.cwd, parsed.data.sessionId);
+  if (!cwdResult.ok) {
+    sendJson(response, 400, { error: cwdResult.message });
+    return;
+  }
+  const cwd = cwdResult.cwd;
   const temporaryUploads = parsed.data.uploads === undefined ? [] : await saveRemoteUploads(cwd, parsed.data.uploads);
   const command = broker.submit({
     prompt: parsed.data.prompt,
@@ -67,4 +75,31 @@ export async function handleRemoteCommand(
     status: command.status,
   });
   sendJson(response, 202, { command });
+}
+
+type RemoteCommandCwdResult =
+  | { readonly ok: true; readonly cwd: string }
+  | { readonly ok: false; readonly message: string };
+
+async function resolveRemoteCommandCwd(root: string, workspaceRoot: string, requestedCwd: string | undefined, sessionId: string | undefined): Promise<RemoteCommandCwdResult> {
+  const cwd = resolve(requestedCwd ?? workspaceRoot);
+  const projects = await listRemoteProjects(root, workspaceRoot);
+  const allowed = projects.some((project) => containsPath(project.path, cwd));
+  if (!allowed) {
+    return { ok: false, message: "Command cwd must be inside a known remote project." };
+  }
+  if (sessionId !== undefined) {
+    const session = await readSession(root, sessionId);
+    if (session !== undefined && !containsPath(session.directory, cwd)) {
+      return { ok: false, message: "Command cwd must stay inside the selected session directory." };
+    }
+  }
+  return { ok: true, cwd };
+}
+
+function containsPath(parent: string, child: string): boolean {
+  const parentPath = resolve(parent);
+  const childPath = resolve(child);
+  const pathToChild = relative(parentPath, childPath);
+  return pathToChild.length === 0 || (!pathToChild.startsWith("..") && !isAbsolute(pathToChild));
 }

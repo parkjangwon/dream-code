@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import { chatChunkSchema, responsesChunkSchema } from "./llm-stream-parser-schema.js";
 import { parseNativeToolCall } from "./provider-native-tools.js";
 import type { ProviderProtocol } from "./provider-registry.js";
 
@@ -8,32 +7,6 @@ export type StreamDataEvent =
   | { readonly kind: "tool_call"; readonly request: import("./agent-tool-schema.js").AgentToolRequest }
   | { readonly kind: "done" }
   | { readonly kind: "skip" };
-
-const chatChunkSchema = z.object({
-  choices: z.array(z.object({
-    delta: z.object({
-      content: z.string().nullable().optional(),
-      tool_calls: z.array(z.object({
-        index: z.number().int().nonnegative().optional(),
-        function: z.object({
-          name: z.string().optional(),
-          arguments: z.string().optional(),
-        }).passthrough().optional(),
-      }).passthrough()).optional(),
-    }).passthrough(),
-    finish_reason: z.string().nullable().optional(),
-  }).passthrough()),
-}).passthrough();
-
-const responsesChunkSchema = z.object({
-  type: z.string().optional(),
-  delta: z.string().optional(),
-  item: z.object({
-    type: z.string().optional(),
-    name: z.string().optional(),
-    arguments: z.string().optional(),
-  }).passthrough().optional(),
-}).passthrough();
 
 export class ProviderProtocolError extends Error {
   constructor(reason: string) {

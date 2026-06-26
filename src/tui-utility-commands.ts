@@ -2,7 +2,6 @@ import { stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
-import { restoreLatestFileCheckpoint } from "./file-history.js";
 import { runAgentPrompt } from "./agent-runner.js";
 import { formatHooksStatus } from "./hooks.js";
 import { runGoalCommand } from "./tui-goal-command.js";
@@ -10,9 +9,7 @@ import { runLspCheck } from "./lsp-check.js";
 import { logoutProvider } from "./tui-logout-command.js";
 import { formatMcpRuntimeStatus } from "./mcp-context.js";
 import { runResearch } from "./research-tool.js";
-import { copyLastAssistantResponse, exportCurrentSession, formatSessionActionResult } from "./session-actions.js";
 import { runCompactCommand } from "./tui-compact-command.js";
-import { clearSessionTurns } from "./session-store.js";
 import type { SessionRuntime } from "./tui-session-commands.js";
 import type { Questioner } from "./tui-workspace-commands.js";
 import { formatContextCommand, formatRulesCommand } from "./context-docs.js";
@@ -20,6 +17,14 @@ import { runTasksCommand } from "./tui-task-command.js";
 import { runWorkflowCommand } from "./tui-workflow-command.js";
 import { runRunsCommand } from "./tui-run-command.js";
 import { createWorkdayPlan, formatWorkdayPlan } from "./workday-plan.js";
+import {
+  clearActiveSession,
+  copyCurrentSession,
+  currentSessionId,
+  exportSession,
+  restoreFile,
+  restOrAsk,
+} from "./tui-utility-command-helpers.js";
 import {
   addWorkspaceDir,
   appendProjectWorkflowNote,
@@ -61,10 +66,10 @@ export async function runUtilityCommand(options: UtilityCommandOptions): Promise
       output.write(`${await formatContextCommand(options.configRoot, options.cwd)}\n`);
       return true;
     case "/copy":
-      output.write(await formatSessionActionResult(await copyLastAssistantResponse(options.configRoot, currentSessionId(options), copyOffset(options.rest))));
+      output.write(await copyCurrentSession(options));
       return true;
     case "/export":
-      output.write(await formatSessionActionResult(await exportCurrentSession(options.configRoot, currentSessionId(options))));
+      output.write(await exportSession(options));
       return true;
     case "/goal":
       await runGoalCommand({
@@ -221,38 +226,4 @@ async function runWorkflowPrompt(
   await appendTask(options.configRoot, taskLabel, prompt);
   output.write(`${paint(`${taskLabel.toLowerCase()} saved:`, ansi.green)} ${paint(filePath, ansi.blue)}\n`);
   await runFramedAgentPrompt({ ...options, rest: prompt }, title, instruction);
-}
-
-async function restOrAsk(rest: string, prompt: string, questioner: Questioner): Promise<string> {
-  return rest.trim().length > 0 ? rest.trim() : questioner.question(prompt);
-}
-
-function currentSessionId(options: UtilityCommandOptions): string {
-  return options.sessionRuntime?.currentId() ?? "";
-}
-
-async function clearActiveSession(options: UtilityCommandOptions): Promise<string> {
-  const sessionId = currentSessionId(options);
-  if (sessionId.length === 0) {
-    return "clear skipped: no active session";
-  }
-  const session = await clearSessionTurns(options.configRoot, sessionId);
-  if (session !== undefined) {
-    options.sessionRuntime?.restore?.(session);
-  }
-  return session === undefined ? "clear skipped: active session not found" : "session cleared";
-}
-
-async function restoreFile(options: UtilityCommandOptions): Promise<string> {
-  const target = await restOrAsk(options.rest, "Restore file: ", options.questioner);
-  if (target.trim().length === 0) {
-    return "restore skipped: no file";
-  }
-  const path = await restoreLatestFileCheckpoint(target, options.cwd, options.configRoot);
-  return `restored: ${path}`;
-}
-
-function copyOffset(rest: string): number {
-  const parsed = Number.parseInt(rest.trim(), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }

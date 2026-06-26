@@ -7,7 +7,7 @@ import { CommandThread } from "./remote-web-thread.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
 import type { RemoteNavigation } from "./remote-web-navigation.js";
 import type { RemoteScreen } from "./remote-web-screen.js";
-import { remoteLabels, remoteTokenKey } from "./remote-web-labels.js";
+import { remoteLabels } from "./remote-web-labels.js";
 import {
   cancelCommand,
   openSession,
@@ -23,7 +23,6 @@ import type {
 export function renderAuthScreen(props: {
   readonly auth: ReturnType<typeof useRemoteAuth>;
   readonly navigation: RemoteNavigation;
-  readonly token: string;
   readonly state: RemoteState;
   readonly visibleCommands: readonly CommandRecord[];
   readonly setState: (update: (current: RemoteState) => RemoteState) => void;
@@ -37,7 +36,7 @@ export function renderAuthScreen(props: {
     case "checking":
       return <p class="muted loading-text">{remoteLabels.checkingConnection}</p>;
     case "pairing":
-      return <PairPanel tokenKey={remoteTokenKey} labels={remoteLabels} onPaired={props.auth.pair} />;
+      return <PairPanel labels={remoteLabels} onPaired={props.auth.pair} />;
     case "paired":
       return (
         <div class="paired-shell">
@@ -65,7 +64,6 @@ export function commandsForThread(screen: Extract<RemoteScreen, { readonly kind:
 
 function renderScreen(props: {
   readonly navigation: RemoteNavigation;
-  readonly token: string;
   readonly state: RemoteState;
   readonly visibleCommands: readonly CommandRecord[];
   readonly setState: (update: (current: RemoteState) => RemoteState) => void;
@@ -86,7 +84,7 @@ function renderScreen(props: {
           onOpenSession={(session) => {
             const project = projectForSession(props.state.projects, session);
             if (project !== undefined) {
-              openSession(props.token, project, session, props.navigation, props.setError);
+              openSession(project, session, props.navigation, props.setError);
             }
           }}
         />
@@ -99,7 +97,7 @@ function renderScreen(props: {
           labels={remoteLabels}
           onDeleteSession={props.setDeleteTarget}
           onNewThread={() => props.navigation.navigate({ kind: "thread", project: screen.project, session: undefined, commandIds: [] })}
-          onOpenSession={(session) => openSession(props.token, screen.project, session, props.navigation, props.setError)}
+          onOpenSession={(session) => openSession(screen.project, session, props.navigation, props.setError)}
         />
       );
     case "thread":
@@ -107,8 +105,8 @@ function renderScreen(props: {
         <CommandThread
           turns={screen.session?.turns ?? []}
           commands={props.visibleCommands}
-          onCancel={(id) => cancelCommand(props.token, id, props.setError)}
-          onRetry={(command) => retryCommand(props.token, command, props.onCommand, props.setError)}
+          onCancel={(id) => cancelCommand(id, props.setError)}
+          onRetry={(command) => retryCommand(command, props.onCommand, props.setError)}
         />
       );
     default:

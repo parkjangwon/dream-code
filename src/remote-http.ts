@@ -16,13 +16,37 @@ export function bearerToken(header: string | readonly string[] | undefined): str
   return value?.startsWith("Bearer ") === true ? value.slice("Bearer ".length) : undefined;
 }
 
+export const remoteTokenCookieName = "dream_remote_token";
+
+export function cookieToken(header: string | readonly string[] | undefined): string | undefined {
+  const value = typeof header === "string" ? header : header?.join("; ");
+  if (value === undefined) {
+    return undefined;
+  }
+  for (const pair of value.split(";")) {
+    const [name, ...rawValue] = pair.trim().split("=");
+    if (name === remoteTokenCookieName) {
+      return decodeURIComponent(rawValue.join("="));
+    }
+  }
+  return undefined;
+}
+
+export function remoteAuthCookie(token: string): string {
+  return `${remoteTokenCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7776000`;
+}
+
+export function clearRemoteAuthCookie(): string {
+  return `${remoteTokenCookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+}
+
 export function sendHtml(response: ServerResponse, html: string): void {
   response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   response.end(html);
 }
 
-export function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+export function sendJson(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | readonly string[]> = {}): void {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8", ...headers });
   response.end(`${JSON.stringify(body)}\n`);
 }
 

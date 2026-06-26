@@ -11,19 +11,19 @@ import {
 } from "./remote-web-api.js";
 
 export function useRemoteData(
-  token: string,
+  authReady: boolean,
   setState: (state: RemoteState) => void,
   setCommands: (commands: readonly CommandRecord[]) => void,
   setError: (message: string) => void,
 ): void {
   useEffect(() => {
-    if (token.length === 0) {
+    if (!authReady) {
       return;
     }
     let active = true;
     Promise.all([
-      loadRemoteState(token),
-      requestJson<{ readonly commands: readonly CommandRecord[] }>("GET", "/api/commands", undefined, token),
+      loadRemoteState(),
+      requestJson<{ readonly commands: readonly CommandRecord[] }>("GET", "/api/commands"),
     ]).then(([remoteState, commandHistory]) => {
       if (active) {
         setState(remoteState);
@@ -38,20 +38,20 @@ export function useRemoteData(
     return () => {
       active = false;
     };
-  }, [token, setState, setCommands, setError]);
+  }, [authReady, setState, setCommands, setError]);
 }
 
 export function useRemoteWorkspaceRefresh(
-  token: string,
+  authReady: boolean,
   setState: (update: (current: RemoteState) => RemoteState) => void,
   setError: (message: string) => void,
 ): void {
   useEffect(() => {
-    if (token.length === 0) {
+    if (!authReady) {
       return;
     }
     const refresh = (): void => {
-      void refreshWorkspaceState(token, setState, setError);
+      void refreshWorkspaceState(setState, setError);
     };
     const refreshWhenVisible = (): void => {
       if (document.visibilityState === "visible") {
@@ -66,21 +66,21 @@ export function useRemoteWorkspaceRefresh(
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [token, setState, setError]);
+  }, [authReady, setState, setError]);
 }
 
 export function useCommandStream(
-  token: string,
+  authReady: boolean,
   setCommands: (update: (current: readonly CommandRecord[]) => readonly CommandRecord[]) => void,
   setState: (update: (current: RemoteState) => RemoteState) => void,
   setError: (message: string) => void,
 ): void {
   const notifiedCommandIds = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    if (token.length === 0) {
+    if (!authReady) {
       return;
     }
-    return connectCommandEvents(token, (snapshot) => setCommands(() => snapshot), (command) => {
+    return connectCommandEvents((snapshot) => setCommands(() => snapshot), (command) => {
       let shouldRefresh = command.sessionId !== undefined && command.status !== "queued";
       setCommands((current) => {
         const previous = current.find((entry) => entry.id === command.id);
@@ -88,23 +88,22 @@ export function useCommandStream(
         return [command, ...current.filter((entry) => entry.id !== command.id)];
       });
       if (shouldRefresh || command.status === "done" || command.status === "failed" || command.status === "cancelled") {
-        void refreshWorkspaceState(token, setState, setError);
+        void refreshWorkspaceState(setState, setError);
       }
       if (isCompleted(command) && !notifiedCommandIds.current.has(command.id)) {
         notifyCommandCompletion(command);
         notifiedCommandIds.current = new Set([...notifiedCommandIds.current, command.id]);
       }
     }, setError);
-  }, [token, setCommands, setState, setError]);
+  }, [authReady, setCommands, setState, setError]);
 }
 
 async function refreshWorkspaceState(
-  token: string,
   setState: (update: (current: RemoteState) => RemoteState) => void,
   setError: (message: string) => void,
 ): Promise<void> {
   try {
-    const next = await loadRemoteState(token);
+    const next = await loadRemoteState();
     setState(() => next);
     setError("");
   } catch (refreshError: unknown) {
@@ -112,10 +111,10 @@ async function refreshWorkspaceState(
   }
 }
 
-async function loadRemoteState(token: string): Promise<RemoteState> {
+async function loadRemoteState(): Promise<RemoteState> {
   const [projects, sessions] = await Promise.all([
-    requestJson<{ readonly projects: readonly ProjectDto[] }>("GET", "/api/projects", undefined, token),
-    requestJson<{ readonly sessions: readonly SessionDto[] }>("GET", "/api/sessions", undefined, token),
+    requestJson<{ readonly projects: readonly ProjectDto[] }>("GET", "/api/projects"),
+    requestJson<{ readonly sessions: readonly SessionDto[] }>("GET", "/api/sessions"),
   ]);
   return { projects: projects.projects, sessions: sessions.sessions };
 }

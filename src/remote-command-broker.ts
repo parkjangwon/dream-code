@@ -1,4 +1,4 @@
-import type { RemoteCommandActivityInput, RemoteCommandInput, RemoteCommandResult } from "./remote-command.js";
+import type { RemoteCommandActivityInput } from "./remote-command.js";
 import { appendRemoteAuditEvent } from "./remote-audit.js";
 import {
   clearTemporaryRemoteCommandFields,
@@ -7,56 +7,24 @@ import {
   nextRemoteActivity,
 } from "./remote-command-broker-utils.js";
 import { loadRemoteCommandRecords, saveRemoteCommandRecords } from "./remote-command-store.js";
-import { cleanupRemoteUploads, type RemoteUploadedFile } from "./remote-upload.js";
+import { cleanupRemoteUploads } from "./remote-upload.js";
+import type {
+  RemoteCommandBroker,
+  RemoteCommandEvent,
+  RemoteCommandRecord,
+  RemoteCommandRunner,
+  RemoteCommandSubmitInput,
+} from "./remote-command-broker-types.js";
 
-export type RemoteCommandStatus = "queued" | "running" | "done" | "failed" | "cancelled";
-
-export type RemoteCommandRecord = {
-  readonly id: string;
-  readonly prompt: string;
-  readonly runnerPrompt?: string;
-  readonly cwd: string;
-  readonly status: RemoteCommandStatus;
-  readonly output: string;
-  readonly activity: readonly RemoteCommandActivity[];
-  readonly sessionId?: string;
-  readonly error?: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-  readonly startedAt?: string;
-  readonly completedAt?: string;
-  readonly cancelRequestedAt?: string;
-  readonly durationMs?: number;
-  readonly temporaryUploads?: readonly RemoteUploadedFile[];
-};
-
-export type RemoteCommandActivity = {
-  readonly at: string;
-  readonly label: string;
-  readonly detail?: string;
-};
-
-export type RemoteCommandEvent =
-  | { readonly type: "snapshot"; readonly commands: readonly RemoteCommandRecord[] }
-  | { readonly type: "command"; readonly command: RemoteCommandRecord };
-
-export type RemoteCommandRunner = (input: RemoteCommandInput) => Promise<RemoteCommandResult>;
-
-export type RemoteCommandSubmitInput = {
-  readonly prompt: string;
-  readonly cwd: string;
-  readonly sessionId?: string;
-  readonly runnerPrompt?: string;
-  readonly temporaryUploads?: readonly RemoteUploadedFile[];
-};
-
-export type RemoteCommandBroker = {
-  readonly submit: (input: RemoteCommandSubmitInput) => RemoteCommandRecord;
-  readonly cancel: (id: string) => RemoteCommandRecord | undefined;
-  readonly commands: () => readonly RemoteCommandRecord[];
-  readonly subscribe: (listener: (event: RemoteCommandEvent) => void) => () => void;
-  readonly flush: () => Promise<void>;
-};
+export type {
+  RemoteCommandActivity,
+  RemoteCommandBroker,
+  RemoteCommandEvent,
+  RemoteCommandRecord,
+  RemoteCommandRunner,
+  RemoteCommandStatus,
+  RemoteCommandSubmitInput,
+} from "./remote-command-broker-types.js";
 
 export async function createRemoteCommandBroker(configRoot: string, runner: RemoteCommandRunner): Promise<RemoteCommandBroker> {
   let sequence = 0;

@@ -6,15 +6,19 @@ import test from "node:test";
 import { request } from "undici";
 
 import { startRemoteServer } from "../src/remote-server.js";
+import { startSession } from "../src/session-store.js";
+import { pairToken, submitCommand, waitForCommandStatus } from "./remote-server-test-helpers.js";
 
 test("remote server streams authenticated command output and keeps command history", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-remote-command-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-remote-command-project-"));
   const server = await startRemoteServer({
     configRoot: root,
     bindHost: "127.0.0.1",
     port: 0,
     pairingCode: "555555",
     unsafeAllowNonTailscale: true,
+    workspaceRoot: project,
     commandRunner: async (input) => {
       input.onChunk?.("working");
       return { sessionId: "session-remote", output: "working done", shouldContinue: true };
@@ -22,12 +26,14 @@ test("remote server streams authenticated command output and keeps command histo
   });
   try {
     const token = await pairToken(server.origin, "555555");
-    const events = await request(`${server.origin}/api/events?token=${encodeURIComponent(token)}`);
+    const events = await request(`${server.origin}/api/events`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
     assert.equal(events.statusCode, 200);
 
     const submitted = await request(`${server.origin}/api/commands`, {
       method: "POST",
-      body: JSON.stringify({ prompt: "/status", cwd: "/tmp/project" }),
+      body: JSON.stringify({ prompt: "/status", cwd: project }),
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     });
 
@@ -50,6 +56,84 @@ test("remote server streams authenticated command output and keeps command histo
   } finally {
     await server.close();
     await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("remote server rejects command cwd outside known remote projects", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-command-cwd-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-remote-command-allowed-"));
+  const outside = await mkdtemp(join(tmpdir(), "dream-remote-command-outside-"));
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "343434",
+    unsafeAllowNonTailscale: true,
+    workspaceRoot: project,
+    commandRunner: async () => ({ sessionId: "session-cwd", output: "should not run", shouldContinue: true }),
+  });
+  try {
+    const token = await pairToken(server.origin, "343434");
+    const rejected = await request(`${server.origin}/api/commands`, {
+      method: "POST",
+      body: JSON.stringify({ prompt: "/status", cwd: outside }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+
+    assert.equal(rejected.statusCode, 400);
+    assert.match(await rejected.body.text(), /known remote project/u);
+
+    const accepted = await request(`${server.origin}/api/commands`, {
+      method: "POST",
+      body: JSON.stringify({ prompt: "/status", cwd: project }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+    assert.equal(accepted.statusCode, 202);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("remote server rejects session commands that target another cwd", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-command-session-cwd-"));
+  const sessionProject = await mkdtemp(join(tmpdir(), "dream-remote-session-project-"));
+  const otherProject = await mkdtemp(join(tmpdir(), "dream-remote-other-project-"));
+  const session = await startSession(root, sessionProject);
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "121212",
+    unsafeAllowNonTailscale: true,
+    workspaceRoot: otherProject,
+    commandRunner: async () => ({ sessionId: "session-should-not-run", output: "should not run", shouldContinue: true }),
+  });
+  try {
+    const token = await pairToken(server.origin, "121212");
+    const rejected = await request(`${server.origin}/api/commands`, {
+      method: "POST",
+      body: JSON.stringify({ prompt: "/status", cwd: otherProject, sessionId: session.id }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+
+    assert.equal(rejected.statusCode, 400);
+    assert.match(await rejected.body.text(), /session directory/u);
+
+    const accepted = await request(`${server.origin}/api/commands`, {
+      method: "POST",
+      body: JSON.stringify({ prompt: "/status", cwd: sessionProject, sessionId: session.id }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+    assert.equal(accepted.statusCode, 202);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(sessionProject, { recursive: true, force: true });
+    await rm(otherProject, { recursive: true, force: true });
   }
 });
 
@@ -267,40 +351,4 @@ async function readUntil(body: NodeJS.ReadableStream, needle: string): Promise<s
     }
   }
   return text;
-}
-
-async function pairToken(origin: string, code: string): Promise<string> {
-  const pair = await request(`${origin}/api/pair`, {
-    method: "POST",
-    body: JSON.stringify({ code, deviceName: "android phone" }),
-    headers: { "content-type": "application/json" },
-  });
-  assert.equal(pair.statusCode, 200);
-  const paired = await pair.body.json() as { readonly token?: string };
-  assert.equal(typeof paired.token, "string");
-  return paired.token ?? "";
-}
-
-async function submitCommand(origin: string, token: string, prompt: string): Promise<{ readonly command?: { readonly id?: string; readonly status?: string } }> {
-  const submitted = await request(`${origin}/api/commands`, {
-    method: "POST",
-    body: JSON.stringify({ prompt }),
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-  });
-  assert.equal(submitted.statusCode, 202);
-  return await submitted.body.json() as { readonly command?: { readonly id?: string; readonly status?: string } };
-}
-
-async function waitForCommandStatus(origin: string, token: string, id: string, status: string): Promise<void> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const history = await request(`${origin}/api/commands`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    const body = await history.body.json() as { readonly commands?: readonly { readonly id?: string; readonly status?: string }[] };
-    if (body.commands?.some((command) => command.id === id && command.status === status) === true) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  assert.fail(`Timed out waiting for command ${id} to become ${status}`);
 }

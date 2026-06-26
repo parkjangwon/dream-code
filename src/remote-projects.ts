@@ -14,13 +14,10 @@ export async function listRemoteProjects(root: string, currentDirectory: string)
   const [workspaceDirs, sessions] = await Promise.all([loadWorkspaceDirs(root), listSessions(root)]);
   const sessionDirs = sessions.map((session) => session.directory);
   const candidates = uniquePaths([currentDirectory, ...workspaceDirs, ...sessionDirs]);
-  const projects: RemoteProject[] = [];
-  for (const candidate of candidates) {
-    if (await isDirectory(candidate)) {
-      projects.push(projectDto(candidate));
-    }
-  }
-  return projects;
+  const existing = await Promise.all(candidates.map(async (candidate) => {
+    return await isDirectory(candidate) ? projectDto(candidate) : undefined;
+  }));
+  return existing.filter((project): project is RemoteProject => project !== undefined);
 }
 
 function uniquePaths(paths: readonly string[]): readonly string[] {

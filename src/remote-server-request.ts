@@ -5,7 +5,7 @@ import { listAgentRuns, readAgentRunRecord } from "./agent-run-store.js";
 import { listSessions } from "./session-store.js";
 import { appendRemoteAuditEvent, readRemoteAuditEvents } from "./remote-audit.js";
 import type { DeviceRecord, RemoteAuth } from "./remote-auth.js";
-import { bearerToken, readJson, sendJson, sendSse } from "./remote-http.js";
+import { bearerToken, clearRemoteAuthCookie, cookieToken, readJson, remoteAuthCookie, sendJson, sendSse } from "./remote-http.js";
 import { appendRemoteLog } from "./remote-log.js";
 import { handlePublicRemoteResource } from "./remote-pwa.js";
 import { listRemoteProjects } from "./remote-projects.js";
@@ -36,14 +36,31 @@ export async function handleRemoteServerRequest(
       return;
     }
     if (request.method === "POST" && url.pathname === "/api/pair") {
+      if (!sameOriginOrNoOrigin(request)) {
+        sendJson(response, 403, { error: "CSRF check failed." });
+        return;
+      }
       await handlePair(root, auth, request, response);
       return;
     }
-    const token = url.pathname === "/api/events" ? (url.searchParams.get("token") ?? undefined) : bearerToken(request.headers["authorization"]);
-    const device = await auth.authenticate(token);
+    if (request.method === "POST" && url.pathname === "/api/logout") {
+      if (!sameOriginOrNoOrigin(request) || !hasCsrfHeader(request)) {
+        sendJson(response, 403, { error: "CSRF check failed." });
+        return;
+      }
+      sendJson(response, 200, { ok: true }, { "set-cookie": clearRemoteAuthCookie() });
+      return;
+    }
+    const authToken = authTokenFromRequest(request);
+    const device = await auth.authenticate(authToken.token);
     if (device === undefined) {
       await appendRemoteAuditEvent(root, { kind: "auth_denied", path: url.pathname, remoteAddress: request.socket.remoteAddress ?? "unknown", status: 401 });
       sendJson(response, 401, { error: "Unauthorized" });
+      return;
+    }
+    if (authToken.source === "cookie" && isStateChangingRequest(request) && (!sameOriginOrNoOrigin(request) || !hasCsrfHeader(request))) {
+      await appendRemoteAuditEvent(root, { kind: "auth_denied", path: url.pathname, remoteAddress: request.socket.remoteAddress ?? "unknown", status: 403, message: "csrf check failed" });
+      sendJson(response, 403, { error: "CSRF check failed." });
       return;
     }
     if (url.pathname === "/api/me") {
@@ -76,7 +93,8 @@ async function handlePair(root: string, auth: RemoteAuth, request: IncomingMessa
     return;
   }
   await appendRemoteAuditEvent(root, { kind: "pair_success", path: "/api/pair", remoteAddress: request.socket.remoteAddress ?? "unknown", deviceId: result.device.id, status: 200 });
-  sendJson(response, 200, { token: result.token, device: result.device });
+  const body = shouldReturnTokenBody(request) ? { token: result.token, device: result.device } : { device: result.device };
+  sendJson(response, 200, body, { "set-cookie": remoteAuthCookie(result.token) });
 }
 
 async function handleAuthed(
@@ -168,4 +186,53 @@ function publicDevice(device: { readonly id: string; readonly name: string; read
 
 function isOperator(device: DeviceRecord): boolean {
   return device.role === "operator";
+}
+
+type RemoteAuthToken =
+  | { readonly source: "bearer"; readonly token: string }
+  | { readonly source: "cookie"; readonly token: string }
+  | { readonly source: "none"; readonly token: undefined };
+
+function authTokenFromRequest(request: IncomingMessage): RemoteAuthToken {
+  const bearer = bearerToken(request.headers["authorization"]);
+  if (bearer !== undefined) {
+    return { source: "bearer", token: bearer };
+  }
+  const cookie = cookieToken(request.headers.cookie);
+  if (cookie !== undefined) {
+    return { source: "cookie", token: cookie };
+  }
+  return { source: "none", token: undefined };
+}
+
+function shouldReturnTokenBody(request: IncomingMessage): boolean {
+  return request.headers["x-dream-remote-token-response"] === "body";
+}
+
+function isStateChangingRequest(request: IncomingMessage): boolean {
+  return request.method !== undefined && request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS";
+}
+
+function hasCsrfHeader(request: IncomingMessage): boolean {
+  return request.headers["x-dream-remote-csrf"] === "1";
+}
+
+function sameOriginOrNoOrigin(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  const host = request.headers.host;
+  if (origin === undefined || host === undefined) {
+    return true;
+  }
+  const value = Array.isArray(origin) ? origin[0] : origin;
+  if (value === undefined) {
+    return false;
+  }
+  try {
+    return new URL(value).host === host;
+  } catch (error) {
+    if (error instanceof Error) {
+      return false;
+    }
+    throw error;
+  }
 }

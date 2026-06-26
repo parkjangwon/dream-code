@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+
+import { withRemoteDeviceStoreLock } from "./remote-device-store-lock.js";
 
 const deviceRecordSchema = z.object({
   id: z.string().min(1),
@@ -17,6 +19,10 @@ const deviceStoreSchema = z.object({
   version: z.literal(1),
   devices: z.array(deviceRecordSchema),
 });
+
+const defaultTokenTtlMs = 90 * 24 * 60 * 60 * 1000;
+const lastSeenRefreshMs = 60_000;
+const deviceStoreUpdates = new Map<string, Promise<void>>();
 
 export type DeviceRecord = z.infer<typeof deviceRecordSchema>;
 type DeviceStore = z.infer<typeof deviceStoreSchema>;
@@ -65,13 +71,13 @@ export async function listRemoteDevices(root: string): Promise<readonly Omit<Dev
 }
 
 export async function revokeRemoteDevice(root: string, deviceId: string): Promise<boolean> {
-  const store = await readDeviceStore(root);
-  const nextDevices = store.devices.filter((device) => device.id !== deviceId);
-  if (nextDevices.length === store.devices.length) {
-    return false;
-  }
-  await writeDeviceStore(root, { version: 1, devices: nextDevices });
-  return true;
+  return await updateDeviceStore(root, (store) => {
+    const nextDevices = store.devices.filter((device) => device.id !== deviceId);
+    if (nextDevices.length === store.devices.length) {
+      return { store, value: false };
+    }
+    return { store: { version: 1, devices: nextDevices }, value: true };
+  });
 }
 
 async function pairDevice(
@@ -100,10 +106,12 @@ async function pairDevice(
     role: input.role ?? "operator",
     tokenHash: hashToken(token),
     pairedAt: now,
-    ...(options.tokenTtlMs === undefined ? {} : { expiresAt: new Date(Date.now() + options.tokenTtlMs).toISOString() }),
+    expiresAt: new Date(Date.now() + (options.tokenTtlMs ?? defaultTokenTtlMs)).toISOString(),
   };
-  const store = await readDeviceStore(root);
-  await writeDeviceStore(root, { version: 1, devices: [...store.devices, device] });
+  await updateDeviceStore(root, (store) => ({
+    store: { version: 1, devices: [...store.devices, device] },
+    value: undefined,
+  }));
   return { ok: true, token, device: publicDevice(device) };
 }
 
@@ -113,7 +121,55 @@ async function authenticate(root: string, token: string | undefined): Promise<De
   }
   const tokenHash = hashToken(token);
   const store = await readDeviceStore(root);
-  return store.devices.find((device) => device.tokenHash === tokenHash && !isExpired(device));
+  const device = store.devices.find((entry) => entry.tokenHash === tokenHash && !isExpired(entry));
+  if (device === undefined) {
+    return undefined;
+  }
+  if (!shouldRefreshLastSeen(device)) {
+    return device;
+  }
+  return await updateDeviceStore(root, (current) => {
+    const currentDevice = current.devices.find((entry) => entry.tokenHash === tokenHash && !isExpired(entry));
+    if (currentDevice === undefined) {
+      return { store: current, value: undefined };
+    }
+    if (!shouldRefreshLastSeen(currentDevice)) {
+      return { store: current, value: currentDevice };
+    }
+    const seenDevice = { ...currentDevice, lastSeenAt: new Date().toISOString() };
+    return {
+      store: {
+        version: 1,
+        devices: current.devices.map((entry) => entry.id === seenDevice.id ? seenDevice : entry),
+      },
+      value: seenDevice,
+    };
+  });
+}
+
+type DeviceStoreUpdate<T> = {
+  readonly store: DeviceStore;
+  readonly value: T;
+};
+
+async function updateDeviceStore<T>(root: string, update: (store: DeviceStore) => DeviceStoreUpdate<T>): Promise<T> {
+  const previous = deviceStoreUpdates.get(root) ?? Promise.resolve();
+  const queued = previous.catch(() => undefined).then(async () => {
+    await mkdir(join(root, "remote"), { recursive: true, mode: 0o700 });
+    return await withRemoteDeviceStoreLock(`${remoteDevicesPath(root)}.lock`, async () => {
+      const result = update(await readDeviceStore(root));
+      await writeDeviceStore(root, result.store);
+      return result.value;
+    });
+  });
+  const marker = queued.then(() => undefined, () => undefined);
+  deviceStoreUpdates.set(root, marker);
+  marker.finally(() => {
+    if (deviceStoreUpdates.get(root) === marker) {
+      deviceStoreUpdates.delete(root);
+    }
+  });
+  return await queued;
 }
 
 async function readDeviceStore(root: string): Promise<DeviceStore> {
@@ -129,7 +185,21 @@ async function readDeviceStore(root: string): Promise<DeviceStore> {
 
 async function writeDeviceStore(root: string, store: DeviceStore): Promise<void> {
   await mkdir(join(root, "remote"), { recursive: true, mode: 0o700 });
-  await writeFile(remoteDevicesPath(root), `${JSON.stringify(store, undefined, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  const path = remoteDevicesPath(root);
+  const temporaryPath = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  const file = await open(temporaryPath, "w", 0o600);
+  try {
+    await file.writeFile(`${JSON.stringify(store, undefined, 2)}\n`, "utf8");
+    await file.sync();
+  } finally {
+    await file.close();
+  }
+  try {
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await rm(temporaryPath, { force: true });
+    throw error;
+  }
 }
 
 function publicDevice(device: DeviceRecord): Omit<DeviceRecord, "tokenHash"> {
@@ -145,6 +215,10 @@ function publicDevice(device: DeviceRecord): Omit<DeviceRecord, "tokenHash"> {
 
 function isExpired(device: DeviceRecord): boolean {
   return device.expiresAt !== undefined && Date.parse(device.expiresAt) <= Date.now();
+}
+
+function shouldRefreshLastSeen(device: DeviceRecord): boolean {
+  return device.lastSeenAt === undefined || Date.parse(device.lastSeenAt) <= Date.now() - lastSeenRefreshMs;
 }
 
 function isPairingRateLimited(rateLimits: Map<string, RateLimitBucket>, remoteAddress: string): boolean {

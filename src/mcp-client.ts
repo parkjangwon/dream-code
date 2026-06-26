@@ -3,18 +3,9 @@ import { Buffer } from "node:buffer";
 
 import { DREAM_VERSION } from "./constants.js";
 import { loadMcpServers, type McpServer } from "./mcp-config.js";
+import type { McpToolCall, McpToolSummary, ParsedMessage, PendingRequest, RpcResponse } from "./mcp-client-types.js";
 
-export type McpToolCall = {
-  readonly server: string;
-  readonly name: string;
-  readonly arguments?: Record<string, unknown> | undefined;
-};
-
-export type McpToolSummary = {
-  readonly server: string;
-  readonly name: string;
-  readonly description: string;
-};
+export type { McpToolCall, McpToolSummary } from "./mcp-client-types.js";
 
 const protocolVersion = "2024-11-05";
 const defaultTimeoutMs = 10_000;
@@ -160,23 +151,6 @@ class McpStdioSession {
     }
   }
 }
-
-type PendingRequest = {
-  readonly resolve: (value: unknown) => void;
-  readonly reject: (error: Error) => void;
-  readonly timeout: NodeJS.Timeout;
-};
-
-type ParsedMessage = {
-  readonly message: unknown;
-  readonly rest: Buffer<ArrayBufferLike>;
-};
-
-type RpcResponse = {
-  readonly id: number;
-  readonly result?: unknown;
-  readonly error?: unknown;
-};
 
 function framePayload(payload: object): string {
   const body = JSON.stringify(payload);
