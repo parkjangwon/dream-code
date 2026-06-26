@@ -14,8 +14,6 @@ export type FullscreenSessionOptions = {
   readonly resizeDebounceMs?: number;
 };
 
-const enterAlternateScreen = "\u001B[?1049h";
-const exitAlternateScreen = "\u001B[?1049l";
 const showCursor = "\u001B[?25h";
 const hideCursor = "\u001B[?25l";
 const disableBracketedPaste = "\u001B[?2004l";
@@ -31,11 +29,11 @@ const cleanupSignals = ["SIGHUP", "SIGTERM"] as const;
 type CleanupSignal = typeof cleanupSignals[number];
 
 export function fullscreenEnterSequence(): string {
-  return `${enterAlternateScreen}${clearScreen()}${hideCursor}`;
+  return `${clearScreen()}${hideCursor}`;
 }
 
 export function fullscreenExitSequence(): string {
-  return `${disableMouseTracking}${disableBracketedPaste}${showCursor}${clearScreen()}${exitAlternateScreen}`;
+  return `${disableMouseTracking}${disableBracketedPaste}${showCursor}`;
 }
 
 export function startFullscreenSession(options: FullscreenSessionOptions): FullscreenSession {
@@ -49,7 +47,9 @@ export function startFullscreenSession(options: FullscreenSessionOptions): Fulls
     if (disposed) {
       return;
     }
-    options.repaint();
+    if (resizeSubscribers.length === 0) {
+      options.repaint();
+    }
     for (const callback of [...resizeSubscribers]) {
       callback();
     }

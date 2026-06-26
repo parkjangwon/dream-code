@@ -16,6 +16,7 @@ import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
 import { createRunningInputSession, type RunningInputSession } from "./tui-running-input.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
+import { isTermuxRuntime } from "./terminal-environment.js";
 
 export type RunAgentTextPromptOptions = {
   readonly text: string;
@@ -82,6 +83,18 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     cwd: options.cwd,
     oneShotYolo: options.oneShotYolo === true,
   });
+  if (isTermuxRuntime()) {
+    const steering = createRunningInputSession(statusLines, options.resize);
+    return {
+      write: (chunk) => {
+        steering.prepareForOutput();
+        const written = output.write(chunk);
+        steering.refreshAfterOutput();
+        return written;
+      },
+      steering,
+    };
+  }
   const layout = renderLayeredScreen({
     config: options.config,
     oneShotYolo: options.oneShotYolo === true,

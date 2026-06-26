@@ -57,7 +57,6 @@ export function readInteractiveInput(
       renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
     };
     const renderAfterResize = (): void => {
-      options.redrawHeader();
       renderedFrame = undefined;
       render();
     };

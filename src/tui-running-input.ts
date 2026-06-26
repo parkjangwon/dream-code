@@ -21,6 +21,7 @@ export type RunningInputSession = AgentSteering & {
   readonly start: () => void;
   readonly stop: () => readonly string[];
   readonly cursorSequence: () => string;
+  readonly prepareForOutput: () => void;
   readonly refreshAfterOutput: () => void;
 };
 
@@ -114,6 +115,10 @@ export function createRunningInputSession(
       return queuedInputs;
     },
     cursorSequence: () => runningInputCursorSequence(renderedFrame),
+    prepareForOutput: () => {
+      clearRenderedInputView(renderedFrame);
+      renderedFrame = undefined;
+    },
     refreshAfterOutput: () => {
       if (renderedFrame === undefined || !sameTerminalSize(lastRenderedSize, readStdoutTerminalSize())) {
         repairAfterResize();

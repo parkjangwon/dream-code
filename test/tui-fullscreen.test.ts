@@ -7,11 +7,11 @@ import {
   startFullscreenSession,
 } from "../src/tui-fullscreen.js";
 
-test("fullscreen sequences use alternate screen without enabling mouse capture", () => {
+test("fullscreen sequences preserve primary scrollback without enabling mouse capture", () => {
   const enter = fullscreenEnterSequence();
   const exit = fullscreenExitSequence();
 
-  assert.match(enter, /\u001B\[\?1049h/u);
+  assert.doesNotMatch(enter, /\u001B\[\?1049h/u);
   assert.match(enter, /\u001B\[2J\u001B\[H/u);
   assert.doesNotMatch(enter, /\u001B\[\?1000h/u);
   assert.doesNotMatch(enter, /\u001B\[\?1006h/u);
@@ -20,10 +20,11 @@ test("fullscreen sequences use alternate screen without enabling mouse capture",
   assert.match(exit, /\u001B\[\?1006l/u);
   assert.match(exit, /\u001B\[\?2004l/u);
   assert.match(exit, /\u001B\[\?25h/u);
-  assert.match(exit, /\u001B\[\?1049l/u);
+  assert.doesNotMatch(exit, /\u001B\[\?1049l/u);
+  assert.doesNotMatch(exit, /\u001B\[2J\u001B\[H/u);
 });
 
-test("startFullscreenSession debounces resize and removes the listener on dispose", async () => {
+test("startFullscreenSession lets resize subscribers repair local frames without global repaint", async () => {
   let repaintCount = 0;
   let resizeSubscriberCount = 0;
   const chunks: string[] = [];
@@ -55,7 +56,7 @@ test("startFullscreenSession debounces resize and removes the listener on dispos
       setTimeout(resolve, 5);
     });
 
-    assert.equal(repaintCount, 2);
+    assert.equal(repaintCount, 1);
     assert.equal(resizeSubscriberCount, 1);
     assert.equal(chunks[0], fullscreenEnterSequence());
     assert.equal(chunks.at(-1), fullscreenExitSequence());
