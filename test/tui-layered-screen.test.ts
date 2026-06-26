@@ -209,3 +209,30 @@ test("createLayeredMainWriter recalculates the viewport when terminal rows shrin
     stdout.mock.restore();
   }
 });
+
+test("createLayeredMainWriter scrolls older output inside the main viewport", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter({
+      topRows: 5,
+      mainStartRow: 6,
+      mainRows: 3,
+      bottomRows: 6,
+    });
+
+    writer.write("one\ntwo\nthree\nfour\nfive");
+    writer.scroll(2);
+
+    const scrolledFrame = chunks.at(-1) ?? "";
+    assert.match(scrolledFrame, /\u001B\[6;1H\u001B\[2Kone/u);
+    assert.match(scrolledFrame, /\u001B\[7;1H\u001B\[2Ktwo/u);
+    assert.match(scrolledFrame, /\u001B\[8;1H\u001B\[2Kthree/u);
+    assert.doesNotMatch(scrolledFrame, /five/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});

@@ -10,6 +10,7 @@ import { renderRunningInputView, runningInputCursorSequence } from "./tui-runnin
 import { nextEscInterruptState, type EscInterruptState } from "./tui-interrupt.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { readStdoutTerminalSize, sameTerminalSize, startTerminalSizeWatcher, type TerminalSize } from "./terminal-size-watch.js";
+import { scrollOutputForTerminalInput, scrollOutputForVerticalKey } from "./tui-output-scroll.js";
 import {
   applySteeringInput,
   createSteeringInputState,
@@ -53,6 +54,9 @@ export function createRunningInputSession(
     render();
   };
   const onKeypress = (value: string | undefined, key: Key): void => {
+    if (inputState.palette === undefined && scrollOutputForVerticalKey(key)) {
+      return;
+    }
     if (key.name === "escape") {
       const update = nextEscInterruptState(escState, Date.now());
       escState = update.state;
@@ -82,6 +86,10 @@ export function createRunningInputSession(
     feedback = "";
     render();
   };
+  const onData = (chunk: Buffer | string): void => {
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    scrollOutputForTerminalInput(text);
+  };
 
   return {
     signal: controller.signal,
@@ -94,6 +102,7 @@ export function createRunningInputSession(
       emitKeypressEvents(input);
       input.setRawMode(true);
       input.resume();
+      input.on("data", onData);
       input.on("keypress", onKeypress);
       unsubscribeResize = onResize?.(repairAfterResize) ?? subscribeStdoutResize(repairAfterResize);
       stopSizeWatcher = startTerminalSizeWatcher({ onChange: repairAfterResize });
@@ -102,6 +111,7 @@ export function createRunningInputSession(
     stop: () => {
       if (started) {
         input.off("keypress", onKeypress);
+        input.off("data", onData);
         unsubscribeResize?.();
         unsubscribeResize = undefined;
         stopSizeWatcher?.();

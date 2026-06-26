@@ -17,6 +17,10 @@ export type FullscreenSessionOptions = {
 const showCursor = "\u001B[?25h";
 const hideCursor = "\u001B[?25l";
 const disableBracketedPaste = "\u001B[?2004l";
+const enableMouseTracking = [
+  "\u001B[?1000h",
+  "\u001B[?1006h",
+].join("");
 const disableMouseTracking = [
   "\u001B[?1000l",
   "\u001B[?1002l",
@@ -29,7 +33,7 @@ const cleanupSignals = ["SIGHUP", "SIGTERM"] as const;
 type CleanupSignal = typeof cleanupSignals[number];
 
 export function fullscreenEnterSequence(): string {
-  return `${clearScreen()}${hideCursor}`;
+  return `${enableMouseTracking}${clearScreen()}${hideCursor}`;
 }
 
 export function fullscreenExitSequence(): string {

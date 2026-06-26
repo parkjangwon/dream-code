@@ -11,6 +11,7 @@ import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { startTerminalSizeWatcher } from "./terminal-size-watch.js";
+import { scrollOutputForTerminalInput, scrollOutputForVerticalKey } from "./tui-output-scroll.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
@@ -74,6 +75,10 @@ export function readInteractiveInput(
     };
 
     const onKeypress = (value: string | undefined, key: Key): void => {
+      if (state.palette === undefined && scrollOutputForVerticalKey(key)) {
+        render();
+        return;
+      }
       const action = actionForKey(value, key);
       if (action === undefined) {
         return;
@@ -119,9 +124,16 @@ export function readInteractiveInput(
           assertNever(update.effect);
       }
     };
+    const onData = (chunk: Buffer | string): void => {
+      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      if (scrollOutputForTerminalInput(text)) {
+        render();
+      }
+    };
 
     const cleanup = (): void => {
       input.off("keypress", onKeypress);
+      input.off("data", onData);
       unsubscribeResize?.();
       unsubscribeResize = undefined;
       stopSizeWatcher?.();
@@ -133,6 +145,7 @@ export function readInteractiveInput(
     emitKeypressEvents(input);
     input.setRawMode(true);
     input.resume();
+    input.on("data", onData);
     input.on("keypress", onKeypress);
     unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
     stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });

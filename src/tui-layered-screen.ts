@@ -27,6 +27,7 @@ export type LayeredScreenOptions = {
 
 export type LayeredMainWriter = {
   readonly write: (chunk: string) => boolean;
+  readonly scroll: (lines: number) => boolean;
 };
 
 export type LayeredMainWriterOptions = {
@@ -37,6 +38,7 @@ export type LayeredMainWriterOptions = {
 };
 
 const topChromeRows = 5;
+const scrollbackViewportMultiplier = 200;
 
 export function layeredTerminalLayout(terminalRows: number | undefined): LayeredTerminalLayout {
   const rows = terminalRows ?? 24;
@@ -73,6 +75,7 @@ export function createLayeredMainWriter(
 ): LayeredMainWriter {
   let logicalLines: string[] = [""];
   let monitorRendered = false;
+  let scrollOffset = 0;
   return {
     write: (chunk) => {
       const currentLayout = activeLayout(layout, options);
@@ -88,15 +91,24 @@ export function createLayeredMainWriter(
           return afterWrite.length === 0 ? true : writeLayeredFrame(afterWrite, options);
         }
         logicalLines = replaceAnimatedLine(logicalLines, animationLine);
-        writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns)}${options.afterWrite?.() ?? ""}`), options);
+        scrollOffset = clampScrollOffset(scrollOffset, currentLayout, logicalLines, currentColumns);
+        writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
         return true;
       }
       if (monitorRendered) {
         logicalLines = [""];
         monitorRendered = false;
+        scrollOffset = 0;
       }
-      logicalLines = appendChunk(logicalLines, chunk).slice(-currentLayout.mainRows * 4);
-      return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns)}${options.afterWrite?.() ?? ""}`), options);
+      logicalLines = appendChunk(logicalLines, chunk).slice(-currentLayout.mainRows * scrollbackViewportMultiplier);
+      scrollOffset = clampScrollOffset(scrollOffset, currentLayout, logicalLines, currentColumns);
+      return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
+    },
+    scroll: (lines) => {
+      const currentLayout = activeLayout(layout, options);
+      const currentColumns = activeColumns(options);
+      scrollOffset = clampScrollOffset(scrollOffset + lines, currentLayout, logicalLines, currentColumns);
+      return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
     },
   };
 }
@@ -192,16 +204,30 @@ function renderMainViewport(
   layout: LayeredTerminalLayout,
   logicalLines: readonly string[],
   terminalColumns: number | undefined,
+  scrollOffset = 0,
 ): string {
   const columns = Math.max(1, terminalColumns ?? 80);
   const visualLines = logicalLines.flatMap((line) => wrapVisibleLine(line, columns));
-  const visibleLines = visualLines.slice(-layout.mainRows);
+  const start = Math.max(0, visualLines.length - layout.mainRows - scrollOffset);
+  const visibleLines = visualLines.slice(start, start + layout.mainRows);
   const rows: string[] = [];
   for (let index = 0; index < layout.mainRows; index += 1) {
     const line = visibleLines[index] ?? "";
     rows.push(`${cursorToRow(layout.mainStartRow + index)}\u001B[2K${fitVisible(line, columns)}`);
   }
   return rows.join("");
+}
+
+function clampScrollOffset(
+  offset: number,
+  layout: LayeredTerminalLayout,
+  logicalLines: readonly string[],
+  terminalColumns: number | undefined,
+): number {
+  const columns = Math.max(1, terminalColumns ?? 80);
+  const visualLineCount = logicalLines.flatMap((line) => wrapVisibleLine(line, columns)).length;
+  const maxOffset = Math.max(0, visualLineCount - layout.mainRows);
+  return Math.min(Math.max(0, offset), maxOffset);
 }
 
 function wrapVisibleLine(line: string, width: number): readonly string[] {

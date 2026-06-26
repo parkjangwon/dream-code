@@ -7,14 +7,14 @@ import {
   startFullscreenSession,
 } from "../src/tui-fullscreen.js";
 
-test("fullscreen sequences preserve primary scrollback without enabling mouse capture", () => {
+test("fullscreen sequences preserve primary scrollback while enabling SGR mouse scroll", () => {
   const enter = fullscreenEnterSequence();
   const exit = fullscreenExitSequence();
 
   assert.doesNotMatch(enter, /\u001B\[\?1049h/u);
   assert.match(enter, /\u001B\[2J\u001B\[H/u);
-  assert.doesNotMatch(enter, /\u001B\[\?1000h/u);
-  assert.doesNotMatch(enter, /\u001B\[\?1006h/u);
+  assert.match(enter, /\u001B\[\?1000h/u);
+  assert.match(enter, /\u001B\[\?1006h/u);
 
   assert.match(exit, /\u001B\[\?1000l/u);
   assert.match(exit, /\u001B\[\?1006l/u);

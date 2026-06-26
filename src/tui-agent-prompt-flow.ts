@@ -16,7 +16,7 @@ import { buildBottomStatusLines } from "./tui-status-bar.js";
 import { createLayeredMainWriter, renderLayeredScreen } from "./tui-layered-screen.js";
 import { createRunningInputSession, type RunningInputSession } from "./tui-running-input.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
-import { isTermuxRuntime } from "./terminal-environment.js";
+import { setActiveOutputScroller } from "./tui-output-scroll.js";
 
 export type RunAgentTextPromptOptions = {
   readonly text: string;
@@ -58,6 +58,7 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
     await runAgentPrompt(sessionId === undefined ? agentPrompt : { ...agentPrompt, sessionId });
   } finally {
     queuedInputs = runtime.steering?.stop() ?? [];
+    runtime.afterSteeringStop?.();
   }
   await finishAgentTextPrompt(options, assistantTranscript, runtime.write);
   return queuedInputs.length === 0
@@ -68,6 +69,7 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
 type AgentResponseRuntime = {
   readonly write: (chunk: string) => boolean;
   readonly steering?: RunningInputSession;
+  readonly afterSteeringStop?: () => void;
 };
 
 async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise<AgentResponseRuntime> {
@@ -83,18 +85,6 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     cwd: options.cwd,
     oneShotYolo: options.oneShotYolo === true,
   });
-  if (isTermuxRuntime()) {
-    const steering = createRunningInputSession(statusLines, options.resize);
-    return {
-      write: (chunk) => {
-        steering.prepareForOutput();
-        const written = output.write(chunk);
-        steering.refreshAfterOutput();
-        return written;
-      },
-      steering,
-    };
-  }
   const layout = renderLayeredScreen({
     config: options.config,
     oneShotYolo: options.oneShotYolo === true,
@@ -105,14 +95,24 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     terminalColumns: output.columns,
   });
   const steering = createRunningInputSession(statusLines, options.resize);
+  let steeringActive = true;
+  const writer = createLayeredMainWriter(layout, {
+    afterWrite: () => (steeringActive ? steering.cursorSequence() : ""),
+    afterRender: () => {
+      if (steeringActive) {
+        steering.refreshAfterOutput();
+      }
+    },
+    terminalRows: () => output.rows,
+    terminalColumns: () => output.columns,
+  });
+  setActiveOutputScroller(writer);
   return {
-    write: createLayeredMainWriter(layout, {
-      afterWrite: steering.cursorSequence,
-      afterRender: steering.refreshAfterOutput,
-      terminalRows: () => output.rows,
-      terminalColumns: () => output.columns,
-    }).write,
+    write: writer.write,
     steering,
+    afterSteeringStop: () => {
+      steeringActive = false;
+    },
   };
 }
 
