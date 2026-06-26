@@ -11,7 +11,11 @@ import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { startTerminalSizeWatcher } from "./terminal-size-watch.js";
-import { scrollOutputForTerminalInput, scrollOutputForVerticalKey } from "./tui-output-scroll.js";
+import {
+  createTerminalMouseInputSuppressor,
+  scrollOutputForTerminalInput,
+  scrollOutputForVerticalKey,
+} from "./tui-output-scroll.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
@@ -53,6 +57,7 @@ export function readInteractiveInput(
     const previousRawMode = input.isRaw;
     let unsubscribeResize: (() => void) | undefined;
     let stopSizeWatcher: (() => void) | undefined;
+    const mouseInputSuppressor = createTerminalMouseInputSuppressor();
 
     const render = (): void => {
       renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
@@ -75,6 +80,9 @@ export function readInteractiveInput(
     };
 
     const onKeypress = (value: string | undefined, key: Key): void => {
+      if (mouseInputSuppressor.shouldSuppressKeypress(value, key)) {
+        return;
+      }
       if (state.palette === undefined && scrollOutputForVerticalKey(key)) {
         render();
         return;
@@ -126,6 +134,7 @@ export function readInteractiveInput(
     };
     const onData = (chunk: Buffer | string): void => {
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      mouseInputSuppressor.observe(text);
       if (scrollOutputForTerminalInput(text)) {
         render();
       }
@@ -142,10 +151,10 @@ export function readInteractiveInput(
       input.pause();
     };
 
+    input.on("data", onData);
     emitKeypressEvents(input);
     input.setRawMode(true);
     input.resume();
-    input.on("data", onData);
     input.on("keypress", onKeypress);
     unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
     stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });

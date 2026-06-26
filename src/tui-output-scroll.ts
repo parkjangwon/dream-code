@@ -4,13 +4,23 @@ export type OutputScroller = {
   readonly scroll: (lines: number) => boolean;
 };
 
+export type TerminalMouseInputSuppressor = {
+  readonly observe: (text: string) => void;
+  readonly shouldSuppressKeypress: (value: string | undefined, key: KeypressFragment) => boolean;
+};
+
 type VerticalKey = {
   readonly name?: string | undefined;
   readonly ctrl?: boolean | undefined;
   readonly meta?: boolean | undefined;
 };
 
+type KeypressFragment = {
+  readonly sequence?: string | undefined;
+};
+
 const scrollStepLines = 3;
+const maxPendingSuppressChars = 512;
 
 let activeOutputScroller: OutputScroller | undefined;
 
@@ -50,7 +60,7 @@ export function scrollOutputForVerticalKey(
 
 export function scrollDeltaFromTerminalInput(text: string): number | undefined {
   let delta = 0;
-  for (const match of text.matchAll(/\u001B\[<(\d+);\d+;\d+[mM]/gu)) {
+  for (const match of text.matchAll(sgrMouseReportPattern())) {
     const codeText = match[1];
     if (codeText === undefined) {
       continue;
@@ -63,4 +73,31 @@ export function scrollDeltaFromTerminalInput(text: string): number | undefined {
     }
   }
   return delta === 0 ? undefined : delta;
+}
+
+export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppressor {
+  let pending = "";
+  return {
+    observe: (text) => {
+      for (const match of text.matchAll(sgrMouseReportPattern())) {
+        const report = match[0];
+        pending = `${pending}${report.replace(/^\u001B\[</u, "")}`.slice(-maxPendingSuppressChars);
+      }
+    },
+    shouldSuppressKeypress: (value, key) => {
+      if (key.sequence === "\u001B[<") {
+        return pending.length > 0;
+      }
+      const fragment = value ?? key.sequence ?? "";
+      if (fragment.length === 0 || !pending.startsWith(fragment)) {
+        return false;
+      }
+      pending = pending.slice(fragment.length);
+      return true;
+    },
+  };
+}
+
+function sgrMouseReportPattern(): RegExp {
+  return /\u001B\[<(\d+);\d+;\d+[mM]/gu;
 }

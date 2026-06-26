@@ -10,7 +10,11 @@ import { renderRunningInputView, runningInputCursorSequence } from "./tui-runnin
 import { nextEscInterruptState, type EscInterruptState } from "./tui-interrupt.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { readStdoutTerminalSize, sameTerminalSize, startTerminalSizeWatcher, type TerminalSize } from "./terminal-size-watch.js";
-import { scrollOutputForTerminalInput, scrollOutputForVerticalKey } from "./tui-output-scroll.js";
+import {
+  createTerminalMouseInputSuppressor,
+  scrollOutputForTerminalInput,
+  scrollOutputForVerticalKey,
+} from "./tui-output-scroll.js";
 import {
   applySteeringInput,
   createSteeringInputState,
@@ -44,6 +48,7 @@ export function createRunningInputSession(
   let unsubscribeResize: (() => void) | undefined;
   let stopSizeWatcher: (() => void) | undefined;
   let lastRenderedSize: TerminalSize = readStdoutTerminalSize();
+  const mouseInputSuppressor = createTerminalMouseInputSuppressor();
 
   const render = (): void => {
     lastRenderedSize = readStdoutTerminalSize();
@@ -54,6 +59,9 @@ export function createRunningInputSession(
     render();
   };
   const onKeypress = (value: string | undefined, key: Key): void => {
+    if (mouseInputSuppressor.shouldSuppressKeypress(value, key)) {
+      return;
+    }
     if (inputState.palette === undefined && scrollOutputForVerticalKey(key)) {
       return;
     }
@@ -88,6 +96,7 @@ export function createRunningInputSession(
   };
   const onData = (chunk: Buffer | string): void => {
     const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    mouseInputSuppressor.observe(text);
     scrollOutputForTerminalInput(text);
   };
 
@@ -99,10 +108,10 @@ export function createRunningInputSession(
       }
       started = true;
       previousRawMode = input.isRaw;
+      input.on("data", onData);
       emitKeypressEvents(input);
       input.setRawMode(true);
       input.resume();
-      input.on("data", onData);
       input.on("keypress", onKeypress);
       unsubscribeResize = onResize?.(repairAfterResize) ?? subscribeStdoutResize(repairAfterResize);
       stopSizeWatcher = startTerminalSizeWatcher({ onChange: repairAfterResize });

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { ctrlCExitWindowMs, shouldExitOnRepeatedCtrlC } from "../src/tui-input.js";
 import {
+  createTerminalMouseInputSuppressor,
   scrollDeltaFromTerminalInput,
   scrollOutputForVerticalKey,
   setActiveOutputScroller,
@@ -36,4 +37,16 @@ test("scrollOutputForVerticalKey consumes Termux up and down keys for active out
   } finally {
     unset();
   }
+});
+
+test("terminal mouse suppressor consumes keypress fragments after raw SGR mouse input", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+  suppressor.observe("\u001B[<65;45;49M");
+
+  const fragments = ["6", "5", ";", "4", "5", ";", "4", "9", "M"];
+  assert.deepEqual(
+    fragments.map((fragment) => suppressor.shouldSuppressKeypress(fragment, { sequence: fragment })),
+    fragments.map(() => true),
+  );
+  assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
 });
