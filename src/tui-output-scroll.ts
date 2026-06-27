@@ -1,7 +1,7 @@
 import {
   readSgrMouseReportTail,
-  sgrWheelMouseReportPartialTailEndIndex,
-  sgrWheelMouseReportTailEndIndex,
+  sgrMouseReportPartialTailEndIndex,
+  sgrMouseReportTailEndIndex,
 } from "./sgr-mouse-report.js";
 
 export type OutputScroller = {
@@ -74,7 +74,7 @@ export function scrollDeltaFromTerminalInput(text: string): number | undefined {
 export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppressor {
   let pendingMouseReportTailChars = 0;
   let collectingMouseReport = false;
-  let collectingUnprefixedWheelReport = false;
+  let collectingUnprefixedMouseReport = false;
   let prefixCarry = "";
   return {
     observe: (text) => {
@@ -110,7 +110,7 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
   };
 
   function consumeMouseKeypressFragment(fragment: string): boolean {
-    if (consumeUnprefixedWheelTailFragment(fragment)) {
+    if (consumeUnprefixedMouseTailFragment(fragment)) {
       return true;
     }
 
@@ -147,31 +147,31 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
     return consumed;
   }
 
-  function consumeUnprefixedWheelTailFragment(fragment: string): boolean {
+  function consumeUnprefixedMouseTailFragment(fragment: string): boolean {
     let index = 0;
     let consumed = false;
-    if (collectingUnprefixedWheelReport) {
+    if (collectingUnprefixedMouseReport) {
       const terminator = fragment[index];
       if (terminator !== "M" && terminator !== "m") {
-        collectingUnprefixedWheelReport = false;
+        collectingUnprefixedMouseReport = false;
         return false;
       }
       index += 1;
       consumed = true;
-      collectingUnprefixedWheelReport = false;
+      collectingUnprefixedMouseReport = false;
     }
 
     while (index < fragment.length) {
-      const completeEndIndex = sgrWheelMouseReportTailEndIndex(fragment, index);
+      const completeEndIndex = sgrMouseReportTailEndIndex(fragment, index);
       if (completeEndIndex !== undefined) {
         index = completeEndIndex;
         consumed = true;
         continue;
       }
 
-      const partialEndIndex = sgrWheelMouseReportPartialTailEndIndex(fragment, index);
+      const partialEndIndex = sgrMouseReportPartialTailEndIndex(fragment, index);
       if (partialEndIndex === fragment.length) {
-        collectingUnprefixedWheelReport = true;
+        collectingUnprefixedMouseReport = true;
         return true;
       }
       return false;

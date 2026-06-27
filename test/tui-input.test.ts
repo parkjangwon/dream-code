@@ -128,18 +128,22 @@ test("terminal mouse suppressor consumes mixed SGR mouse keypress fragments", ()
   assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
 });
 
-test("terminal mouse suppressor consumes unobserved wheel tail bursts", () => {
+test("terminal mouse suppressor consumes unobserved SGR mouse tail bursts", () => {
   const suppressor = createTerminalMouseInputSuppressor();
 
   assert.equal(suppressor.shouldSuppressKeypress("64;19;52M64;19;52M64;19;52M", { sequence: "64;19;52M64;19;52M64;19;52M" }), true);
   assert.equal(suppressor.shouldSuppressKeypress("65;19;52M", { sequence: "65;19;52M" }), true);
-  assert.equal(suppressor.shouldSuppressKeypress("12;19;52M", { sequence: "12;19;52M" }), false);
+  assert.equal(suppressor.shouldSuppressKeypress("66;26;30M66;26;30M", { sequence: "66;26;30M66;26;30M" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("12;19;52M", { sequence: "12;19;52M" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("66;26;30x", { sequence: "66;26;30x" }), false);
   assert.equal(suppressor.shouldSuppressKeypress("hello", { sequence: "hello" }), false);
 });
 
-test("terminal mouse suppressor consumes split unobserved wheel tail bursts", () => {
+test("terminal mouse suppressor consumes split unobserved SGR mouse tail bursts", () => {
   const suppressor = createTerminalMouseInputSuppressor();
 
+  assert.equal(suppressor.shouldSuppressKeypress("66;26;30", { sequence: "66;26;30" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("M66;26;30M", { sequence: "M66;26;30M" }), true);
   assert.equal(suppressor.shouldSuppressKeypress("65;14;27", { sequence: "65;14;27" }), true);
   assert.equal(suppressor.shouldSuppressKeypress("M65;16;28", { sequence: "M65;16;28" }), true);
   assert.equal(suppressor.shouldSuppressKeypress("M64;17;17M", { sequence: "M64;17;17M" }), true);

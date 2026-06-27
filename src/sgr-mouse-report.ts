@@ -17,9 +17,9 @@ export function readSgrMouseReportTail(text: string, startIndex: number): {
   return { text: text.slice(startIndex, nextIndex), nextIndex, completed: false };
 }
 
-export function sgrWheelMouseReportTailEndIndex(text: string, startIndex: number): number | undefined {
+export function sgrMouseReportTailEndIndex(text: string, startIndex: number): number | undefined {
   const code = readDigits(text, startIndex);
-  if (code === undefined || (code.text !== "64" && code.text !== "65")) {
+  if (code === undefined) {
     return undefined;
   }
   let index = code.nextIndex;
@@ -43,9 +43,9 @@ export function sgrWheelMouseReportTailEndIndex(text: string, startIndex: number
   return terminator === "M" || terminator === "m" ? index + 1 : undefined;
 }
 
-export function sgrWheelMouseReportPartialTailEndIndex(text: string, startIndex: number): number | undefined {
+export function sgrMouseReportPartialTailEndIndex(text: string, startIndex: number): number | undefined {
   const code = readDigits(text, startIndex);
-  if (code === undefined || (code.text !== "64" && code.text !== "65")) {
+  if (code === undefined) {
     return undefined;
   }
   let index = code.nextIndex;

@@ -35,7 +35,7 @@ That direction shapes the runtime loop:
   artifacts so long-running work remains understandable.
 
 ```text
-Dream Code (v0.1.37)
+Dream Code (v0.1.38)
 Even while you sleep, your dreams keep building. ☾
 directory:   ~/dev/project/dream-code
 ```
@@ -205,8 +205,8 @@ inside the GitHub Release asset. The repository does not commit `dist/`.
 Create a release by pushing a version tag:
 
 ```sh
-git tag v0.1.37
-git push origin v0.1.37
+git tag v0.1.38
+git push origin v0.1.38
 ```
 
 The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
@@ -215,7 +215,7 @@ The release workflow runs `npm ci`, `npm run check`, `npm pack`, uploads
 Useful installer overrides:
 
 ```sh
-DREAM_CODE_VERSION=v0.1.37 sh install.sh
+DREAM_CODE_VERSION=v0.1.38 sh install.sh
 DREAM_CODE_SOURCE=1 sh install.sh
 ```
 
