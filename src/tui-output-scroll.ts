@@ -1,5 +1,3 @@
-import { isTermuxRuntime } from "./terminal-environment.js";
-
 export type OutputScroller = {
   readonly scroll: (lines: number) => boolean;
 };
@@ -19,7 +17,7 @@ type KeypressFragment = {
   readonly sequence?: string | undefined;
 };
 
-const scrollStepLines = 3;
+const scrollStepLines = 1;
 const sgrMouseReportPrefix = "\u001B[<";
 const maxSgrMouseReportPrefixCarryChars = sgrMouseReportPrefix.length - 1;
 
@@ -44,18 +42,9 @@ export function scrollOutputForTerminalInput(text: string): boolean {
 }
 
 export function scrollOutputForVerticalKey(
-  key: VerticalKey,
-  env: NodeJS.ProcessEnv = process.env,
+  _key: VerticalKey,
+  _env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (!isTermuxRuntime(env) || key.ctrl === true || key.meta === true) {
-    return false;
-  }
-  if (key.name === "up") {
-    return scrollActiveOutput(scrollStepLines);
-  }
-  if (key.name === "down") {
-    return scrollActiveOutput(-scrollStepLines);
-  }
   return false;
 }
 
@@ -108,48 +97,57 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
       }
     },
     shouldSuppressKeypress: (value, key) => {
-      if (key.sequence === sgrMouseReportPrefix) {
-        return collectingMouseReport || pendingMouseReportTailChars > 0;
-      }
       const fragment = value ?? key.sequence ?? "";
-      const completeReportTailLength = completeSgrMouseReportTailLength(fragment);
-      if (completeReportTailLength !== undefined && completeReportTailLength <= pendingMouseReportTailChars) {
-        pendingMouseReportTailChars -= completeReportTailLength;
-        return true;
-      }
-      if (
-        fragment.length === 0 ||
-        fragment.length > pendingMouseReportTailChars ||
-        !isSgrMouseReportTailFragment(fragment)
-      ) {
-        return false;
-      }
-      pendingMouseReportTailChars -= fragment.length;
-      return true;
+      return consumeMouseKeypressFragment(fragment);
     },
   };
+
+  function consumeMouseKeypressFragment(fragment: string): boolean {
+    let index = 0;
+    let consumed = false;
+    while (index < fragment.length) {
+      if (fragment.startsWith(sgrMouseReportPrefix, index)) {
+        const tail = readSgrMouseReportTail(fragment, index + sgrMouseReportPrefix.length);
+        if (tail.completed && tail.text.length <= pendingMouseReportTailChars) {
+          pendingMouseReportTailChars -= tail.text.length;
+          index = tail.nextIndex;
+          consumed = true;
+          continue;
+        }
+        if (
+          index + sgrMouseReportPrefix.length === fragment.length &&
+          (collectingMouseReport || pendingMouseReportTailChars > 0)
+        ) {
+          index += sgrMouseReportPrefix.length;
+          consumed = true;
+          continue;
+        }
+        return false;
+      }
+
+      const tailLength = sgrMouseReportTailFragmentLength(fragment, index);
+      if (tailLength === 0 || tailLength > pendingMouseReportTailChars) {
+        return false;
+      }
+      pendingMouseReportTailChars -= tailLength;
+      index += tailLength;
+      consumed = true;
+    }
+    return consumed;
+  }
 }
 
-function completeSgrMouseReportTailLength(text: string): number | undefined {
-  if (!text.startsWith(sgrMouseReportPrefix)) {
-    return undefined;
-  }
-  const tail = readSgrMouseReportTail(text, sgrMouseReportPrefix.length);
-  if (!tail.completed || tail.nextIndex !== text.length) {
-    return undefined;
-  }
-  return tail.text.length;
-}
-
-function isSgrMouseReportTailFragment(text: string): boolean {
-  for (let index = 0; index < text.length; index += 1) {
+function sgrMouseReportTailFragmentLength(text: string, startIndex: number): number {
+  let index = startIndex;
+  while (index < text.length) {
     const code = text.charCodeAt(index);
     const isDigit = code >= 48 && code <= 57;
     if (!isDigit && code !== 59 && code !== 77 && code !== 109) {
-      return false;
+      break;
     }
+    index += 1;
   }
-  return true;
+  return index - startIndex;
 }
 
 function trailingSgrMouseReportPrefix(text: string): string {

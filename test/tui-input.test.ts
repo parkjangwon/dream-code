@@ -18,12 +18,12 @@ test("shouldExitOnRepeatedCtrlC requires two presses within the exit window", ()
 });
 
 test("scrollDeltaFromTerminalInput reads SGR mouse wheel events", () => {
-  assert.equal(scrollDeltaFromTerminalInput("\u001B[<64;20;10M"), 3);
-  assert.equal(scrollDeltaFromTerminalInput("\u001B[<65;20;10M"), -3);
+  assert.equal(scrollDeltaFromTerminalInput("\u001B[<64;20;10M"), 1);
+  assert.equal(scrollDeltaFromTerminalInput("\u001B[<65;20;10M"), -1);
   assert.equal(scrollDeltaFromTerminalInput("text"), undefined);
 });
 
-test("scrollOutputForVerticalKey consumes Termux up and down keys for active output scrolling", () => {
+test("scrollOutputForVerticalKey preserves keyboard arrows for input history", () => {
   let scrolled = 0;
   const unset = setActiveOutputScroller({
     scroll: (lines) => {
@@ -32,8 +32,8 @@ test("scrollOutputForVerticalKey consumes Termux up and down keys for active out
     },
   });
   try {
-    assert.equal(scrollOutputForVerticalKey({ name: "up", ctrl: false, meta: false }, { TERMUX_VERSION: "0.119.0" }), true);
-    assert.equal(scrollOutputForVerticalKey({ name: "down", ctrl: false, meta: false }, { TERMUX_VERSION: "0.119.0" }), true);
+    assert.equal(scrollOutputForVerticalKey({ name: "up", ctrl: false, meta: false }, { TERMUX_VERSION: "0.119.0" }), false);
+    assert.equal(scrollOutputForVerticalKey({ name: "down", ctrl: false, meta: false }, { TERMUX_VERSION: "0.119.0" }), false);
     assert.equal(scrollOutputForVerticalKey({ name: "up", ctrl: false, meta: false }, { TERM_PROGRAM: "Apple_Terminal" }), false);
     assert.equal(scrolled, 0);
   } finally {
@@ -116,6 +116,15 @@ test("terminal mouse suppressor consumes full SGR mouse keypress fragments", () 
   suppressor.observe(report);
 
   assert.equal(suppressor.shouldSuppressKeypress(report, { sequence: report }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
+});
+
+test("terminal mouse suppressor consumes mixed SGR mouse keypress fragments", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+  suppressor.observe("\u001B[<64;14;43M\u001B[<65;14;43M");
+
+  assert.equal(suppressor.shouldSuppressKeypress(undefined, { sequence: "\u001B[<" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("64;14;43M\u001B[<65;14;43M", { sequence: "64;14;43M\u001B[<65;14;43M" }), true);
   assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
 });
 
