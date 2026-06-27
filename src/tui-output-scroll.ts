@@ -1,3 +1,9 @@
+import {
+  readSgrMouseReportTail,
+  sgrWheelMouseReportPartialTailEndIndex,
+  sgrWheelMouseReportTailEndIndex,
+} from "./sgr-mouse-report.js";
+
 export type OutputScroller = {
   readonly scroll: (lines: number) => boolean;
 };
@@ -68,6 +74,7 @@ export function scrollDeltaFromTerminalInput(text: string): number | undefined {
 export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppressor {
   let pendingMouseReportTailChars = 0;
   let collectingMouseReport = false;
+  let collectingUnprefixedWheelReport = false;
   let prefixCarry = "";
   return {
     observe: (text) => {
@@ -103,7 +110,7 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
   };
 
   function consumeMouseKeypressFragment(fragment: string): boolean {
-    if (isSgrWheelMouseReportTailBurst(fragment)) {
+    if (consumeUnprefixedWheelTailFragment(fragment)) {
       return true;
     }
 
@@ -139,58 +146,38 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
     }
     return consumed;
   }
-}
 
-function isSgrWheelMouseReportTailBurst(text: string): boolean {
-  let index = 0;
-  let consumed = false;
-  while (index < text.length) {
-    const nextIndex = sgrWheelMouseReportTailEndIndex(text, index);
-    if (nextIndex === undefined) {
+  function consumeUnprefixedWheelTailFragment(fragment: string): boolean {
+    let index = 0;
+    let consumed = false;
+    if (collectingUnprefixedWheelReport) {
+      const terminator = fragment[index];
+      if (terminator !== "M" && terminator !== "m") {
+        collectingUnprefixedWheelReport = false;
+        return false;
+      }
+      index += 1;
+      consumed = true;
+      collectingUnprefixedWheelReport = false;
+    }
+
+    while (index < fragment.length) {
+      const completeEndIndex = sgrWheelMouseReportTailEndIndex(fragment, index);
+      if (completeEndIndex !== undefined) {
+        index = completeEndIndex;
+        consumed = true;
+        continue;
+      }
+
+      const partialEndIndex = sgrWheelMouseReportPartialTailEndIndex(fragment, index);
+      if (partialEndIndex === fragment.length) {
+        collectingUnprefixedWheelReport = true;
+        return true;
+      }
       return false;
     }
-    index = nextIndex;
-    consumed = true;
+    return consumed;
   }
-  return consumed;
-}
-
-function sgrWheelMouseReportTailEndIndex(text: string, startIndex: number): number | undefined {
-  const code = readDigits(text, startIndex);
-  if (code === undefined || (code.text !== "64" && code.text !== "65")) {
-    return undefined;
-  }
-  let index = code.nextIndex;
-  if (text[index] !== ";") {
-    return undefined;
-  }
-  const column = readDigits(text, index + 1);
-  if (column === undefined) {
-    return undefined;
-  }
-  index = column.nextIndex;
-  if (text[index] !== ";") {
-    return undefined;
-  }
-  const row = readDigits(text, index + 1);
-  if (row === undefined) {
-    return undefined;
-  }
-  index = row.nextIndex;
-  const terminator = text[index];
-  return terminator === "M" || terminator === "m" ? index + 1 : undefined;
-}
-
-function readDigits(text: string, startIndex: number): { readonly text: string; readonly nextIndex: number } | undefined {
-  let index = startIndex;
-  while (index < text.length) {
-    const code = text.charCodeAt(index);
-    if (code < 48 || code > 57) {
-      break;
-    }
-    index += 1;
-  }
-  return index === startIndex ? undefined : { text: text.slice(startIndex, index), nextIndex: index };
 }
 
 function sgrMouseReportTailFragmentLength(text: string, startIndex: number): number {
@@ -215,25 +202,6 @@ function trailingSgrMouseReportPrefix(text: string): string {
     }
   }
   return "";
-}
-
-function readSgrMouseReportTail(text: string, startIndex: number): {
-  readonly text: string;
-  readonly nextIndex: number;
-  readonly completed: boolean;
-} {
-  let nextIndex = startIndex;
-  while (nextIndex < text.length) {
-    const char = text[nextIndex];
-    if (char === undefined || !/[0-9;mM]/u.test(char)) {
-      break;
-    }
-    nextIndex += 1;
-    if (char === "m" || char === "M") {
-      return { text: text.slice(startIndex, nextIndex), nextIndex, completed: true };
-    }
-  }
-  return { text: text.slice(startIndex, nextIndex), nextIndex, completed: false };
 }
 
 function sgrMouseReportPattern(): RegExp {
