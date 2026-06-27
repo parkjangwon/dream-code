@@ -150,6 +150,15 @@ test("terminal mouse suppressor consumes split unobserved SGR mouse tail bursts"
   assert.equal(suppressor.shouldSuppressKeypress("hello", { sequence: "hello" }), false);
 });
 
+test("terminal mouse suppressor consumes unprefixed SGR mouse data before readline splits keypresses", () => {
+  assert.equal(insertedTextForTerminalChunks(["66;52;20M66;52;20M65;52;20M"]), "");
+});
+
+test("terminal mouse suppressor preserves ordinary numeric input", () => {
+  assert.equal(insertedTextForTerminalChunks(["66"]), "66");
+  assert.equal(insertedTextForTerminalChunks(["66;52;20x"]), "66;52;20x");
+});
+
 test("terminal mouse suppressor preserves normal text after coalesced SGR mouse input", () => {
   const burst = Array.from({ length: 200 }, (_, index) => `\u001B[<${index % 2 === 0 ? 65 : 64};44;25M`).join("");
   assert.equal(insertedTextForTerminalChunks([burst, "hello"]), "hello");

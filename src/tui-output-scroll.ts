@@ -85,6 +85,9 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
         if (!collectingMouseReport) {
           const prefixIndex = observed.indexOf(sgrMouseReportPrefix, index);
           if (prefixIndex === -1) {
+            if (observeUnprefixedMouseTailText(observed)) {
+              return;
+            }
             prefixCarry = trailingSgrMouseReportPrefix(observed);
             return;
           }
@@ -110,10 +113,17 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
   };
 
   function consumeMouseKeypressFragment(fragment: string): boolean {
+    if ((pendingMouseReportTailChars > 0 || collectingMouseReport) && consumePendingMouseKeypressFragment(fragment)) {
+      return true;
+    }
     if (consumeUnprefixedMouseTailFragment(fragment)) {
       return true;
     }
 
+    return false;
+  }
+
+  function consumePendingMouseKeypressFragment(fragment: string): boolean {
     let index = 0;
     let consumed = false;
     while (index < fragment.length) {
@@ -145,6 +155,24 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
       consumed = true;
     }
     return consumed;
+  }
+
+  function observeUnprefixedMouseTailText(text: string): boolean {
+    let index = 0;
+    let tailChars = 0;
+    while (index < text.length) {
+      const completeEndIndex = sgrMouseReportTailEndIndex(text, index);
+      if (completeEndIndex === undefined) {
+        return false;
+      }
+      tailChars += completeEndIndex - index;
+      index = completeEndIndex;
+    }
+    if (tailChars === 0) {
+      return false;
+    }
+    pendingMouseReportTailChars += tailChars;
+    return true;
   }
 
   function consumeUnprefixedMouseTailFragment(fragment: string): boolean {
