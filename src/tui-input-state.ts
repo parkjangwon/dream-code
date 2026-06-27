@@ -2,6 +2,7 @@ import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
 import type { InputAction, InputState, InputUpdate } from "./tui-input-state-types.js";
+import { stripSgrMouseReportTails } from "./sgr-mouse-report.js";
 import {
   movePalette as moveCompletionPalette,
   paletteFor,
@@ -69,8 +70,11 @@ export function reduceInputState(state: InputState, action: InputAction): InputU
 }
 
 function insertText(state: InputState, value: string): InputUpdate {
-  const text = `${state.text.slice(0, state.cursor)}${value}${state.text.slice(state.cursor)}`;
-  return withTextAndCursor(state, text, state.cursor + value.length);
+  const rawText = `${state.text.slice(0, state.cursor)}${value}${state.text.slice(state.cursor)}`;
+  const rawCursor = state.cursor + value.length;
+  const textBeforeCursor = stripSgrMouseReportTails(rawText.slice(0, rawCursor));
+  const textAfterCursor = stripSgrMouseReportTails(rawText.slice(rawCursor));
+  return withTextAndCursor(state, `${textBeforeCursor}${textAfterCursor}`, textBeforeCursor.length);
 }
 
 function deleteBeforeCursor(state: InputState): InputUpdate {

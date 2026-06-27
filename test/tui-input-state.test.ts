@@ -212,6 +212,26 @@ test("question mark stays in the input and backspace removes it naturally", () =
   assert.equal(removed.state.text, "");
 });
 
+test("completed SGR mouse tails are removed from prompt text", () => {
+  let state = createInputState([], slashCommands);
+  for (const char of "65;69;15M66;69;15M65;50;25M") {
+    state = reduceInputState(state, { kind: "insert", value: char }).state;
+  }
+
+  assert.equal(state.text, "");
+  assert.equal(state.cursor, 0);
+});
+
+test("ordinary numeric prompt text is preserved", () => {
+  const numeric = reduceInputState(createInputState([], slashCommands), {
+    kind: "insert",
+    value: "65;69;15x",
+  });
+
+  assert.equal(numeric.state.text, "65;69;15x");
+  assert.equal(numeric.state.cursor, "65;69;15x".length);
+});
+
 test("empty backspace cancels cancellable prompt input only", () => {
   const mainPrompt = reduceInputState(createInputState([], slashCommands), { kind: "backspace" });
   const modalPrompt = reduceInputState(createInputState([], slashCommands, [], { cancelOnEmptyBackspace: true }), {

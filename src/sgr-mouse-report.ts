@@ -65,6 +65,21 @@ export function sgrMouseReportPartialTailEndIndex(text: string, startIndex: numb
   return separators === 2 ? index : undefined;
 }
 
+export function stripSgrMouseReportTails(text: string): string {
+  let index = 0;
+  let stripped = "";
+  while (index < text.length) {
+    const tailEndIndex = sgrMouseReportTailEndIndex(text, index);
+    if (tailEndIndex !== undefined) {
+      index = tailEndIndex;
+      continue;
+    }
+    stripped = `${stripped}${text[index] ?? ""}`;
+    index += 1;
+  }
+  return stripped;
+}
+
 function readDigits(text: string, startIndex: number): { readonly text: string; readonly nextIndex: number } | undefined {
   let index = startIndex;
   while (index < text.length) {
