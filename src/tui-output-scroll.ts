@@ -103,6 +103,10 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
   };
 
   function consumeMouseKeypressFragment(fragment: string): boolean {
+    if (isSgrWheelMouseReportTailBurst(fragment)) {
+      return true;
+    }
+
     let index = 0;
     let consumed = false;
     while (index < fragment.length) {
@@ -135,6 +139,58 @@ export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppress
     }
     return consumed;
   }
+}
+
+function isSgrWheelMouseReportTailBurst(text: string): boolean {
+  let index = 0;
+  let consumed = false;
+  while (index < text.length) {
+    const nextIndex = sgrWheelMouseReportTailEndIndex(text, index);
+    if (nextIndex === undefined) {
+      return false;
+    }
+    index = nextIndex;
+    consumed = true;
+  }
+  return consumed;
+}
+
+function sgrWheelMouseReportTailEndIndex(text: string, startIndex: number): number | undefined {
+  const code = readDigits(text, startIndex);
+  if (code === undefined || (code.text !== "64" && code.text !== "65")) {
+    return undefined;
+  }
+  let index = code.nextIndex;
+  if (text[index] !== ";") {
+    return undefined;
+  }
+  const column = readDigits(text, index + 1);
+  if (column === undefined) {
+    return undefined;
+  }
+  index = column.nextIndex;
+  if (text[index] !== ";") {
+    return undefined;
+  }
+  const row = readDigits(text, index + 1);
+  if (row === undefined) {
+    return undefined;
+  }
+  index = row.nextIndex;
+  const terminator = text[index];
+  return terminator === "M" || terminator === "m" ? index + 1 : undefined;
+}
+
+function readDigits(text: string, startIndex: number): { readonly text: string; readonly nextIndex: number } | undefined {
+  let index = startIndex;
+  while (index < text.length) {
+    const code = text.charCodeAt(index);
+    if (code < 48 || code > 57) {
+      break;
+    }
+    index += 1;
+  }
+  return index === startIndex ? undefined : { text: text.slice(startIndex, index), nextIndex: index };
 }
 
 function sgrMouseReportTailFragmentLength(text: string, startIndex: number): number {

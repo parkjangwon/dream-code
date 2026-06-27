@@ -128,6 +128,15 @@ test("terminal mouse suppressor consumes mixed SGR mouse keypress fragments", ()
   assert.equal(suppressor.shouldSuppressKeypress("x", { sequence: "x" }), false);
 });
 
+test("terminal mouse suppressor consumes unobserved wheel tail bursts", () => {
+  const suppressor = createTerminalMouseInputSuppressor();
+
+  assert.equal(suppressor.shouldSuppressKeypress("64;19;52M64;19;52M64;19;52M", { sequence: "64;19;52M64;19;52M64;19;52M" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("65;19;52M", { sequence: "65;19;52M" }), true);
+  assert.equal(suppressor.shouldSuppressKeypress("12;19;52M", { sequence: "12;19;52M" }), false);
+  assert.equal(suppressor.shouldSuppressKeypress("hello", { sequence: "hello" }), false);
+});
+
 test("terminal mouse suppressor preserves normal text after coalesced SGR mouse input", () => {
   const burst = Array.from({ length: 200 }, (_, index) => `\u001B[<${index % 2 === 0 ? 65 : 64};44;25M`).join("");
   assert.equal(insertedTextForTerminalChunks([burst, "hello"]), "hello");
