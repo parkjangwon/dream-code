@@ -266,6 +266,72 @@ test("remote server keeps running commands alive after they are assigned to a se
   }
 });
 
+test("remote server lets operator approve or reject pending command tool approvals", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-approval-"));
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "313131",
+    unsafeAllowNonTailscale: true,
+    commandRunner: async (input) => {
+      const approved = await input.approveTool?.({ tool: "shell", command: "npm test" });
+      return { sessionId: "session-approval", output: `approved=${approved === true}`, shouldContinue: true };
+    },
+  });
+  try {
+    const token = await pairToken(server.origin, "313131");
+    const submitted = await submitCommand(server.origin, token, "needs approval");
+    const commandId = submitted.command?.id ?? "";
+    await waitForCommandStatus(server.origin, token, commandId, "waiting_approval");
+
+    const waiting = await request(`${server.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const waitingBody = await waiting.body.json() as {
+      readonly commands?: readonly {
+        readonly id?: string;
+        readonly status?: string;
+        readonly pendingApproval?: { readonly tool?: string; readonly preview?: string };
+      }[];
+    };
+    const command = waitingBody.commands?.find((entry) => entry.id === commandId);
+    assert.equal(command?.status, "waiting_approval");
+    assert.equal(command?.pendingApproval?.tool, "shell");
+    assert.match(command?.pendingApproval?.preview ?? "", /npm test/u);
+
+    const approved = await request(`${server.origin}/api/commands/${encodeURIComponent(commandId)}/approve`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(approved.statusCode, 200);
+
+    await waitForCommandStatus(server.origin, token, commandId, "done");
+    const history = await request(`${server.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.match(await history.body.text(), /approved=true/u);
+
+    const rejected = await submitCommand(server.origin, token, "reject approval");
+    const rejectedId = rejected.command?.id ?? "";
+    await waitForCommandStatus(server.origin, token, rejectedId, "waiting_approval");
+    const rejectResponse = await request(`${server.origin}/api/commands/${encodeURIComponent(rejectedId)}/reject`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(rejectResponse.statusCode, 200);
+
+    await waitForCommandStatus(server.origin, token, rejectedId, "done");
+    const rejectedHistory = await request(`${server.origin}/api/commands`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.match(await rejectedHistory.body.text(), /approved=false/u);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("remote server restores command history after daemon restart", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-remote-persist-"));
   const options = {

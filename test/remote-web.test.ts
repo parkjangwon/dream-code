@@ -37,6 +37,11 @@ test("remote web app renders an English mobile-first control shell", () => {
   assert.match(html, /Thread/u);
   assert.match(html, /Stop/u);
   assert.match(html, /Working/u);
+  assert.match(html, /Needs Approval/u);
+  assert.match(html, /Approve/u);
+  assert.match(html, /Reject/u);
+  assert.match(html, /\/api\/commands\/.*\/approve/u);
+  assert.match(html, /\/api\/commands\/.*\/reject/u);
   assert.match(html, /Prompt received/u);
   assert.match(html, /Cancelled/u);
   assert.match(html, /\/api\/commands\/.*\/cancel/u);
@@ -66,6 +71,18 @@ test("remote web app renders an English mobile-first control shell", () => {
   assert.match(html, /visibilitychange/u);
   assert.match(html, /setInterval/u);
   assert.match(html, /\/api\/projects/u);
+  assert.match(html, /\/api\/runs/u);
+  assert.match(html, /\/api\/model/u);
+  assert.match(html, /Model Control/u);
+  assert.match(html, /Use Model/u);
+  assert.match(html, /Recent Runs/u);
+  assert.match(html, /Review/u);
+  assert.match(html, /Restore/u);
+  assert.match(html, /Continue/u);
+  assert.match(html, /Continue prompt/u);
+  assert.match(html, /\/api\/runs\/.*\/review/u);
+  assert.match(html, /\/api\/runs\/.*\/restore/u);
+  assert.match(html, /\/api\/runs\/.*\/continue/u);
   assert.match(html, /serviceWorker\.register/u);
   assert.match(html, /Notification\.requestPermission/u);
   assert.match(html, /showNotification/u);
@@ -80,7 +97,6 @@ test("remote web app renders an English mobile-first control shell", () => {
   assert.match(html, /Slash commands/u);
   assert.match(html, /\/swarm/u);
   assert.match(html, /Uploading\.\.\./u);
-  assert.doesNotMatch(html, /Recent Runs/u);
   assert.match(html, /min-width: 0/u);
   assert.match(html, /grid-template-columns: 52px minmax\(0, 1fr\) 52px/u);
   assert.match(html, /width: 0/u);

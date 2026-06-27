@@ -1,7 +1,15 @@
 import type { RemoteCommandInput, RemoteCommandResult } from "./remote-command.js";
 import type { RemoteUploadedFile } from "./remote-upload.js";
 
-export type RemoteCommandStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+export type RemoteCommandStatus = "queued" | "running" | "waiting_approval" | "done" | "failed" | "cancelled";
+
+export type RemoteCommandPendingApproval = {
+  readonly id: string;
+  readonly tool: string;
+  readonly label: string;
+  readonly preview: string;
+  readonly requestedAt: string;
+};
 
 export type RemoteCommandRecord = {
   readonly id: string;
@@ -20,6 +28,7 @@ export type RemoteCommandRecord = {
   readonly cancelRequestedAt?: string;
   readonly durationMs?: number;
   readonly temporaryUploads?: readonly RemoteUploadedFile[];
+  readonly pendingApproval?: RemoteCommandPendingApproval;
 };
 
 export type RemoteCommandActivity = {
@@ -45,6 +54,8 @@ export type RemoteCommandSubmitInput = {
 export type RemoteCommandBroker = {
   readonly submit: (input: RemoteCommandSubmitInput) => RemoteCommandRecord;
   readonly cancel: (id: string) => RemoteCommandRecord | undefined;
+  readonly approve: (id: string) => RemoteCommandRecord | undefined;
+  readonly reject: (id: string) => RemoteCommandRecord | undefined;
   readonly commands: () => readonly RemoteCommandRecord[];
   readonly subscribe: (listener: (event: RemoteCommandEvent) => void) => () => void;
   readonly flush: () => Promise<void>;

@@ -25,7 +25,7 @@ import {
 function App() {
   const auth = useRemoteAuth(pairedStorageKey);
   const authReady = auth.state.kind === "paired";
-  const [state, setState] = useState<RemoteState>({ projects: [], sessions: [] });
+  const [state, setState] = useState<RemoteState>({ projects: [], sessions: [], runs: [] });
   const [commands, setCommands] = useState<readonly CommandRecord[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<SessionDto | undefined>(undefined);
   const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>(undefined);

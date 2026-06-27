@@ -49,6 +49,7 @@ function outcomeTitle(status: CommandStatus): string {
       return "Stopped";
     case "queued":
     case "running":
+    case "waiting_approval":
       return "Working";
     default:
       return assertNever(status);
@@ -69,6 +70,8 @@ function outcomeDetail(command: CommandRecord): string {
     case "queued":
     case "running":
       return "Dream Code is still working.";
+    case "waiting_approval":
+      return "Approve or reject the pending tool from this device.";
     default:
       return assertNever(command.status);
   }
@@ -109,7 +112,7 @@ function formatElapsed(value: number): string {
 }
 
 function isActive(command: CommandRecord): boolean {
-  return command.status === "queued" || command.status === "running";
+  return command.status === "queued" || command.status === "running" || command.status === "waiting_approval";
 }
 
 function assertNever(value: never): never {

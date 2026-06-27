@@ -9,6 +9,7 @@ import type { CommandRecord, CommandStatus, SessionTurnDto } from "./remote-web-
 const statusLabel: Record<CommandStatus, string> = {
   queued: "Queued",
   running: "Running",
+  waiting_approval: "Needs Approval",
   done: "Done",
   failed: "Failed",
   cancelled: "Cancelled",
@@ -17,7 +18,9 @@ const statusLabel: Record<CommandStatus, string> = {
 export function CommandThread(props: {
   readonly commands: readonly CommandRecord[];
   readonly turns: readonly SessionTurnDto[];
+  readonly onApprove: (id: string) => void;
   readonly onCancel: (id: string) => void;
+  readonly onReject: (id: string) => void;
   readonly onRetry: (command: CommandRecord) => void;
 }) {
   const commands = [...props.commands].reverse();
@@ -58,6 +61,7 @@ export function CommandThread(props: {
               </div>
               <ProcessSummary command={command} />
               <PersistentProcessTimeline command={command} />
+              <ApprovalPanel command={command} onApprove={props.onApprove} onReject={props.onReject} />
               <CommandOutcomeSummary command={command} onRetry={props.onRetry} />
               <FinalCommandResult command={command} />
             </div>
@@ -66,6 +70,30 @@ export function CommandThread(props: {
         <div class="thread-scroll-anchor" ref={endRef} aria-hidden="true" />
       </div>
     </section>
+  );
+}
+
+function ApprovalPanel(props: {
+  readonly command: CommandRecord;
+  readonly onApprove: (id: string) => void;
+  readonly onReject: (id: string) => void;
+}) {
+  const approval = props.command.pendingApproval;
+  if (approval === undefined) {
+    return null;
+  }
+  return (
+    <div class="approval-panel">
+      <div class="approval-head">
+        <span class="pill waiting_approval">{approval.tool}</span>
+        <strong>{approval.label}</strong>
+      </div>
+      <pre>{approval.preview}</pre>
+      <div class="approval-actions">
+        <button type="button" onClick={() => props.onReject(props.command.id)}>Reject</button>
+        <button type="button" onClick={() => props.onApprove(props.command.id)}>Approve</button>
+      </div>
+    </div>
   );
 }
 
@@ -145,6 +173,8 @@ function commandText(command: CommandRecord): string {
       return "Waiting for Dream Code...";
     case "running":
       return "Dream Code is working...";
+    case "waiting_approval":
+      return "Waiting for remote approval...";
     case "done":
       return "Done.";
     case "failed":
@@ -157,7 +187,7 @@ function commandText(command: CommandRecord): string {
 }
 
 function isActive(command: CommandRecord): boolean {
-  return command.status === "queued" || command.status === "running";
+  return command.status === "queued" || command.status === "running" || command.status === "waiting_approval";
 }
 
 function isVisibleTurn(turn: SessionTurnDto): boolean {

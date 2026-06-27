@@ -7,6 +7,7 @@ import type { RemoteCommandActivity, RemoteCommandRecord } from "./remote-comman
 const commandStatusSchema = z.union([
   z.literal("queued"),
   z.literal("running"),
+  z.literal("waiting_approval"),
   z.literal("done"),
   z.literal("failed"),
   z.literal("cancelled"),
@@ -64,6 +65,7 @@ function normalizeRestoredCommand(command: RemoteCommandRecord, now: Date): Remo
   switch (command.status) {
     case "queued":
     case "running":
+    case "waiting_approval":
       return {
         ...command,
         status: "failed",

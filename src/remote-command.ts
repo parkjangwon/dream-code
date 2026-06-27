@@ -9,6 +9,7 @@ import { isRemoteSlashCommandAllowed } from "./remote-slash-commands.js";
 import { runWorkspaceCommand } from "./tui-workspace-commands.js";
 import type { Questioner } from "./tui-questioner.js";
 import { approveAgentTool } from "./tui-tool-approval.js";
+import type { AgentToolRequest } from "./agent-tool-schema.js";
 
 type WriteCallback = (error?: Error | null) => void;
 
@@ -21,6 +22,7 @@ export type RemoteCommandInput = {
   readonly onActivity?: (activity: RemoteCommandActivityInput) => void;
   readonly onChunk?: (chunk: string) => void;
   readonly onSession?: (sessionId: string) => void;
+  readonly approveTool?: (request: AgentToolRequest) => Promise<boolean>;
 };
 
 export type RemoteCommandActivityInput = {
@@ -67,7 +69,7 @@ export async function runRemoteCommand(input: RemoteCommandInput): Promise<Remot
           input.onActivity?.(activity);
         }
       },
-      approveTool: (request) => approveAgentTool(request, remoteQuestioner()),
+      approveTool: input.approveTool ?? ((request) => approveAgentTool(request, remoteQuestioner())),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
     if (isSignalAborted(input.signal)) {

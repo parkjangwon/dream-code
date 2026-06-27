@@ -101,6 +101,8 @@ function statusPhrase(command: CommandRecord): string {
       return "Queued for remote work";
     case "running":
       return "Dream Code is working";
+    case "waiting_approval":
+      return "Waiting for approval";
     case "done":
       return "Run completed";
     case "failed":
@@ -131,6 +133,8 @@ function timelineHeading(command: CommandRecord): string {
     case "queued":
     case "running":
       return "Working";
+    case "waiting_approval":
+      return "Approval";
     case "done":
       return "Process";
     case "failed":
@@ -199,7 +203,7 @@ function useNow(active: boolean): number {
 }
 
 function isActive(command: CommandRecord): boolean {
-  return command.status === "queued" || command.status === "running";
+  return command.status === "queued" || command.status === "running" || command.status === "waiting_approval";
 }
 
 function elapsedMs(start: string, now: number): number {

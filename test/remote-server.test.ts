@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -8,7 +8,9 @@ import { request } from "undici";
 import { startAgentRun } from "../src/agent-run-store.js";
 import { startRemoteServer } from "../src/remote-server.js";
 import { appendSessionTurn, startSession } from "../src/session-store.js";
+import { saveFileCheckpoint } from "../src/file-history.js";
 import { addWorkspaceDir } from "../src/workspace-state.js";
+import { pairToken } from "./remote-server-test-helpers.js";
 
 test("remote server pairs a device and serves authenticated project session run state", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-remote-server-"));
@@ -217,6 +219,107 @@ test("remote projects refresh workspace directories without restarting the daemo
     await rm(root, { recursive: true, force: true });
     await rm(currentProject, { recursive: true, force: true });
     await rm(laterProject, { recursive: true, force: true });
+  }
+});
+
+test("remote server exposes run review diff, restore, and continue actions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-run-review-"));
+  const project = await mkdtemp(join(tmpdir(), "dream-remote-run-review-project-"));
+  const filePath = join(project, "feature.txt");
+  let continuedPrompt = "";
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "767676",
+    unsafeAllowNonTailscale: true,
+    workspaceRoot: project,
+    commandRunner: async (input) => {
+      continuedPrompt = input.prompt;
+      return { sessionId: "session-review-continue", output: "continued", shouldContinue: true };
+    },
+  });
+  try {
+    await writeFile(filePath, "before\n", "utf8");
+    const checkpoint = await saveFileCheckpoint("feature.txt", project, root);
+    await writeFile(filePath, "after\n", "utf8");
+    const run = await startAgentRun(root, {
+      id: "run-review",
+      kind: "agent",
+      agentId: "dream",
+      agentName: "Dream",
+      prompt: "change feature",
+    });
+    run.tool("edit feature", { changedPath: "feature.txt", checkpoints: [checkpoint] });
+    await run.finish("done");
+
+    const token = await pairToken(server.origin, "767676");
+    const review = await request(`${server.origin}/api/runs/run-review/review`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(review.statusCode, 200);
+    const reviewText = await review.body.text();
+    assert.match(reviewText, /feature\.txt/u);
+    assert.match(reviewText, /-before/u);
+    assert.match(reviewText, /\+after/u);
+
+    const continued = await request(`${server.origin}/api/runs/run-review/continue`, {
+      method: "POST",
+      body: JSON.stringify({ cwd: project, prompt: "finish the cleanup" }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+    assert.equal(continued.statusCode, 202);
+    assert.match(continuedPrompt, /Resume run run-review/u);
+    assert.match(continuedPrompt, /finish the cleanup/u);
+
+    const restored = await request(`${server.origin}/api/runs/run-review/restore`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(restored.statusCode, 200);
+    assert.equal(await readFile(filePath, "utf8"), "before\n");
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("remote server lets operators change the active single provider model", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-remote-model-"));
+  const server = await startRemoteServer({
+    configRoot: root,
+    bindHost: "127.0.0.1",
+    port: 0,
+    pairingCode: "686868",
+    unsafeAllowNonTailscale: true,
+  });
+  try {
+    const token = await pairToken(server.origin, "686868");
+    const saved = await request(`${server.origin}/api/model`, {
+      method: "POST",
+      body: JSON.stringify({ provider: "z-ai", model: "glm-5.2", tier: "high" }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+    assert.equal(saved.statusCode, 200);
+
+    const model = await request(`${server.origin}/api/model`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(model.statusCode, 200);
+    const body = await model.body.json() as {
+      readonly mode?: string;
+      readonly single?: { readonly provider?: string; readonly defaultTier?: string; readonly model?: string };
+      readonly providers?: readonly { readonly id?: string; readonly models?: readonly string[] }[];
+    };
+    assert.equal(body.mode, "single");
+    assert.equal(body.single?.provider, "z-ai");
+    assert.equal(body.single?.defaultTier, "high");
+    assert.equal(body.single?.model, "glm-5.2");
+    assert.equal(body.providers?.some((provider) => provider.id === "z-ai" && provider.models?.includes("glm-5.2")), true);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 

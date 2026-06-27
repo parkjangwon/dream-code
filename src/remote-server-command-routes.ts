@@ -38,6 +38,26 @@ export function handleRemoteCommandCancel(
   sendJson(response, 200, { command });
 }
 
+export function handleRemoteCommandApproval(
+  broker: RemoteCommandBroker,
+  pathname: string,
+  response: ServerResponse,
+): void {
+  const action = pathname.endsWith("/approve") ? "approve" : "reject";
+  const suffix = `/${action}`;
+  const id = pathname.slice("/api/commands/".length, -suffix.length);
+  if (id.length === 0) {
+    sendJson(response, 400, { error: "Command id is required." });
+    return;
+  }
+  const command = action === "approve" ? broker.approve(decodeURIComponent(id)) : broker.reject(decodeURIComponent(id));
+  if (command === undefined) {
+    sendJson(response, 404, { error: "Pending approval not found." });
+    return;
+  }
+  sendJson(response, 200, { command });
+}
+
 export async function handleRemoteCommand(
   root: string,
   broker: RemoteCommandBroker,
@@ -81,7 +101,7 @@ type RemoteCommandCwdResult =
   | { readonly ok: true; readonly cwd: string }
   | { readonly ok: false; readonly message: string };
 
-async function resolveRemoteCommandCwd(root: string, workspaceRoot: string, requestedCwd: string | undefined, sessionId: string | undefined): Promise<RemoteCommandCwdResult> {
+export async function resolveRemoteCommandCwd(root: string, workspaceRoot: string, requestedCwd: string | undefined, sessionId: string | undefined): Promise<RemoteCommandCwdResult> {
   const cwd = resolve(requestedCwd ?? workspaceRoot);
   const projects = await listRemoteProjects(root, workspaceRoot);
   const allowed = projects.some((project) => containsPath(project.path, cwd));

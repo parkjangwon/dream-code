@@ -8,6 +8,7 @@ import {
 } from "./remote-command-broker-utils.js";
 import { loadRemoteCommandRecords, saveRemoteCommandRecords } from "./remote-command-store.js";
 import { cleanupRemoteUploads } from "./remote-upload.js";
+import { createRemoteCommandApprovalManager } from "./remote-command-approvals.js";
 import type {
   RemoteCommandBroker,
   RemoteCommandEvent,
@@ -67,6 +68,8 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
       updatedAt: now,
     }));
   }
+
+  const approvals = createRemoteCommandApprovalManager(patch);
 
   function submit(input: RemoteCommandSubmitInput): RemoteCommandRecord {
     sequence += 1;
@@ -156,6 +159,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
             updatedAt: now,
           }));
         },
+        approveTool: (request) => approvals.request(id, request, controller.signal),
       });
       if (controller.signal.aborted) {
         cancel(id);
@@ -207,6 +211,8 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
   return {
     submit,
     cancel,
+    approve: approvals.approve,
+    reject: approvals.reject,
     commands: () => records,
     subscribe: (listener) => {
       listeners.add(listener);

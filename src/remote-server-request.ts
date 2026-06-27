@@ -5,12 +5,15 @@ import { listAgentRuns, readAgentRunRecord } from "./agent-run-store.js";
 import { listSessions } from "./session-store.js";
 import { appendRemoteAuditEvent, readRemoteAuditEvents } from "./remote-audit.js";
 import type { DeviceRecord, RemoteAuth } from "./remote-auth.js";
-import { bearerToken, clearRemoteAuthCookie, cookieToken, readJson, remoteAuthCookie, sendJson, sendSse } from "./remote-http.js";
+import { clearRemoteAuthCookie, readJson, remoteAuthCookie, sendJson, sendSse } from "./remote-http.js";
 import { appendRemoteLog } from "./remote-log.js";
 import { handlePublicRemoteResource } from "./remote-pwa.js";
 import { listRemoteProjects } from "./remote-projects.js";
 import type { RemoteCommandBroker } from "./remote-command-broker.js";
-import { handleRemoteCommand, handleRemoteCommandCancel } from "./remote-server-command-routes.js";
+import { handleRemoteCommand, handleRemoteCommandApproval, handleRemoteCommandCancel } from "./remote-server-command-routes.js";
+import { handleRemoteModelResource } from "./remote-server-model-routes.js";
+import { handleRemoteRunResource } from "./remote-server-run-routes.js";
+import { authTokenFromRequest, hasCsrfHeader, isOperator, isStateChangingRequest, publicDevice, sameOriginOrNoOrigin } from "./remote-server-security.js";
 import { handleSessionResource } from "./remote-session-routes.js";
 
 const pairRequestSchema = z.object({
@@ -121,6 +124,14 @@ async function handleAuthed(
       sendJson(response, 200, { records, events: records });
       return;
     }
+    case "/api/model":
+      if (request.method !== "GET" && !isOperator(device)) {
+        await appendRemoteAuditEvent(root, { kind: "model_change_denied", path: pathname, deviceId: device.id, status: 403, message: "operator role required" });
+        sendJson(response, 403, { error: "operator role required" });
+        return;
+      }
+      await handleRemoteModelResource(root, request, response);
+      return;
     case "/api/events":
       sendSse(request, response, broker);
       return;
@@ -128,7 +139,7 @@ async function handleAuthed(
       await handleCommandsPath(root, workspaceRoot, broker, device, request, response);
       return;
     default:
-      await handleAuthedFallback(root, broker, device, pathname, request, response);
+    await handleAuthedFallback(root, workspaceRoot, broker, device, pathname, request, response);
   }
 }
 
@@ -149,7 +160,7 @@ async function handleCommandsPath(root: string, workspaceRoot: string, broker: R
   await handleRemoteCommand(root, broker, workspaceRoot, request, response);
 }
 
-async function handleAuthedFallback(root: string, broker: RemoteCommandBroker, device: DeviceRecord, pathname: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handleAuthedFallback(root: string, workspaceRoot: string, broker: RemoteCommandBroker, device: DeviceRecord, pathname: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
   if (pathname.startsWith("/api/commands/") && pathname.endsWith("/cancel")) {
     if (request.method !== "POST") {
       sendJson(response, 405, { error: "Method not allowed" });
@@ -163,6 +174,27 @@ async function handleAuthedFallback(root: string, broker: RemoteCommandBroker, d
     handleRemoteCommandCancel(broker, pathname, response);
     return;
   }
+  if (pathname.startsWith("/api/commands/") && (pathname.endsWith("/approve") || pathname.endsWith("/reject"))) {
+    if (request.method !== "POST") {
+      sendJson(response, 405, { error: "Method not allowed" });
+      return;
+    }
+    if (!isOperator(device)) {
+      await appendRemoteAuditEvent(root, { kind: "command_approval_denied", path: pathname, deviceId: device.id, status: 403, message: "operator role required" });
+      sendJson(response, 403, { error: "operator role required" });
+      return;
+    }
+    handleRemoteCommandApproval(broker, pathname, response);
+    return;
+  }
+  if (pathname.startsWith("/api/runs/") && request.method !== "GET" && !isOperator(device)) {
+    await appendRemoteAuditEvent(root, { kind: "run_action_denied", path: pathname, deviceId: device.id, status: 403, message: "operator role required" });
+    sendJson(response, 403, { error: "operator role required" });
+    return;
+  }
+  if (await handleRemoteRunResource(root, workspaceRoot, broker, pathname, request, response)) {
+    return;
+  }
   if (pathname.startsWith("/api/runs/")) {
     sendJson(response, 200, { run: await readAgentRunRecord(root, pathname.slice("/api/runs/".length)) });
     return;
@@ -174,65 +206,6 @@ async function handleAuthedFallback(root: string, broker: RemoteCommandBroker, d
   sendJson(response, 404, { error: "Not found" });
 }
 
-function publicDevice(device: { readonly id: string; readonly name: string; readonly role?: string; readonly pairedAt: string; readonly lastSeenAt?: string | undefined }) {
-  return {
-    id: device.id,
-    name: device.name,
-    role: device.role ?? "operator",
-    pairedAt: device.pairedAt,
-    ...(device.lastSeenAt === undefined ? {} : { lastSeenAt: device.lastSeenAt }),
-  };
-}
-
-function isOperator(device: DeviceRecord): boolean {
-  return device.role === "operator";
-}
-
-type RemoteAuthToken =
-  | { readonly source: "bearer"; readonly token: string }
-  | { readonly source: "cookie"; readonly token: string }
-  | { readonly source: "none"; readonly token: undefined };
-
-function authTokenFromRequest(request: IncomingMessage): RemoteAuthToken {
-  const bearer = bearerToken(request.headers["authorization"]);
-  if (bearer !== undefined) {
-    return { source: "bearer", token: bearer };
-  }
-  const cookie = cookieToken(request.headers.cookie);
-  if (cookie !== undefined) {
-    return { source: "cookie", token: cookie };
-  }
-  return { source: "none", token: undefined };
-}
-
 function shouldReturnTokenBody(request: IncomingMessage): boolean {
   return request.headers["x-dream-remote-token-response"] === "body";
-}
-
-function isStateChangingRequest(request: IncomingMessage): boolean {
-  return request.method !== undefined && request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS";
-}
-
-function hasCsrfHeader(request: IncomingMessage): boolean {
-  return request.headers["x-dream-remote-csrf"] === "1";
-}
-
-function sameOriginOrNoOrigin(request: IncomingMessage): boolean {
-  const origin = request.headers.origin;
-  const host = request.headers.host;
-  if (origin === undefined || host === undefined) {
-    return true;
-  }
-  const value = Array.isArray(origin) ? origin[0] : origin;
-  if (value === undefined) {
-    return false;
-  }
-  try {
-    return new URL(value).host === host;
-  } catch (error) {
-    if (error instanceof Error) {
-      return false;
-    }
-    throw error;
-  }
 }

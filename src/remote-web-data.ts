@@ -5,8 +5,10 @@ import {
   connectCommandEvents,
   requestJson,
   type CommandRecord,
+  type RemoteModelDto,
   type ProjectDto,
   type RemoteState,
+  type RunDto,
   type SessionDto,
 } from "./remote-web-api.js";
 
@@ -112,11 +114,13 @@ async function refreshWorkspaceState(
 }
 
 async function loadRemoteState(): Promise<RemoteState> {
-  const [projects, sessions] = await Promise.all([
+  const [projects, sessions, runs, model] = await Promise.all([
     requestJson<{ readonly projects: readonly ProjectDto[] }>("GET", "/api/projects"),
     requestJson<{ readonly sessions: readonly SessionDto[] }>("GET", "/api/sessions"),
+    requestJson<{ readonly runs: readonly RunDto[] }>("GET", "/api/runs"),
+    requestJson<RemoteModelDto>("GET", "/api/model"),
   ]);
-  return { projects: projects.projects, sessions: sessions.sessions };
+  return { projects: projects.projects, sessions: sessions.sessions, runs: runs.runs, model };
 }
 
 function isCompleted(command: CommandRecord): boolean {

@@ -25,11 +25,42 @@ export type SessionDetailDto = SessionDto & {
 
 export type RunDto = {
   readonly id: string;
-  readonly status?: string;
+  readonly status: string;
   readonly prompt?: string;
+  readonly changedFiles?: readonly string[];
+  readonly checkpoints?: readonly { readonly path: string }[];
+  readonly updatedAt?: string;
 };
 
-export type CommandStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+export type RunReviewDto = {
+  readonly run: RunDto;
+  readonly diff: string;
+};
+
+export type ModelProviderDto = {
+  readonly id: string;
+  readonly name: string;
+  readonly enabled: boolean;
+  readonly source: string;
+  readonly models: readonly string[];
+};
+
+export type RemoteModelDto = {
+  readonly mode: string;
+  readonly single: {
+    readonly provider: string;
+    readonly defaultTier: "low" | "mid" | "high";
+    readonly model: string;
+    readonly models: {
+      readonly low: string;
+      readonly mid: string;
+      readonly high: string;
+    };
+  };
+  readonly providers: readonly ModelProviderDto[];
+};
+
+export type CommandStatus = "queued" | "running" | "waiting_approval" | "done" | "failed" | "cancelled";
 
 export type CommandRecord = {
   readonly id: string;
@@ -46,6 +77,12 @@ export type CommandRecord = {
   readonly completedAt?: string;
   readonly cancelRequestedAt?: string;
   readonly durationMs?: number;
+  readonly pendingApproval?: {
+    readonly tool: string;
+    readonly label: string;
+    readonly preview: string;
+    readonly requestedAt: string;
+  };
 };
 
 export type CommandActivity = {
@@ -57,6 +94,8 @@ export type CommandActivity = {
 export type RemoteState = {
   readonly projects: readonly ProjectDto[];
   readonly sessions: readonly SessionDto[];
+  readonly runs: readonly RunDto[];
+  readonly model?: RemoteModelDto;
 };
 
 export type UploadedFileDto = {

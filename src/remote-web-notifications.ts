@@ -58,6 +58,7 @@ function titleForCommand(command: CommandRecord): string {
       return "Dream Code cancelled";
     case "queued":
     case "running":
+    case "waiting_approval":
       return "Dream Code is working";
     default:
       return assertNever(command.status);

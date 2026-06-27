@@ -35,7 +35,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -234,6 +236,136 @@ input {
 .home-menu {
   display: grid;
   gap: 24px;
+}
+
+.home-dashboard {
+  display: grid;
+  gap: 18px;
+}
+
+.remote-control-panel,
+.run-review-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+}
+
+.section-head h2,
+.section-head h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.control-grid label,
+.continue-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.control-grid select,
+.continue-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input);
+  color: var(--fg);
+  padding: 10px 12px;
+}
+
+.continue-field textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.compact-action {
+  min-height: 42px;
+}
+
+.run-review-row {
+  display: grid;
+}
+
+.run-review-detail {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.diff-preview,
+.approval-panel pre {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #303034;
+  border-radius: 12px;
+  background: #111113;
+  color: #e7e7ea;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.review-actions,
+.approval-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-actions button,
+.approval-actions button,
+.section-head button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #1c1c1e;
+  color: var(--fg);
+  font-weight: 800;
+}
+
+.approval-panel {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.approval-head strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thread {
@@ -869,7 +1001,8 @@ input {
 }
 
 .process-status.queued,
-.process-status.running {
+.process-status.running,
+.process-status.waiting_approval {
   background: var(--accent);
   box-shadow: 0 0 0 5px rgb(96 211 148 / 11%);
 }
@@ -939,6 +1072,10 @@ input {
 
 .pill.running {
   color: var(--accent);
+}
+
+.pill.waiting_approval {
+  color: #7dd3fc;
 }
 
 .pill.failed {

@@ -2,7 +2,9 @@ import { h } from "preact";
 
 import { HomeView, ProjectView } from "./remote-web-home.js";
 import { InstallAppButton } from "./remote-web-install.js";
+import { ModelControl } from "./remote-web-model-control.js";
 import { PairPanel } from "./remote-web-pair.js";
+import { RunReviewSection } from "./remote-web-run-review.js";
 import { CommandThread } from "./remote-web-thread.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
 import type { RemoteNavigation } from "./remote-web-navigation.js";
@@ -14,6 +16,7 @@ import {
   projectForSession,
   retryCommand,
 } from "./remote-web-session-ops.js";
+import { approveRemoteCommand, rejectRemoteCommand, stateWithModel } from "./remote-web-run-ops.js";
 import type {
   CommandRecord,
   RemoteState,
@@ -76,18 +79,26 @@ function renderScreen(props: {
   switch (screen.kind) {
     case "home":
       return (
-        <HomeView
-          projects={props.state.projects}
-          recentSessions={props.state.sessions.slice(0, 12)}
-          labels={remoteLabels}
-          onOpenProject={(project) => props.navigation.navigate({ kind: "project", project })}
-          onOpenSession={(session) => {
-            const project = projectForSession(props.state.projects, session);
-            if (project !== undefined) {
-              openSession(project, session, props.navigation, props.setError);
-            }
-          }}
-        />
+        <div class="home-dashboard">
+          <ModelControl
+            model={props.state.model}
+            onSaved={(model) => props.setState((current) => stateWithModel(current, model))}
+            onError={props.setError}
+          />
+          <RunReviewSection runs={props.state.runs} onCommand={props.onCommand} onError={props.setError} />
+          <HomeView
+            projects={props.state.projects}
+            recentSessions={props.state.sessions.slice(0, 12)}
+            labels={remoteLabels}
+            onOpenProject={(project) => props.navigation.navigate({ kind: "project", project })}
+            onOpenSession={(session) => {
+              const project = projectForSession(props.state.projects, session);
+              if (project !== undefined) {
+                openSession(project, session, props.navigation, props.setError);
+              }
+            }}
+          />
+        </div>
       );
     case "project":
       return (
@@ -105,7 +116,9 @@ function renderScreen(props: {
         <CommandThread
           turns={screen.session?.turns ?? []}
           commands={props.visibleCommands}
+          onApprove={(id) => approveRemoteCommand(id).then(props.onCommand).catch((error: unknown) => props.setError(error instanceof Error ? error.message : "Approval failed."))}
           onCancel={(id) => cancelCommand(id, props.setError)}
+          onReject={(id) => rejectRemoteCommand(id).then(props.onCommand).catch((error: unknown) => props.setError(error instanceof Error ? error.message : "Rejection failed."))}
           onRetry={(command) => retryCommand(command, props.onCommand, props.setError)}
         />
       );
@@ -115,7 +128,7 @@ function renderScreen(props: {
 }
 
 function isActive(command: CommandRecord): boolean {
-  return command.status === "queued" || command.status === "running";
+  return command.status === "queued" || command.status === "running" || command.status === "waiting_approval";
 }
 
 function assertNever(value: never): never {
