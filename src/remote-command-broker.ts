@@ -9,6 +9,7 @@ import {
 import { loadRemoteCommandRecords, saveRemoteCommandRecords } from "./remote-command-store.js";
 import { cleanupRemoteUploads } from "./remote-upload.js";
 import { createRemoteCommandApprovalManager } from "./remote-command-approvals.js";
+import { cleanRemoteCommandOutput } from "./remote-command-output.js";
 import type {
   RemoteCommandBroker,
   RemoteCommandEvent,
@@ -155,7 +156,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
               label: "Output received",
               detail: "Dream Code produced visible text",
             }),
-            output: `${record.output}${chunk}`,
+            output: cleanRemoteCommandOutput(`${record.output}${chunk}`),
             updatedAt: now,
           }));
         },
@@ -175,7 +176,7 @@ export async function createRemoteCommandBroker(configRoot: string, runner: Remo
       patch(id, (record) => ({
         ...record,
         status: "done",
-        output: result.output,
+        output: cleanRemoteCommandOutput(result.output),
         sessionId: result.sessionId,
         completedAt,
         durationMs: elapsedRemoteCommandMs(record.createdAt, completedAt),

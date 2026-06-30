@@ -3,6 +3,7 @@ import { useEffect, useRef } from "preact/hooks";
 
 import { ActivityTimeline, ProcessSummary } from "./remote-web-activity.js";
 import { CommandOutcomeSummary } from "./remote-web-command-summary.js";
+import { cleanRemoteCommandOutput } from "./remote-command-output.js";
 import { MarkdownView } from "./remote-web-markdown.js";
 import type { CommandRecord, CommandStatus, SessionTurnDto } from "./remote-web-api.js";
 
@@ -99,11 +100,12 @@ function ApprovalPanel(props: {
 
 function TurnBubble(props: { readonly turn: SessionTurnDto }) {
   const user = props.turn.role === "user";
+  const content = user ? props.turn.content : cleanRemoteCommandOutput(props.turn.content);
   return (
     <article class="exchange">
       <div class={`bubble ${user ? "user-bubble" : "dream-bubble"}`}>
         <span class="bubble-label">{user ? "You" : "Dream"}</span>
-        {user ? <p class="turn-text">{props.turn.content}</p> : <MarkdownView markdown={props.turn.content} />}
+        {user ? <p class="turn-text">{content}</p> : <MarkdownView markdown={content} />}
       </div>
     </article>
   );
@@ -134,7 +136,8 @@ function FinalCommandResult(props: { readonly command: CommandRecord }) {
 }
 
 function LiveOutput(props: { readonly command: CommandRecord }) {
-  const swarmFrame = props.command.prompt.startsWith("/swarm") ? latestSwarmFrame(props.command.output) : undefined;
+  const output = cleanRemoteCommandOutput(props.command.output);
+  const swarmFrame = props.command.prompt.startsWith("/swarm") ? latestSwarmFrame(output) : undefined;
   return (
     <div class={`live-output ${swarmFrame === undefined ? "" : "swarm-live"}`} aria-label="Live command output">
       <div class="live-output-head">
@@ -146,7 +149,7 @@ function LiveOutput(props: { readonly command: CommandRecord }) {
         </span>
         <span>Live output · {props.command.prompt.split(/\s/u)[0] ?? "command"}</span>
       </div>
-      {swarmFrame === undefined ? <pre>{tailText(props.command.output.trimEnd(), 4_000)}</pre> : <SwarmFrame text={swarmFrame} />}
+      {swarmFrame === undefined ? <pre>{tailText(output.trimEnd(), 4_000)}</pre> : <SwarmFrame text={swarmFrame} />}
     </div>
   );
 }
@@ -166,7 +169,7 @@ function commandText(command: CommandRecord): string {
     return command.error;
   }
   if (command.output.trim().length > 0) {
-    return command.output.trimEnd();
+    return cleanRemoteCommandOutput(command.output).trimEnd();
   }
   switch (command.status) {
     case "queued":

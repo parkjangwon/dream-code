@@ -3,7 +3,7 @@ import { emitKeypressEvents } from "node:readline";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 
-import { ctrlCExitWindowMs, shouldExitOnRepeatedCtrlC } from "../src/tui-input.js";
+import { ctrlCExitWindowMs, inputFinishEchoKind, shouldExitOnRepeatedCtrlC } from "../src/tui-input.js";
 import {
   createTerminalMouseInputSuppressor,
   scrollDeltaFromTerminalInput,
@@ -15,6 +15,12 @@ test("shouldExitOnRepeatedCtrlC requires two presses within the exit window", ()
   assert.equal(shouldExitOnRepeatedCtrlC(undefined, 1_000), false);
   assert.equal(shouldExitOnRepeatedCtrlC(1_000, 1_000 + ctrlCExitWindowMs), true);
   assert.equal(shouldExitOnRepeatedCtrlC(1_000, 1_001 + ctrlCExitWindowMs), false);
+});
+
+test("inputFinishEchoKind does not echo cancel text for silent submits", () => {
+  assert.equal(inputFinishEchoKind({ kind: "submit", text: "/doctor" }, false, true), "none");
+  assert.equal(inputFinishEchoKind({ kind: "submit", text: "/doctor" }, true, true), "submit");
+  assert.equal(inputFinishEchoKind({ kind: "cancel" }, false, true), "cancel");
 });
 
 test("scrollDeltaFromTerminalInput reads SGR mouse wheel events", () => {

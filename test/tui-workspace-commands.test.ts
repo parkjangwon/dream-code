@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -472,4 +473,18 @@ test("runWorkspaceCommand runs swarm fan-out separately from single agent delega
     await rm(root, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
   }
+});
+
+test("workspace commands import does not load experimental sqlite", () => {
+  const result = spawnSync(process.execPath, [
+    "--input-type=module",
+    "-e",
+    "await import('./dist/src/tui-workspace-commands.js')",
+  ], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr.includes("ExperimentalWarning: SQLite"), false, result.stderr);
 });

@@ -3,8 +3,8 @@ import { stdout as output } from "node:process";
 import { runAgentPrompt } from "./agent-runner.js";
 import { loadConfig } from "./config.js";
 import { appendSessionTurn, readSession, startSession, type DreamSession } from "./session-store.js";
-import { stripAnsi } from "./ansi.js";
 import { activityFromAgentProgress } from "./remote-command-activity.js";
+import { cleanRemoteCommandOutput } from "./remote-command-output.js";
 import { isRemoteSlashCommandAllowed } from "./remote-slash-commands.js";
 import { runWorkspaceCommand } from "./tui-workspace-commands.js";
 import type { Questioner } from "./tui-questioner.js";
@@ -75,10 +75,11 @@ export async function runRemoteCommand(input: RemoteCommandInput): Promise<Remot
     if (isSignalAborted(input.signal)) {
       throw new RemoteCommandError("Remote command was cancelled.");
     }
+    const assistantOutput = cleanRemoteCommandOutput(assistantText);
     input.onActivity?.({ label: "Finalizing answer", detail: "Saving the assistant response" });
-    await appendSessionTurn(input.configRoot, session.id, "assistant", assistantText);
-    input.onChunk?.(assistantText);
-    return { sessionId: session.id, output: assistantText, shouldContinue: true };
+    await appendSessionTurn(input.configRoot, session.id, "assistant", assistantOutput);
+    input.onChunk?.(assistantOutput);
+    return { sessionId: session.id, output: assistantOutput, shouldContinue: true };
   }
   if (!isRemoteSlashCommandAllowed(commandName(input.prompt))) {
     throw new RemoteCommandError(`${commandName(input.prompt)} is not available in Dream Remote.`);
@@ -87,9 +88,9 @@ export async function runRemoteCommand(input: RemoteCommandInput): Promise<Remot
   const chunks: string[] = [];
   const originalWrite = output.write;
   output.write = ((chunk: string | Uint8Array, encodingOrCallback?: BufferEncoding | WriteCallback, callback?: WriteCallback): boolean => {
-    const text = stripAnsi(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
     chunks.push(text);
-    input.onChunk?.(text);
+    input.onChunk?.(cleanRemoteCommandOutput(text));
     const done = typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
     done?.();
     return true;
@@ -99,7 +100,7 @@ export async function runRemoteCommand(input: RemoteCommandInput): Promise<Remot
       currentId: () => session.id,
       switchTo: () => undefined,
     }, input.cwd, input.signal);
-    return { sessionId: session.id, output: chunks.join(""), shouldContinue: result.shouldContinue };
+    return { sessionId: session.id, output: cleanRemoteCommandOutput(chunks.join("")), shouldContinue: result.shouldContinue };
   } finally {
     output.write = originalWrite;
   }

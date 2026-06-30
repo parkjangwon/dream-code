@@ -2,9 +2,7 @@ import { h } from "preact";
 
 import { HomeView, ProjectView } from "./remote-web-home.js";
 import { InstallAppButton } from "./remote-web-install.js";
-import { ModelControl } from "./remote-web-model-control.js";
 import { PairPanel } from "./remote-web-pair.js";
-import { RunReviewSection } from "./remote-web-run-review.js";
 import { CommandThread } from "./remote-web-thread.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
 import type { RemoteNavigation } from "./remote-web-navigation.js";
@@ -16,7 +14,7 @@ import {
   projectForSession,
   retryCommand,
 } from "./remote-web-session-ops.js";
-import { approveRemoteCommand, rejectRemoteCommand, stateWithModel } from "./remote-web-run-ops.js";
+import { approveRemoteCommand, rejectRemoteCommand } from "./remote-web-run-ops.js";
 import type {
   CommandRecord,
   RemoteState,
@@ -28,10 +26,8 @@ export function renderAuthScreen(props: {
   readonly navigation: RemoteNavigation;
   readonly state: RemoteState;
   readonly visibleCommands: readonly CommandRecord[];
-  readonly setState: (update: (current: RemoteState) => RemoteState) => void;
   readonly setDeleteTarget: (session: SessionDto) => void;
   readonly setLogoutOpen: (open: boolean) => void;
-  readonly setMessage: (message: string) => void;
   readonly setError: (message: string) => void;
   readonly onCommand: (command: CommandRecord) => void;
 }) {
@@ -69,9 +65,7 @@ function renderScreen(props: {
   readonly navigation: RemoteNavigation;
   readonly state: RemoteState;
   readonly visibleCommands: readonly CommandRecord[];
-  readonly setState: (update: (current: RemoteState) => RemoteState) => void;
   readonly setDeleteTarget: (session: SessionDto) => void;
-  readonly setMessage: (message: string) => void;
   readonly setError: (message: string) => void;
   readonly onCommand: (command: CommandRecord) => void;
 }) {
@@ -79,13 +73,7 @@ function renderScreen(props: {
   switch (screen.kind) {
     case "home":
       return (
-        <div class="home-dashboard">
-          <ModelControl
-            model={props.state.model}
-            onSaved={(model) => props.setState((current) => stateWithModel(current, model))}
-            onError={props.setError}
-          />
-          <RunReviewSection runs={props.state.runs} onCommand={props.onCommand} onError={props.setError} />
+        <div class="home-menu">
           <HomeView
             projects={props.state.projects}
             recentSessions={props.state.sessions.slice(0, 12)}

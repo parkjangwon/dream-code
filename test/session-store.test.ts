@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   appendSessionTurn,
   listSessions,
+  readSession,
   renameSession,
   sessionIndexPath,
   startSession,
@@ -46,6 +47,26 @@ test("session store uses an index and per-session wire log", async () => {
 
     assert.equal(state.summary, "Ship a Termux-friendly session store.");
     assert.match(wire, /"type":"turn"/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("appendSessionTurn cleans assistant terminal chrome before storing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-session-clean-"));
+  try {
+    const session = await startSession(root, "/tmp/example-project");
+    await appendSessionTurn(root, session.id, "assistant", [
+      "⠋ Thinking AUTO deep · high → openai/gpt-5.5",
+      "⣿ Dream AUTO deep · high → openai/gpt-5.5",
+      "│ 완료했습니다.",
+      "│ • 빌드 성공",
+      "✓ Done 1.0s · ~20 tokens",
+    ].join("\n"));
+
+    const stored = await readSession(root, session.id);
+
+    assert.equal(stored?.turns[0]?.content, "완료했습니다.\n- 빌드 성공");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

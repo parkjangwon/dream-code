@@ -238,83 +238,6 @@ textarea {
   gap: 24px;
 }
 
-.home-dashboard {
-  display: grid;
-  gap: 18px;
-}
-
-.remote-control-panel,
-.run-review-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-width: 0;
-  gap: 12px;
-}
-
-.section-head h2,
-.section-head h3 {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.control-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-
-.control-grid label,
-.continue-field {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.control-grid select,
-.continue-field textarea {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--input);
-  color: var(--fg);
-  padding: 10px 12px;
-}
-
-.continue-field textarea {
-  min-height: 74px;
-  resize: vertical;
-}
-
-.compact-action {
-  min-height: 42px;
-}
-
-.run-review-row {
-  display: grid;
-}
-
-.run-review-detail {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-}
-
-.diff-preview,
 .approval-panel pre {
   max-height: 260px;
   overflow: auto;
@@ -328,16 +251,13 @@ textarea {
   white-space: pre-wrap;
 }
 
-.review-actions,
 .approval-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.review-actions button,
-.approval-actions button,
-.section-head button {
+.approval-actions button {
   min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -897,6 +817,39 @@ textarea {
   display: grid;
   gap: 6px;
   padding-left: 20px;
+}
+
+.md-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0d0d0f;
+}
+
+.md-table {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.md-table th,
+.md-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table th {
+  background: #18181a;
+  color: var(--fg);
+  font-weight: 850;
+}
+
+.md-table tr:last-child td {
+  border-bottom: 0;
 }
 
 .markdown-result blockquote {

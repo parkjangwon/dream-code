@@ -1,13 +1,8 @@
 import { h } from "preact";
 import type { ComponentChildren } from "preact";
 
-type MarkdownBlock =
-  | { readonly kind: "blockquote"; readonly text: string }
-  | { readonly kind: "code"; readonly language: string; readonly text: string }
-  | { readonly kind: "divider" }
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly text: string }
-  | { readonly kind: "list"; readonly ordered: boolean; readonly items: readonly string[] }
-  | { readonly kind: "paragraph"; readonly text: string };
+import { parseMarkdown, type MarkdownBlock } from "./remote-web-markdown-parser.js";
+export { parseMarkdown } from "./remote-web-markdown-parser.js";
 
 type InlineNode =
   | { readonly kind: "code"; readonly text: string }
@@ -45,115 +40,24 @@ function renderBlock(block: MarkdownBlock, index: number) {
         : <ul key={index}>{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInline(item, `ul-${index}-${itemIndex}`)}</li>)}</ul>;
     case "paragraph":
       return <p key={index}>{renderInline(block.text, `p-${index}`)}</p>;
+    case "table":
+      return (
+        <div class="md-table-wrap" key={index}>
+          <table class="md-table">
+            <thead>
+              <tr>{block.headers.map((header, cellIndex) => <th key={cellIndex}>{renderInline(header, `th-${index}-${cellIndex}`)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{renderInline(cell, `td-${index}-${rowIndex}-${cellIndex}`)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     default:
       return assertNever(block);
   }
-}
-
-function parseMarkdown(markdown: string): readonly MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = [];
-  const lines = markdown.trim().split(/\r?\n/u);
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index] ?? "";
-    if (line.trim().length === 0) {
-      index += 1;
-    } else if (line.startsWith("```")) {
-      const parsed = readCodeBlock(lines, index);
-      blocks.push(parsed.block);
-      index = parsed.nextIndex;
-    } else if (isDivider(line)) {
-      blocks.push({ kind: "divider" });
-      index += 1;
-    } else if (line.startsWith("# ")) {
-      blocks.push({ kind: "heading", level: 1, text: line.slice(2).trim() });
-      index += 1;
-    } else if (line.startsWith("## ")) {
-      blocks.push({ kind: "heading", level: 2, text: line.slice(3).trim() });
-      index += 1;
-    } else if (line.startsWith("### ")) {
-      blocks.push({ kind: "heading", level: 3, text: line.slice(4).trim() });
-      index += 1;
-    } else if (line.startsWith(">")) {
-      const parsed = readBlockquote(lines, index);
-      blocks.push(parsed.block);
-      index = parsed.nextIndex;
-    } else if (isListLine(line)) {
-      const parsed = readList(lines, index);
-      blocks.push(parsed.block);
-      index = parsed.nextIndex;
-    } else {
-      const parsed = readParagraph(lines, index);
-      blocks.push(parsed.block);
-      index = parsed.nextIndex;
-    }
-  }
-  return blocks;
-}
-
-function readCodeBlock(lines: readonly string[], start: number): { readonly block: MarkdownBlock; readonly nextIndex: number } {
-  const opener = lines[start] ?? "```";
-  const language = opener.slice(3).trim();
-  const body: string[] = [];
-  let index = start + 1;
-  while (index < lines.length && lines[index] !== "```") {
-    body.push(lines[index] ?? "");
-    index += 1;
-  }
-  return { block: { kind: "code", language, text: body.join("\n") }, nextIndex: index + 1 };
-}
-
-function readList(lines: readonly string[], start: number): { readonly block: MarkdownBlock; readonly nextIndex: number } {
-  const items: string[] = [];
-  const ordered = isOrderedListLine(lines[start] ?? "");
-  let index = start;
-  while (index < lines.length && isListLine(lines[index] ?? "") && isOrderedListLine(lines[index] ?? "") === ordered) {
-    items.push((lines[index] ?? "").replace(/^\s*(?:[-*]|\d+\.)\s+/u, "").trim());
-    index += 1;
-  }
-  return { block: { kind: "list", ordered, items }, nextIndex: index };
-}
-
-function readBlockquote(lines: readonly string[], start: number): { readonly block: MarkdownBlock; readonly nextIndex: number } {
-  const parts: string[] = [];
-  let index = start;
-  while (index < lines.length && (lines[index] ?? "").startsWith(">")) {
-    parts.push((lines[index] ?? "").replace(/^>\s?/u, "").trim());
-    index += 1;
-  }
-  return { block: { kind: "blockquote", text: parts.join(" ") }, nextIndex: index };
-}
-
-function readParagraph(lines: readonly string[], start: number): { readonly block: MarkdownBlock; readonly nextIndex: number } {
-  const parts: string[] = [];
-  let index = start;
-  while (index < lines.length && lines[index]?.trim().length !== 0 && !startsBlock(lines[index] ?? "")) {
-    parts.push((lines[index] ?? "").trim());
-    index += 1;
-  }
-  return { block: { kind: "paragraph", text: parts.join(" ") }, nextIndex: index };
-}
-
-function startsBlock(line: string): boolean {
-  return line.startsWith("```")
-    || line.startsWith("# ")
-    || line.startsWith("## ")
-    || line.startsWith("### ")
-    || line.startsWith(">")
-    || isDivider(line)
-    || isListLine(line);
-}
-
-function isListLine(line: string): boolean {
-  return /^\s*(?:[-*]|\d+\.)\s+\S/u.test(line);
-}
-
-function isOrderedListLine(line: string): boolean {
-  return /^\s*\d+\.\s+\S/u.test(line);
-}
-
-function isDivider(line: string): boolean {
-  return /^\s*---+\s*$/u.test(line);
 }
 
 function renderInline(text: string, keyPrefix: string): ComponentChildren {

@@ -7,11 +7,13 @@ import { RenameSessionDialog, ThreadActions } from "./remote-web-session-actions
 import { useNotificationNavigation } from "./remote-web-notification-navigation.js";
 import { registerRemoteServiceWorker } from "./remote-web-notifications.js";
 import { useRemoteAuth } from "./remote-web-auth.js";
+import { initialRemoteRouteFromHash } from "./remote-web-initial-route.js";
 import { useRemoteNavigation } from "./remote-web-navigation.js";
 import { useCommandStream, useRemoteData, useRemoteWorkspaceRefresh } from "./remote-web-data.js";
 import { pairedStorageKey, remoteLabels as t } from "./remote-web-labels.js";
 import {
   deleteRemoteSession,
+  openSession,
   renameRemoteSession,
 } from "./remote-web-session-ops.js";
 import { commandsForThread, renderAuthScreen } from "./remote-web-shell.js";
@@ -34,6 +36,8 @@ function App() {
   const [renamingSessionId, setRenamingSessionId] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [initialRoute] = useState(() => initialRemoteRouteFromHash(window.location.hash));
+  const [initialRouteOpened, setInitialRouteOpened] = useState(false);
   const navigation = useRemoteNavigation();
   const screen = navigation.screen;
   const rememberCommand = (command: CommandRecord) => {
@@ -45,6 +49,22 @@ function App() {
   useRemoteWorkspaceRefresh(authReady, setState, setError);
   useCommandStream(authReady, setCommands, setState, setError);
   useNotificationNavigation(authReady, state.projects, navigation, setError);
+  useEffect(() => {
+    if (!authReady || initialRouteOpened || initialRoute.kind !== "threadProject") {
+      return;
+    }
+    const project = state.projects.find((candidate) => candidate.id === initialRoute.projectId);
+    if (project === undefined) {
+      return;
+    }
+    const session = state.sessions.find((candidate) => candidate.directory === project.path);
+    setInitialRouteOpened(true);
+    if (session === undefined) {
+      navigation.replace({ kind: "project", project });
+      return;
+    }
+    openSession(project, session, navigation, setError);
+  }, [authReady, initialRoute, initialRouteOpened, navigation, setError, state.projects, state.sessions]);
 
   const visibleCommands = screen.kind === "thread" ? commandsForThread(screen, commands) : [];
   const title = screen.kind === "home" ? t.remote : screen.kind === "project" ? screen.project.name : screen.session?.name ?? screen.session?.summary ?? t.thread;
@@ -67,10 +87,8 @@ function App() {
             navigation,
             state,
             visibleCommands,
-            setState,
             setDeleteTarget,
             setLogoutOpen,
-            setMessage,
             setError,
             onCommand: rememberCommand,
           })}

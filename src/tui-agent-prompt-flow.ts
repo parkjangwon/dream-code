@@ -6,6 +6,7 @@ import { createLlmCompactSummarizer } from "./compact-summarizer.js";
 import type { DreamConfig } from "./config.js";
 import { continueGoalIfNeeded } from "./goal-continuation.js";
 import { recordGoalEvidence } from "./goal-state.js";
+import { cleanRemoteCommandOutput } from "./remote-command-output.js";
 import { appendSessionTurn } from "./session-store.js";
 import { maybeAutoCompactSession } from "./session-actions.js";
 import { approveAgentTool } from "./tui-tool-approval.js";
@@ -106,12 +107,13 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     terminalRows: () => output.rows,
     terminalColumns: () => output.columns,
   });
-  setActiveOutputScroller(writer);
+  const unsetActiveOutputScroller = setActiveOutputScroller(writer);
   return {
     write: writer.write,
     steering,
     afterSteeringStop: () => {
       steeringActive = false;
+      unsetActiveOutputScroller();
     },
   };
 }
@@ -129,7 +131,7 @@ async function finishAgentTextPrompt(
   write: (chunk: string) => boolean,
 ): Promise<void> {
   if (options.sessionRuntime !== undefined) {
-    await appendSessionTurn(options.configRoot, options.sessionRuntime.currentId(), "assistant", assistantTranscript);
+    await appendSessionTurn(options.configRoot, options.sessionRuntime.currentId(), "assistant", cleanRemoteCommandOutput(assistantTranscript));
     await maybeAutoCompactSession(options.configRoot, options.sessionRuntime.currentId(), {
       summarizer: createLlmCompactSummarizer(options.config, options.configRoot),
     }).catch((error: unknown) => {

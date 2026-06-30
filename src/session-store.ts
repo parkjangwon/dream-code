@@ -3,6 +3,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import { cwd } from "node:process";
 
 import { defaultConfigRoot } from "./config.js";
+import { cleanRemoteCommandOutput } from "./remote-command-output.js";
 import { pruneEmptySessions } from "./session-gc.js";
 import { sessionDirFor, sessionIndexPath as layoutSessionIndexPath } from "./session-layout.js";
 import { rememberWorkspaceDir } from "./workspace-state.js";
@@ -75,7 +76,7 @@ export async function appendSessionTurn(
     return undefined;
   }
 
-  const trimmed = content.trim();
+  const trimmed = cleanSessionTurnContent(role, content).trim();
   if (trimmed.length === 0) {
     return session;
   }
@@ -232,11 +233,15 @@ async function readWireTurns(sessionDir: string): Promise<SessionTurn[]> {
     .filter((line) => line.length > 0)
     .map((line) => {
       const parsed = parseJsonLine(wireTurnSchema, filePath, line);
-      return { role: parsed.role, content: parsed.content, createdAt: parsed.createdAt };
+      return { role: parsed.role, content: cleanSessionTurnContent(parsed.role, parsed.content), createdAt: parsed.createdAt };
     });
 }
 
 function updatedDreamSession(session: DreamSession, role: SessionRole, content: string, now: string): DreamSession {
   const summary = role === "user" ? sentenceFromText(content) : session.summary;
   return { ...session, summary, updatedAt: now, turns: [...session.turns, { role, content, createdAt: now }] };
+}
+
+function cleanSessionTurnContent(role: SessionRole, content: string): string {
+  return role === "assistant" ? cleanRemoteCommandOutput(content) : content;
 }

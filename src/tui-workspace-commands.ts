@@ -17,7 +17,6 @@ import { enableAutoRouting } from "./tui-auto-routing-command.js";
 import { maybeEditFile, maybeRunShell, maybeWriteFile, printFile } from "./tui-file-commands.js";
 import { configureModels } from "./tui-model-commands.js";
 import { runNotificationsCommand } from "./tui-notification-command.js";
-import { runCronCommand } from "./tui-cron-command.js";
 import { runPermissionCommand } from "./tui-permission-command.js";
 import { loginProvider, printProviders } from "./tui-provider-commands.js";
 import { switchProvider } from "./tui-provider-switch.js";
@@ -101,7 +100,10 @@ async function runWorkspaceCommandBody(
       });
       return { config, shouldContinue: true };
     case "/cron":
-      await runCronCommand({ config, configRoot, args: command.rest, questioner, cwd });
+      {
+        const { runCronCommand } = await import("./tui-cron-command.js");
+        await runCronCommand({ config, configRoot, args: command.rest, questioner, cwd });
+      }
       return { config, shouldContinue: true };
     case "/yolo": {
       const nextConfig = await togglePersistedYolo(configRoot);

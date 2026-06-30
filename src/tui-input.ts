@@ -35,6 +35,8 @@ export type InteractiveInputResult =
   | { readonly kind: "submit"; readonly text: string }
   | { readonly kind: "cancel" };
 
+type InputFinishEchoKind = "submit" | "cancel" | "none";
+
 export const ctrlCExitWindowMs = 1_500;
 
 export function shouldExitOnRepeatedCtrlC(
@@ -42,6 +44,21 @@ export function shouldExitOnRepeatedCtrlC(
   now: number,
 ): boolean {
   return lastCtrlCAt !== undefined && now - lastCtrlCAt <= ctrlCExitWindowMs;
+}
+
+export function inputFinishEchoKind(
+  result: InteractiveInputResult,
+  echoSubmitted: boolean,
+  echoCancel: boolean,
+): InputFinishEchoKind {
+  switch (result.kind) {
+    case "submit":
+      return echoSubmitted ? "submit" : "none";
+    case "cancel":
+      return echoCancel ? "cancel" : "none";
+    default:
+      return assertNever(result);
+  }
 }
 
 export function readInteractiveInput(
@@ -71,9 +88,10 @@ export function readInteractiveInput(
       clearRenderedInputView(renderedFrame);
       renderedFrame = undefined;
       cleanup();
-      if (result.kind === "submit" && options.echoSubmitted !== false) {
+      const echoKind = inputFinishEchoKind(result, options.echoSubmitted !== false, echoCancel);
+      if (echoKind === "submit" && result.kind === "submit") {
         output.write(`${paint(options.prompt, ansi.accent)}${renderInputText(result.text, options.secret === true, options.skills ?? [], options.fileMentions ?? [])}\n`);
-      } else if (echoCancel) {
+      } else if (echoKind === "cancel") {
         output.write("^C\n");
       }
       resolve(result);

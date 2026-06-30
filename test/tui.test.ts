@@ -8,6 +8,8 @@ import { defaultConfig, loadConfig } from "../src/config.js";
 import { listAgentRuns } from "../src/agent-run-store.js";
 import { appendSessionTurn, listSessions, startSession } from "../src/session-store.js";
 import { handleInput } from "../src/tui.js";
+import { runAgentTextPrompt } from "../src/tui-agent-prompt-flow.js";
+import { scrollActiveOutput, setActiveOutputScroller } from "../src/tui-output-scroll.js";
 
 test("handleInput routes /model to model selection instead of status output", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-tui-"));
@@ -153,3 +155,51 @@ test("handleInput marks an interrupted prompt as cancelled", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("runAgentTextPrompt clears the active output scroller after layered steering stops", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dream-tui-steering-"));
+  const stdout = mock.method(process.stdout, "write", () => true);
+  const unsetExistingScroller = setActiveOutputScroller({ scroll: () => true });
+  unsetExistingScroller();
+  const restoreIsTTY = replaceStdoutProperty("isTTY", true);
+  const restoreRows = replaceStdoutProperty("rows", 30);
+  const restoreColumns = replaceStdoutProperty("columns", 100);
+  try {
+    const session = await startSession(root, "/tmp/dream-code");
+    const controller = new AbortController();
+    controller.abort();
+
+    await runAgentTextPrompt({
+      text: "long running agent prompt",
+      config: defaultConfig(),
+      configRoot: root,
+      questioner: { question: async () => "" },
+      cwd: "/tmp/dream-code",
+      sessionRuntime: {
+        currentId: () => session.id,
+        switchTo: () => undefined,
+      },
+      signal: controller.signal,
+    });
+
+    assert.equal(scrollActiveOutput(1), false);
+  } finally {
+    restoreColumns();
+    restoreRows();
+    restoreIsTTY();
+    stdout.mock.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function replaceStdoutProperty(name: "columns" | "isTTY" | "rows", value: unknown): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdout, name);
+  Object.defineProperty(process.stdout, name, { configurable: true, value });
+  return () => {
+    if (descriptor === undefined) {
+      Reflect.deleteProperty(process.stdout, name);
+      return;
+    }
+    Object.defineProperty(process.stdout, name, descriptor);
+  };
+}
