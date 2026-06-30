@@ -1,4 +1,5 @@
 import type { CockpitFrame } from "./tui-cockpit.js";
+import { isTermuxRuntime } from "./terminal-environment.js";
 
 export type RenderedInputView = {
   readonly lineCount: number;
@@ -17,6 +18,13 @@ export function renderedInputViewFromCockpit(
     promptCursorColumn: frame.promptCursorColumn,
     terminalRows,
   };
+}
+
+export function terminalRowsForInputFrame(
+  terminalRows: number | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): number | undefined {
+  return isTermuxRuntime(env) ? undefined : terminalRows;
 }
 
 export function clearRenderedInputViewSequence(frame: RenderedInputView | undefined): string {

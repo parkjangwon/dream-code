@@ -11,6 +11,7 @@ import {
   cursorToFrameStartSequence,
   cursorToPromptSequence,
   renderedInputViewFromCockpit,
+  terminalRowsForInputFrame,
 } from "./tui-input-frame.js";
 import type { RenderedInputView } from "./tui-input-frame.js";
 import { inputViewport } from "./tui-input-viewport.js";
@@ -44,12 +45,13 @@ export function renderInputView(
     auxiliaryLines: renderAuxiliaryLines(state, secret, width),
     footerLines: statusLines,
   });
-  const renderedFrame = renderedInputViewFromCockpit(frame, output.rows);
+  const terminalRows = terminalRowsForInputFrame(output.rows);
+  const renderedFrame = renderedInputViewFromCockpit(frame, terminalRows);
   output.write(withHiddenCursor([
     clearRenderedInputViewSequence(previousFrame),
-    cursorToFrameStartSequence(frame.lines.length, output.rows),
+    cursorToFrameStartSequence(frame.lines.length, terminalRows),
     frame.lines.join("\n"),
-    cursorToPromptSequence(frame, output.rows),
+    cursorToPromptSequence(frame, terminalRows),
   ].join("")));
   return renderedFrame;
 }

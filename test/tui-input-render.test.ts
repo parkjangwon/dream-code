@@ -15,7 +15,7 @@ import {
   shouldShowInlineShortcutGuide,
 } from "../src/tui-input-render.js";
 import { terminalVisibleWidth } from "../src/terminal-width.js";
-import { createInputState } from "../src/tui-input-state.js";
+import { createInputState, reduceInputState } from "../src/tui-input-state.js";
 
 test("cockpit input cursor lands on the prompt row above the footer", () => {
   assert.equal(cursorUpToPromptLineCount(5, 0), 1);
@@ -96,6 +96,39 @@ test("renderInputView pins the cockpit to the terminal bottom when rows are know
     assert.match(chunks[0] ?? "", /\u001B\[25;1H/u);
     assert.match(chunks[0] ?? "", /\u001B\[27;1H/u);
   } finally {
+    if (rows === undefined) {
+      Reflect.deleteProperty(process.stdout, "rows");
+    } else {
+      Object.defineProperty(process.stdout, "rows", rows);
+    }
+    stdout.mock.restore();
+  }
+});
+
+test("renderInputView avoids absolute bottom rows on Termux", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  const rows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+  const previousTermuxVersion = process.env["TERMUX_VERSION"];
+  try {
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
+    process.env["TERMUX_VERSION"] = "0.119.0";
+
+    const previous = renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const typed = reduceInputState(createInputState([], []), { kind: "insert", value: "프로젝트" }).state;
+    renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous);
+
+    assert.doesNotMatch(chunks.join(""), /\u001B\[(?:25|27);1H/u);
+    assert.match(chunks[1] ?? "", /\u001B\[3A\r/u);
+  } finally {
+    if (previousTermuxVersion === undefined) {
+      Reflect.deleteProperty(process.env, "TERMUX_VERSION");
+    } else {
+      process.env["TERMUX_VERSION"] = previousTermuxVersion;
+    }
     if (rows === undefined) {
       Reflect.deleteProperty(process.stdout, "rows");
     } else {
