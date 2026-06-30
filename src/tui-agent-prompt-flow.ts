@@ -107,13 +107,12 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     terminalRows: () => output.rows,
     terminalColumns: () => output.columns,
   });
-  const unsetActiveOutputScroller = setActiveOutputScroller(writer);
+  setActiveOutputScroller(writer);
   return {
     write: writer.write,
     steering,
     afterSteeringStop: () => {
       steeringActive = false;
-      unsetActiveOutputScroller();
     },
   };
 }

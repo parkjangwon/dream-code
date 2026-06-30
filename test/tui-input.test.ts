@@ -6,6 +6,7 @@ import test from "node:test";
 import { ctrlCExitWindowMs, inputFinishEchoKind, shouldExitOnRepeatedCtrlC } from "../src/tui-input.js";
 import {
   createTerminalMouseInputSuppressor,
+  createTerminalOutputScrollInput,
   scrollDeltaFromTerminalInput,
   scrollOutputForVerticalKey,
   setActiveOutputScroller,
@@ -42,6 +43,48 @@ test("scrollOutputForVerticalKey preserves keyboard arrows for input history", (
     assert.equal(scrollOutputForVerticalKey({ name: "down", ctrl: false, meta: false }, { TERMUX_VERSION: "0.119.0" }), false);
     assert.equal(scrollOutputForVerticalKey({ name: "up", ctrl: false, meta: false }, { TERM_PROGRAM: "Apple_Terminal" }), false);
     assert.equal(scrolled, 0);
+  } finally {
+    unset();
+  }
+});
+
+test("scrollOutputForVerticalKey scrolls output with page keys", () => {
+  let scrolled = 0;
+  const unset = setActiveOutputScroller({
+    scroll: (lines) => {
+      scrolled += lines;
+      return true;
+    },
+  });
+  try {
+    assert.equal(scrollOutputForVerticalKey({ name: "pageup" }), true);
+    assert.equal(scrolled, 8);
+    assert.equal(scrollOutputForVerticalKey({ name: "pagedown" }), true);
+    assert.equal(scrolled, 0);
+  } finally {
+    unset();
+  }
+});
+
+test("terminal output scroll input maps SGR drag motion to output scroll", () => {
+  let scrolled = 0;
+  const unset = setActiveOutputScroller({
+    scroll: (lines) => {
+      scrolled += lines;
+      return true;
+    },
+  });
+  try {
+    const handler = createTerminalOutputScrollInput();
+
+    assert.equal(handler.handle("\u001B[<0;20;10M"), false);
+    assert.equal(handler.handle("\u001B[<32;20;13M"), true);
+    assert.equal(scrolled, 3);
+    assert.equal(handler.handle("\u001B[<32;20;11M"), true);
+    assert.equal(scrolled, 1);
+    assert.equal(handler.handle("\u001B[<0;20;11m"), false);
+    assert.equal(handler.handle("\u001B[<32;20;15M"), false);
+    assert.equal(scrolled, 1);
   } finally {
     unset();
   }

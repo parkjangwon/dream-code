@@ -14,6 +14,7 @@ test("fullscreen sequences preserve primary scrollback while enabling SGR mouse 
   assert.doesNotMatch(enter, /\u001B\[\?1049h/u);
   assert.match(enter, /\u001B\[2J\u001B\[H/u);
   assert.match(enter, /\u001B\[\?1000h/u);
+  assert.match(enter, /\u001B\[\?1002h/u);
   assert.match(enter, /\u001B\[\?1006h/u);
 
   assert.match(exit, /\u001B\[\?1000l/u);

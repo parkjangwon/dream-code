@@ -3,6 +3,7 @@ import {
   sgrMouseReportPartialTailEndIndex,
   sgrMouseReportTailEndIndex,
 } from "./sgr-mouse-report.js";
+import { sgrMouseScrollDelta, sgrWheelScrollDelta, type SgrMouseScrollState } from "./sgr-mouse-scroll.js";
 
 export type OutputScroller = {
   readonly scroll: (lines: number) => boolean;
@@ -11,6 +12,10 @@ export type OutputScroller = {
 export type TerminalMouseInputSuppressor = {
   readonly observe: (text: string) => void;
   readonly shouldSuppressKeypress: (value: string | undefined, key: KeypressFragment) => boolean;
+};
+
+export type TerminalOutputScrollInput = {
+  readonly handle: (text: string) => boolean;
 };
 
 type VerticalKey = {
@@ -23,7 +28,7 @@ type KeypressFragment = {
   readonly sequence?: string | undefined;
 };
 
-const scrollStepLines = 1;
+const keyboardScrollStepLines = 8;
 const sgrMouseReportPrefix = "\u001B[<";
 const maxSgrMouseReportPrefixCarryChars = sgrMouseReportPrefix.length - 1;
 
@@ -48,27 +53,32 @@ export function scrollOutputForTerminalInput(text: string): boolean {
 }
 
 export function scrollOutputForVerticalKey(
-  _key: VerticalKey,
+  key: VerticalKey,
   _env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return false;
+  switch (key.name) {
+    case "pageup":
+      return scrollActiveOutput(keyboardScrollStepLines);
+    case "pagedown":
+      return scrollActiveOutput(-keyboardScrollStepLines);
+    default:
+      return false;
+  }
+}
+
+export function createTerminalOutputScrollInput(): TerminalOutputScrollInput {
+  let state: SgrMouseScrollState = { lastDragRow: undefined };
+  return {
+    handle: (text) => {
+      const result = sgrMouseScrollDelta(text, state);
+      state = result.state;
+      return result.delta === 0 ? false : scrollActiveOutput(result.delta);
+    },
+  };
 }
 
 export function scrollDeltaFromTerminalInput(text: string): number | undefined {
-  let delta = 0;
-  for (const match of text.matchAll(sgrMouseReportPattern())) {
-    const codeText = match[1];
-    if (codeText === undefined) {
-      continue;
-    }
-    const code = Number.parseInt(codeText, 10);
-    if (code === 64) {
-      delta += scrollStepLines;
-    } else if (code === 65) {
-      delta -= scrollStepLines;
-    }
-  }
-  return delta === 0 ? undefined : delta;
+  return sgrWheelScrollDelta(text);
 }
 
 export function createTerminalMouseInputSuppressor(): TerminalMouseInputSuppressor {
@@ -230,8 +240,4 @@ function trailingSgrMouseReportPrefix(text: string): string {
     }
   }
   return "";
-}
-
-function sgrMouseReportPattern(): RegExp {
-  return /\u001B\[<(\d+);\d+;\d+[mM]/gu;
 }

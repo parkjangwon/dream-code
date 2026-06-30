@@ -12,8 +12,8 @@ import type { FileMentionTarget } from "./file-mention-targets.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { startTerminalSizeWatcher } from "./terminal-size-watch.js";
 import {
+  createTerminalOutputScrollInput,
   createTerminalMouseInputSuppressor,
-  scrollOutputForTerminalInput,
   scrollOutputForVerticalKey,
 } from "./tui-output-scroll.js";
 
@@ -75,6 +75,7 @@ export function readInteractiveInput(
     let unsubscribeResize: (() => void) | undefined;
     let stopSizeWatcher: (() => void) | undefined;
     const mouseInputSuppressor = createTerminalMouseInputSuppressor();
+    const outputScrollInput = createTerminalOutputScrollInput();
 
     const render = (): void => {
       renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
@@ -153,7 +154,7 @@ export function readInteractiveInput(
     const onData = (chunk: Buffer | string): void => {
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       mouseInputSuppressor.observe(text);
-      if (scrollOutputForTerminalInput(text)) {
+      if (outputScrollInput.handle(text)) {
         render();
       }
     };

@@ -19,6 +19,7 @@ const hideCursor = "\u001B[?25l";
 const disableBracketedPaste = "\u001B[?2004l";
 const enableMouseTracking = [
   "\u001B[?1000h",
+  "\u001B[?1002h",
   "\u001B[?1006h",
 ].join("");
 const disableMouseTracking = [

@@ -156,7 +156,7 @@ test("handleInput marks an interrupted prompt as cancelled", async () => {
   }
 });
 
-test("runAgentTextPrompt clears the active output scroller after layered steering stops", async () => {
+test("runAgentTextPrompt keeps the active output scroller after layered steering stops", async () => {
   const root = await mkdtemp(join(tmpdir(), "dream-tui-steering-"));
   const stdout = mock.method(process.stdout, "write", () => true);
   const unsetExistingScroller = setActiveOutputScroller({ scroll: () => true });
@@ -182,8 +182,10 @@ test("runAgentTextPrompt clears the active output scroller after layered steerin
       signal: controller.signal,
     });
 
-    assert.equal(scrollActiveOutput(1), false);
+    assert.equal(scrollActiveOutput(1), true);
   } finally {
+    const unset = setActiveOutputScroller({ scroll: () => true });
+    unset();
     restoreColumns();
     restoreRows();
     restoreIsTTY();

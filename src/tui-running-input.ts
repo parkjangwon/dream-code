@@ -11,8 +11,8 @@ import { nextEscInterruptState, type EscInterruptState } from "./tui-interrupt.j
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
 import { readStdoutTerminalSize, sameTerminalSize, startTerminalSizeWatcher, type TerminalSize } from "./terminal-size-watch.js";
 import {
+  createTerminalOutputScrollInput,
   createTerminalMouseInputSuppressor,
-  scrollOutputForTerminalInput,
   scrollOutputForVerticalKey,
 } from "./tui-output-scroll.js";
 import {
@@ -49,6 +49,7 @@ export function createRunningInputSession(
   let stopSizeWatcher: (() => void) | undefined;
   let lastRenderedSize: TerminalSize = readStdoutTerminalSize();
   const mouseInputSuppressor = createTerminalMouseInputSuppressor();
+  const outputScrollInput = createTerminalOutputScrollInput();
 
   const render = (): void => {
     lastRenderedSize = readStdoutTerminalSize();
@@ -97,7 +98,7 @@ export function createRunningInputSession(
   const onData = (chunk: Buffer | string): void => {
     const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
     mouseInputSuppressor.observe(text);
-    scrollOutputForTerminalInput(text);
+    outputScrollInput.handle(text);
   };
 
   return {
