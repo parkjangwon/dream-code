@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 
-import { createCursorRowQuery } from "../src/terminal-cursor-query.js";
+import { createCursorRowQuery, queryTerminalRows } from "../src/terminal-cursor-query.js";
 
 const esc = "";
 
@@ -68,4 +68,16 @@ test("shouldSuppressKeypress only suppresses report-shaped fragments while a que
   await pending;
 
   assert.equal(query.shouldSuppressKeypress(esc, {}), false);
+});
+
+test("queryTerminalRows probes the bottom-right corner before asking for position", async () => {
+  const writes: string[] = [];
+  const input = fakeInput();
+  const output = fakeOutput(writes);
+
+  const pending = queryTerminalRows(input, output);
+  input.emit("data", `${esc}[42;80R`);
+
+  assert.equal(await pending, 42);
+  assert.deepEqual(writes, [`${esc}[9999;9999H`, `${esc}[6n`]);
 });

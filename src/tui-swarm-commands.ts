@@ -41,7 +41,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
   const replaceMonitor = output.isTTY === true;
   const cwd = options.cwd ?? currentWorkingDirectory();
   const layeredLayout = replaceMonitor && options.sessionId !== undefined
-    ? renderLayeredScreen({
+    ? await renderLayeredScreen({
       config: options.config,
       oneShotYolo: options.oneShotYolo === true,
       statusLines: await buildBottomStatusLines({

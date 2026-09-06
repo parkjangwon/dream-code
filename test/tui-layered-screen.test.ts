@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
+import { EventEmitter } from "node:events";
 
 import { stripAnsi } from "../src/ansi.js";
 import { defaultConfig } from "../src/config.js";
@@ -21,14 +22,14 @@ test("layeredTerminalLayout never allocates more rows than a tiny terminal has",
   assert.equal(layout.mainRows, 1);
 });
 
-test("renderLayeredScreen keeps the running dock passive instead of echoing input", () => {
+test("renderLayeredScreen keeps the running dock passive instead of echoing input", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
-    renderLayeredScreen({
+    await renderLayeredScreen({
       config: defaultConfig(),
       oneShotYolo: true,
       statusLines: ["[AUTO routing] | dream-code"],
@@ -48,6 +49,52 @@ test("renderLayeredScreen keeps the running dock passive instead of echoing inpu
   }
 });
 
+test("renderLayeredScreen anchors the bottom dock to a CPR-confirmed row count on Termux", async () => {
+  const chunks: string[] = [];
+  const input = new EventEmitter() as unknown as NodeJS.ReadStream;
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    if (chunk.includes("[6n")) {
+      // The unreliable process.stdout.rows (passed as terminalRows below) says
+      // 30, but the terminal itself reports a true height of 18 once probed.
+      queueMicrotask(() => input.emit("data", "[18;80R"));
+    }
+    return true;
+  });
+  const previousTermuxVersion = process.env["TERMUX_VERSION"];
+  try {
+    process.env["TERMUX_VERSION"] = "0.119.0";
+
+    const layout = await renderLayeredScreen({
+      config: defaultConfig(),
+      oneShotYolo: true,
+      statusLines: ["[AUTO routing] | dream-code"],
+      busyLabel: "thinking",
+      guideLine: "esc interrupt · input resumes after this turn",
+      terminalRows: 30,
+      terminalColumns: 100,
+      input,
+    });
+
+    // The layout must be derived from the confirmed height (18), not the
+    // unreliable terminalRows: 30 that was passed in.
+    assert.deepEqual(layout, layeredTerminalLayout(18));
+    const written = chunks.join("");
+    assert.match(written, /\[9999;9999H/u);
+    // The bottom dock (5 lines) belongs at row 14 (18 - 5 + 1) when anchored to
+    // the confirmed height, not row 26 (30 - 5 + 1) from the stale terminalRows.
+    assert.match(written, /\[14;1H/u);
+    assert.doesNotMatch(written, /\[26;1H/u);
+  } finally {
+    if (previousTermuxVersion === undefined) {
+      Reflect.deleteProperty(process.env, "TERMUX_VERSION");
+    } else {
+      process.env["TERMUX_VERSION"] = previousTermuxVersion;
+    }
+    stdout.mock.restore();
+  }
+});
+
 test("createLayeredMainWriter keeps text in the middle viewport and passes monitor frames through", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
@@ -63,14 +110,14 @@ test("createLayeredMainWriter keeps text in the middle viewport and passes monit
     });
 
     writer.write("header\nsubheader\n");
-    writer.write("\u001B[?25l\u001B[8;1Hmonitor\u001B[?25h");
+    writer.write("[?25l[8;1Hmonitor[?25h");
     writer.write("synthesis\n");
 
-    assert.match(chunks[0] ?? "", /^\u001B\[\?25l\u001B\[6;1H\u001B\[2K/u);
-    assert.equal(chunks[1], "\u001B[?25l\u001B[?25l\u001B[8;1Hmonitor\u001B[?25h\u001B[?25h");
-    assert.match(chunks[2] ?? "", /^\u001B\[\?25l\u001B\[6;1H/u);
-    assert.match(chunks[2] ?? "", /\u001B\[2K/u);
-    assert.match(chunks[2] ?? "", /\u001B\[6;1H\u001B\[2Ksynthesis/u);
+    assert.match(chunks[0] ?? "", /^\[\?25l\[6;1H\[2K/u);
+    assert.equal(chunks[1], "[?25l[?25l[8;1Hmonitor[?25h[?25h");
+    assert.match(chunks[2] ?? "", /^\[\?25l\[6;1H/u);
+    assert.match(chunks[2] ?? "", /\[2K/u);
+    assert.match(chunks[2] ?? "", /\[6;1H\[2Ksynthesis/u);
   } finally {
     stdout.mock.restore();
   }
@@ -91,13 +138,13 @@ test("createLayeredMainWriter renders thinking animation through the middle view
     });
 
     writer.write("Thinking model\n");
-    writer.write("\u001B[?25l\u001B[1A\r\u001B[2KThinking. model\n\u001B[?25h");
+    writer.write("[?25l[1A\r[2KThinking. model\n[?25h");
     writer.write("answer\n");
 
     assert.equal(chunks.length, 3);
-    assert.equal(chunks.some((chunk) => chunk.includes("\u001B[1A")), false);
-    assert.match(chunks[1] ?? "", /\u001B\[6;1H\u001B\[2KThinking\. model/u);
-    assert.match(chunks[2] ?? "", /\u001B\[7;1H\u001B\[2Kanswer/u);
+    assert.equal(chunks.some((chunk) => chunk.includes("[1A")), false);
+    assert.match(chunks[1] ?? "", /\[6;1H\[2KThinking\. model/u);
+    assert.match(chunks[2] ?? "", /\[7;1H\[2Kanswer/u);
   } finally {
     stdout.mock.restore();
   }
@@ -120,10 +167,10 @@ test("createLayeredMainWriter wraps CJK text without writing raw newlines into t
     writer.write("대표 파일: 상태가 복잡하기 때문에 회귀 위험이 높습니다. ".repeat(8));
 
     assert.equal(chunks.join("").includes("\n"), false);
-    assert.match(chunks.join(""), /\u001B\[6;1H/u);
-    assert.match(chunks.join(""), /\u001B\[7;1H/u);
-    assert.match(chunks.join(""), /\u001B\[8;1H/u);
-    assert.doesNotMatch(chunks.join(""), /\u001B\[9;1H/u);
+    assert.match(chunks.join(""), /\[6;1H/u);
+    assert.match(chunks.join(""), /\[7;1H/u);
+    assert.match(chunks.join(""), /\[8;1H/u);
+    assert.doesNotMatch(chunks.join(""), /\[9;1H/u);
   } finally {
     stdout.mock.restore();
   }
@@ -143,13 +190,13 @@ test("createLayeredMainWriter returns cursor ownership to the active input dock"
         mainRows: 3,
         bottomRows: 6,
       },
-      { afterWrite: () => "\u001B[29;12H\u001B[?25h" },
+      { afterWrite: () => "[29;12H[?25h" },
     );
 
     writer.write("answer\n");
 
-    assert.match(chunks[0] ?? "", /\u001B\[6;1H\u001B\[2Kanswer/u);
-    assert.equal(chunks[0]?.endsWith("\u001B[29;12H\u001B[?25h\u001B[?25h"), true);
+    assert.match(chunks[0] ?? "", /\[6;1H\[2Kanswer/u);
+    assert.equal(chunks[0]?.endsWith("[29;12H[?25h[?25h"), true);
   } finally {
     stdout.mock.restore();
   }
@@ -202,9 +249,9 @@ test("createLayeredMainWriter recalculates the viewport when terminal rows shrin
     writer.write("six\n");
 
     const resizedFrame = chunks.at(-1) ?? "";
-    assert.match(resizedFrame, /\u001B\[6;1H/u);
-    assert.match(resizedFrame, /\u001B\[10;1H/u);
-    assert.doesNotMatch(resizedFrame, /\u001B\[11;1H/u);
+    assert.match(resizedFrame, /\[6;1H/u);
+    assert.match(resizedFrame, /\[10;1H/u);
+    assert.doesNotMatch(resizedFrame, /\[11;1H/u);
   } finally {
     stdout.mock.restore();
   }
@@ -228,9 +275,9 @@ test("createLayeredMainWriter scrolls older output inside the main viewport", ()
     writer.scroll(2);
 
     const scrolledFrame = chunks.at(-1) ?? "";
-    assert.match(scrolledFrame, /\u001B\[6;1H\u001B\[2Kone/u);
-    assert.match(scrolledFrame, /\u001B\[7;1H\u001B\[2Ktwo/u);
-    assert.match(scrolledFrame, /\u001B\[8;1H\u001B\[2Kthree/u);
+    assert.match(scrolledFrame, /\[6;1H\[2Kone/u);
+    assert.match(scrolledFrame, /\[7;1H\[2Ktwo/u);
+    assert.match(scrolledFrame, /\[8;1H\[2Kthree/u);
     assert.doesNotMatch(scrolledFrame, /five/u);
   } finally {
     stdout.mock.restore();

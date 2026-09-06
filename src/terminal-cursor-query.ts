@@ -18,6 +18,21 @@ export type CursorRowQuery = {
 };
 
 const defaultTimeoutMs = 200;
+const bottomRightProbeSequence = "[9999;9999H";
+
+// process.stdout.rows can be wrong (Termux is the known offender). Moving the
+// cursor to an unreachably large row/column clamps it to the terminal's real
+// bottom-right corner, so the row a CPR query reports back afterward is the
+// terminal's true height rather than whatever Node guessed.
+export async function queryTerminalRows(
+  input: NodeJS.ReadStream,
+  output: NodeJS.WriteStream,
+  cursorRowQuery: CursorRowQuery = createCursorRowQuery(),
+  timeoutMs?: number,
+): Promise<number | undefined> {
+  output.write(bottomRightProbeSequence);
+  return cursorRowQuery.queryRow(input, output, timeoutMs);
+}
 
 export function createCursorRowQuery(): CursorRowQuery {
   let pending = false;

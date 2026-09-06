@@ -86,7 +86,7 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
     cwd: options.cwd,
     oneShotYolo: options.oneShotYolo === true,
   });
-  const layout = renderLayeredScreen({
+  const layout = await renderLayeredScreen({
     config: options.config,
     oneShotYolo: options.oneShotYolo === true,
     statusLines,

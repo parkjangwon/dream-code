@@ -1,4 +1,4 @@
-import { stdout as output } from "node:process";
+import { stdin as input, stdout as output } from "node:process";
 
 import { ansi, clearScreen, paint, stripAnsi } from "./ansi.js";
 import type { DreamConfig } from "./config.js";
@@ -7,6 +7,8 @@ import { cursorToFrameStartSequence } from "./tui-input-frame.js";
 import { renderHeaderPanel } from "./tui-render.js";
 import { cursorToRow, withHiddenCursor } from "./terminal-frame.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
+import { isTermuxRuntime } from "./terminal-environment.js";
+import { queryTerminalRows } from "./terminal-cursor-query.js";
 
 export type LayeredTerminalLayout = {
   readonly topRows: number;
@@ -23,6 +25,7 @@ export type LayeredScreenOptions = {
   readonly guideLine?: string;
   readonly terminalRows?: number;
   readonly terminalColumns?: number;
+  readonly input?: NodeJS.ReadStream;
 };
 
 export type LayeredMainWriter = {
@@ -51,11 +54,11 @@ export function layeredTerminalLayout(terminalRows: number | undefined): Layered
   };
 }
 
-export function renderLayeredScreen(options: LayeredScreenOptions): LayeredTerminalLayout {
+export async function renderLayeredScreen(options: LayeredScreenOptions): Promise<LayeredTerminalLayout> {
   const columns = Math.max(64, options.terminalColumns ?? output.columns ?? 80);
-  const rows = options.terminalRows ?? output.rows;
-  const layout = layeredTerminalLayout(rows);
   output.write(clearScreen());
+  const rows = await confirmedTerminalRows(options.terminalRows, options.input ?? input);
+  const layout = layeredTerminalLayout(rows);
   renderTopChrome(options.config, options.oneShotYolo, columns);
   renderPassiveBottomDock(
     options.statusLines,
@@ -67,6 +70,23 @@ export function renderLayeredScreen(options: LayeredScreenOptions): LayeredTermi
   );
   output.write(`\u001B[${layout.mainStartRow};1H`);
   return layout;
+}
+
+// process.stdout.rows is unreliable on Termux, which misplaced this screen's
+// bottom dock (it addresses rows absolutely, from the total height down). No
+// keypress listener is attached yet at this point in either caller, so this
+// probe can run without needing the CPR-reply suppression the interactive
+// input redraw path requires.
+async function confirmedTerminalRows(
+  terminalRowsOverride: number | undefined,
+  inputStream: NodeJS.ReadStream,
+): Promise<number | undefined> {
+  const rows = terminalRowsOverride ?? output.rows;
+  if (!isTermuxRuntime()) {
+    return rows;
+  }
+  const confirmedRows = await queryTerminalRows(inputStream, output);
+  return confirmedRows ?? rows;
 }
 
 export function createLayeredMainWriter(
