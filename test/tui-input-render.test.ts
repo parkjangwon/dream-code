@@ -139,7 +139,7 @@ test("renderInputView avoids absolute bottom rows on Termux", async () => {
   }
 });
 
-test("renderInputView anchors the Termux redraw to a CPR-confirmed terminal height", async () => {
+test("renderInputView anchors the Termux redraw to the confirmed cursor row, ignoring an unstable reported height", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -147,36 +147,28 @@ test("renderInputView anchors the Termux redraw to a CPR-confirmed terminal heig
   });
   const rows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
   const previousTermuxVersion = process.env["TERMUX_VERSION"];
-  // process.stdout.rows would say 30 here, but the real viewport (once the
-  // on-screen keyboard/extra-keys row eats into it) is confirmed at 20 — a
-  // frame anchored to the stale 30 would write past the real bottom edge,
-  // forcing a scroll that invalidates the fixed row math for that same write.
+  // On some devices process.stdout.rows itself swings wildly between renders
+  // (observed: 56, then 31) as the on-screen keyboard resizes the viewport —
+  // the redraw must not depend on it at all. The cursor is confirmed to still
+  // be sitting on row 28 (this render's own prior write put it there), so the
+  // redraw anchors there regardless of what output.rows claims right now.
   const cursorRowQuery: CursorRowQuery = {
-    queryRow: () => Promise.resolve(20),
+    queryRow: () => Promise.resolve(28),
     shouldSuppressKeypress: () => false,
   };
   try {
-    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 56 });
     process.env["TERMUX_VERSION"] = "0.119.0";
 
-    const previous = await renderInputView(
-      createInputState([], []),
-      "> ",
-      false,
-      ["[model] | dream-code", "Context 0%"],
-      undefined,
-      cursorRowQuery,
-    );
+    const previous = await renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
     const typed = reduceInputState(createInputState([], []), { kind: "insert", value: "hi" }).state;
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 31 });
     chunks.length = 0;
     await renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous, cursorRowQuery);
 
-    // chunks[0] is the bottom-right-corner probe queryTerminalRows sends before
-    // asking for position; chunks[1] is the actual redraw.
-    assert.equal(chunks.length, 2);
-    const expectedFrameTopRow = 20 - previous.lineCount + 1;
-    assert.match(chunks[1] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
-    assert.doesNotMatch(chunks[1] ?? "", /\[25;1H/u);
+    assert.equal(chunks.length, 1);
+    const expectedFrameTopRow = 28 - previous.promptLineIndex;
+    assert.match(chunks[0] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
   } finally {
     if (previousTermuxVersion === undefined) {
       Reflect.deleteProperty(process.env, "TERMUX_VERSION");
