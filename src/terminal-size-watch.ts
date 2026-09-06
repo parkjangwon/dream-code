@@ -1,4 +1,5 @@
 import { stdout as output } from "node:process";
+import { isTermuxRuntime } from "./terminal-environment.js";
 
 export type TerminalSize = {
   readonly rows: number | undefined;
@@ -7,9 +8,14 @@ export type TerminalSize = {
 
 export type TerminalSizeReader = () => TerminalSize;
 
+// process.stdout.rows can flap on Termux even when nothing actually resized.
+// Comparing that noisy value on every poll fired spurious "resize" redraws,
+// each one dropping the previous frame and re-rendering from scratch without
+// clearing it first — the exact stacking bug this masked. Rows is reported as
+// always undefined here on Termux so it can never register as "changed".
 export function readStdoutTerminalSize(): TerminalSize {
   return {
-    rows: output.rows,
+    rows: isTermuxRuntime() ? undefined : output.rows,
     columns: output.columns,
   };
 }
