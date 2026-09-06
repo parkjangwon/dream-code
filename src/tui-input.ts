@@ -16,6 +16,7 @@ import {
   createTerminalMouseInputSuppressor,
   scrollOutputForVerticalKey,
 } from "./tui-output-scroll.js";
+import { createCursorRowQuery } from "./terminal-cursor-query.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
@@ -76,9 +77,31 @@ export function readInteractiveInput(
     let stopSizeWatcher: (() => void) | undefined;
     const mouseInputSuppressor = createTerminalMouseInputSuppressor();
     const outputScrollInput = createTerminalOutputScrollInput();
+    const cursorRowQuery = createCursorRowQuery();
+    let renderInFlight = false;
+    let renderPending = false;
 
+    const performRender = async (): Promise<void> => {
+      do {
+        renderPending = false;
+        renderedFrame = await renderInputView(
+          state,
+          options.prompt,
+          options.secret === true,
+          options.statusLines ?? [],
+          renderedFrame,
+          cursorRowQuery,
+        );
+      } while (renderPending);
+      renderInFlight = false;
+    };
     const render = (): void => {
-      renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? [], renderedFrame);
+      if (renderInFlight) {
+        renderPending = true;
+        return;
+      }
+      renderInFlight = true;
+      void performRender();
     };
     const renderAfterResize = (): void => {
       renderedFrame = undefined;
@@ -99,6 +122,9 @@ export function readInteractiveInput(
     };
 
     const onKeypress = (value: string | undefined, key: Key): void => {
+      if (cursorRowQuery.shouldSuppressKeypress(value, key)) {
+        return;
+      }
       if (mouseInputSuppressor.shouldSuppressKeypress(value, key)) {
         return;
       }
@@ -144,7 +170,7 @@ export function readInteractiveInput(
             clearRenderedInputView(renderedFrame);
             renderedFrame = undefined;
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            renderedFrame = renderInputView(state, options.prompt, options.secret === true, options.statusLines ?? []);
+            render();
           }
           return;
         default:

@@ -4,15 +4,16 @@ import test, { mock } from "node:test";
 import { stripAnsi } from "../src/ansi.js";
 import { createInputState } from "../src/tui-input-state.js";
 import { renderRunningInputView } from "../src/tui-running-input-render.js";
+import type { CursorRowQuery } from "../src/terminal-cursor-query.js";
 
-test("renderRunningInputView shows queue count and text-command guidance", () => {
+test("renderRunningInputView shows queue count and text-command guidance", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
-    renderRunningInputView(createInputState([], []), 2, "", ["[AUTO routing] | dream-code"], undefined);
+    await renderRunningInputView(createInputState([], []), 2, "", ["[AUTO routing] | dream-code"], undefined);
 
     const rendered = stripAnsi(chunks.join(""));
     assert.match(rendered, /\[queue 2\] >/u);
@@ -23,7 +24,7 @@ test("renderRunningInputView shows queue count and text-command guidance", () =>
   }
 });
 
-test("renderRunningInputView avoids absolute bottom rows on Termux", () => {
+test("renderRunningInputView avoids absolute bottom rows on Termux", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -35,9 +36,9 @@ test("renderRunningInputView avoids absolute bottom rows on Termux", () => {
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
     process.env["TERMUX_VERSION"] = "0.119.0";
 
-    renderRunningInputView(createInputState([], []), 0, "", ["[AUTO routing] | dream-code"], undefined);
+    await renderRunningInputView(createInputState([], []), 0, "", ["[AUTO routing] | dream-code"], undefined);
 
-    assert.doesNotMatch(chunks.join(""), /\u001B\[(?:25|27);1H/u);
+    assert.doesNotMatch(chunks.join(""), /\[(?:25|27);1H/u);
   } finally {
     if (previousTermuxVersion === undefined) {
       Reflect.deleteProperty(process.env, "TERMUX_VERSION");
@@ -48,6 +49,50 @@ test("renderRunningInputView avoids absolute bottom rows on Termux", () => {
       Reflect.deleteProperty(process.stdout, "rows");
     } else {
       Object.defineProperty(process.stdout, "rows", rows);
+    }
+    stdout.mock.restore();
+  }
+});
+
+test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed row instead of drifting", async () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  const previousTermuxVersion = process.env["TERMUX_VERSION"];
+  const cursorRowQuery: CursorRowQuery = {
+    queryRow: () => Promise.resolve(28),
+    shouldSuppressKeypress: () => false,
+  };
+  try {
+    process.env["TERMUX_VERSION"] = "0.119.0";
+
+    const previous = await renderRunningInputView(
+      createInputState([], []),
+      0,
+      "",
+      ["[AUTO routing] | dream-code"],
+      undefined,
+    );
+    chunks.length = 0;
+    await renderRunningInputView(
+      createInputState([], []),
+      1,
+      "",
+      ["[AUTO routing] | dream-code"],
+      previous,
+      cursorRowQuery,
+    );
+
+    assert.equal(chunks.length, 1);
+    const expectedFrameTopRow = 28 - previous.promptLineIndex;
+    assert.match(chunks[0] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
+  } finally {
+    if (previousTermuxVersion === undefined) {
+      Reflect.deleteProperty(process.env, "TERMUX_VERSION");
+    } else {
+      process.env["TERMUX_VERSION"] = previousTermuxVersion;
     }
     stdout.mock.restore();
   }

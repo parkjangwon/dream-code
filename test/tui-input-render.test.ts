@@ -16,20 +16,21 @@ import {
 } from "../src/tui-input-render.js";
 import { terminalVisibleWidth } from "../src/terminal-width.js";
 import { createInputState, reduceInputState } from "../src/tui-input-state.js";
+import type { CursorRowQuery } from "../src/terminal-cursor-query.js";
 
 test("cockpit input cursor lands on the prompt row above the footer", () => {
   assert.equal(cursorUpToPromptLineCount(5, 0), 1);
   assert.equal(cursorUpToPromptLineCount(7, 2), 3);
 });
 
-test("renderInputView batches redraw into one cursor-hidden frame", () => {
+test("renderInputView batches redraw into one cursor-hidden frame", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
-    renderInputView(createInputState([], []), "> ", false, [], {
+    await renderInputView(createInputState([], []), "> ", false, [], {
       lineCount: 3,
       promptLineIndex: 1,
       promptCursorColumn: 2,
@@ -45,14 +46,14 @@ test("renderInputView batches redraw into one cursor-hidden frame", () => {
   }
 });
 
-test("renderInputView renders a compact cockpit dock instead of a boxed composer", () => {
+test("renderInputView renders a compact cockpit dock instead of a boxed composer", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
-    const lineCount = renderInputViewLineCount(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const lineCount = await renderInputViewLineCount(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
     const rendered = stripAnsi(chunks.join(""));
 
     assert.equal(lineCount, 6);
@@ -65,15 +66,15 @@ test("renderInputView renders a compact cockpit dock instead of a boxed composer
   }
 });
 
-test("renderInputView clears from the previous cockpit top when auxiliary height changes", () => {
+test("renderInputView clears from the previous cockpit top when auxiliary height changes", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
   try {
-    const previous = renderInputView(createInputState([], []), "> ", false, []);
-    renderInputView(createInputState([], []), "> ", false, [], previous);
+    const previous = await renderInputView(createInputState([], []), "> ", false, []);
+    await renderInputView(createInputState([], []), "> ", false, [], previous);
 
     assert.match(chunks[1] ?? "", /\u001B\[3A\r/u);
   } finally {
@@ -81,7 +82,7 @@ test("renderInputView clears from the previous cockpit top when auxiliary height
   }
 });
 
-test("renderInputView pins the cockpit to the terminal bottom when rows are known", () => {
+test("renderInputView pins the cockpit to the terminal bottom when rows are known", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -90,7 +91,7 @@ test("renderInputView pins the cockpit to the terminal bottom when rows are know
   const rows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
   try {
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
-    const frame = renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const frame = await renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
 
     assert.equal(frame.lineCount, 6);
     assert.match(chunks[0] ?? "", /\u001B\[25;1H/u);
@@ -105,7 +106,7 @@ test("renderInputView pins the cockpit to the terminal bottom when rows are know
   }
 });
 
-test("renderInputView avoids absolute bottom rows on Termux", () => {
+test("renderInputView avoids absolute bottom rows on Termux", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -117,9 +118,9 @@ test("renderInputView avoids absolute bottom rows on Termux", () => {
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
     process.env["TERMUX_VERSION"] = "0.119.0";
 
-    const previous = renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const previous = await renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
     const typed = reduceInputState(createInputState([], []), { kind: "insert", value: "프로젝트" }).state;
-    renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous);
+    await renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous);
 
     assert.doesNotMatch(chunks.join(""), /\u001B\[(?:25|27);1H/u);
     assert.match(chunks[1] ?? "", /\u001B\[3A\r/u);
@@ -133,6 +134,42 @@ test("renderInputView avoids absolute bottom rows on Termux", () => {
       Reflect.deleteProperty(process.stdout, "rows");
     } else {
       Object.defineProperty(process.stdout, "rows", rows);
+    }
+    stdout.mock.restore();
+  }
+});
+
+test("renderInputView anchors the Termux redraw to a CPR-confirmed row instead of drifting", async () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  const previousTermuxVersion = process.env["TERMUX_VERSION"];
+  const cursorRowQuery: CursorRowQuery = {
+    queryRow: () => Promise.resolve(28),
+    shouldSuppressKeypress: () => false,
+  };
+  try {
+    process.env["TERMUX_VERSION"] = "0.119.0";
+
+    const previous = await renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const typed = reduceInputState(createInputState([], []), { kind: "insert", value: "hi" }).state;
+    chunks.length = 0;
+    await renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous, cursorRowQuery);
+
+    assert.equal(chunks.length, 1);
+    // The terminal reports the cursor sitting on row 28 (the ground-truth row,
+    // regardless of any scroll that happened since the previous render) — the
+    // redraw must clear and rewrite anchored there, derived from that row minus
+    // the previous frame's promptLineIndex, not from a stale assumed position.
+    const expectedFrameTopRow = 28 - previous.promptLineIndex;
+    assert.match(chunks[0] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
+  } finally {
+    if (previousTermuxVersion === undefined) {
+      Reflect.deleteProperty(process.env, "TERMUX_VERSION");
+    } else {
+      process.env["TERMUX_VERSION"] = previousTermuxVersion;
     }
     stdout.mock.restore();
   }

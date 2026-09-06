@@ -1,29 +1,26 @@
-import { stdout as output } from "node:process";
+import { stdin as input, stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
-import { withHiddenCursor } from "./terminal-frame.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 import { renderCockpitFrame } from "./tui-cockpit.js";
+import { writeCockpitFrame } from "./tui-cockpit-write.js";
 import {
-  clearRenderedInputViewSequence,
-  cursorToFrameStartSequence,
   cursorToRenderedPromptSequence,
-  cursorToPromptSequence,
-  renderedInputViewFromCockpit,
-  terminalRowsForInputFrame,
   type RenderedInputView,
 } from "./tui-input-frame.js";
 import { inputViewport } from "./tui-input-viewport.js";
 import type { InputState } from "./tui-input-state.js";
 import { renderInputText } from "./tui-input-render.js";
+import type { CursorRowQuery } from "./terminal-cursor-query.js";
 
-export function renderRunningInputView(
+export async function renderRunningInputView(
   state: InputState,
   queueCount: number,
   feedback: string,
   statusLines: readonly string[],
   previousFrame: RenderedInputView | undefined,
-): RenderedInputView {
+  cursorRowQuery: CursorRowQuery | undefined = undefined,
+): Promise<RenderedInputView> {
   const width = Math.max(64, output.columns ?? 80);
   const prompt = `${paint(`[queue ${queueCount}]`, ansi.blue)} ${paint(">", ansi.accent)} `;
   const promptWidth = terminalVisibleWidth(prompt);
@@ -37,15 +34,7 @@ export function renderRunningInputView(
     ],
     footerLines: statusLines,
   });
-  const terminalRows = terminalRowsForInputFrame(output.rows);
-  const renderedFrame = renderedInputViewFromCockpit(frame, terminalRows);
-  output.write(withHiddenCursor([
-    clearRenderedInputViewSequence(previousFrame),
-    cursorToFrameStartSequence(frame.lines.length, terminalRows),
-    frame.lines.join("\n"),
-    cursorToPromptSequence(frame, terminalRows),
-  ].join("")));
-  return renderedFrame;
+  return writeCockpitFrame({ input, output }, frame, previousFrame, cursorRowQuery);
 }
 
 export function runningInputCursorSequence(frame: RenderedInputView | undefined): string {

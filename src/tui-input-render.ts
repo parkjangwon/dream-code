@@ -1,4 +1,4 @@
-import { stdout as output } from "node:process";
+import { stdin as input, stdout as output } from "node:process";
 
 import { ansi, paint } from "./ansi.js";
 import type { DreamSkill } from "./skills.js";
@@ -6,18 +6,14 @@ import type { FileMentionTarget } from "./file-mention-targets.js";
 import { withHiddenCursor } from "./terminal-frame.js";
 import { terminalVisibleWidth } from "./terminal-width.js";
 import { cockpitPromptRowOffsetFromBottom, renderCockpitFrame } from "./tui-cockpit.js";
-import {
-  clearRenderedInputViewSequence,
-  cursorToFrameStartSequence,
-  cursorToPromptSequence,
-  renderedInputViewFromCockpit,
-  terminalRowsForInputFrame,
-} from "./tui-input-frame.js";
+import { writeCockpitFrame } from "./tui-cockpit-write.js";
+import { clearRenderedInputViewSequence } from "./tui-input-frame.js";
 import type { RenderedInputView } from "./tui-input-frame.js";
 import { inputViewport } from "./tui-input-viewport.js";
 import type { InputState } from "./tui-input-state.js";
 import { renderPaletteLines } from "./tui-input-palette-render.js";
 import { shortcutGuideLines } from "./tui-shortcuts.js";
+import type { CursorRowQuery } from "./terminal-cursor-query.js";
 
 export type { RenderedInputView } from "./tui-input-frame.js";
 export {
@@ -27,13 +23,14 @@ export {
   renderPaletteDescription,
 } from "./tui-input-palette-render.js";
 
-export function renderInputView(
+export async function renderInputView(
   state: InputState,
   prompt: string,
   secret = false,
   statusLines: readonly string[] = [],
   previousFrame: RenderedInputView | undefined = undefined,
-): RenderedInputView {
+  cursorRowQuery: CursorRowQuery | undefined = undefined,
+): Promise<RenderedInputView> {
   const width = Math.max(64, output.columns ?? 80);
   const promptWidth = terminalVisibleWidth(prompt);
   const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - promptWidth));
@@ -45,25 +42,17 @@ export function renderInputView(
     auxiliaryLines: renderAuxiliaryLines(state, secret, width),
     footerLines: statusLines,
   });
-  const terminalRows = terminalRowsForInputFrame(output.rows);
-  const renderedFrame = renderedInputViewFromCockpit(frame, terminalRows);
-  output.write(withHiddenCursor([
-    clearRenderedInputViewSequence(previousFrame),
-    cursorToFrameStartSequence(frame.lines.length, terminalRows),
-    frame.lines.join("\n"),
-    cursorToPromptSequence(frame, terminalRows),
-  ].join("")));
-  return renderedFrame;
+  return writeCockpitFrame({ input, output }, frame, previousFrame, cursorRowQuery);
 }
 
-export function renderInputViewLineCount(
+export async function renderInputViewLineCount(
   state: InputState,
   prompt: string,
   secret = false,
   statusLines: readonly string[] = [],
   previousFrame: RenderedInputView | undefined = undefined,
-): number {
-  return renderInputView(state, prompt, secret, statusLines, previousFrame).lineCount;
+): Promise<number> {
+  return (await renderInputView(state, prompt, secret, statusLines, previousFrame)).lineCount;
 }
 
 export function clearRenderedInputView(frame: RenderedInputView | undefined): void {

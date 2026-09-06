@@ -15,6 +15,7 @@ import {
   createTerminalMouseInputSuppressor,
   scrollOutputForVerticalKey,
 } from "./tui-output-scroll.js";
+import { createCursorRowQuery } from "./terminal-cursor-query.js";
 import {
   applySteeringInput,
   createSteeringInputState,
@@ -50,16 +51,41 @@ export function createRunningInputSession(
   let lastRenderedSize: TerminalSize = readStdoutTerminalSize();
   const mouseInputSuppressor = createTerminalMouseInputSuppressor();
   const outputScrollInput = createTerminalOutputScrollInput();
+  const cursorRowQuery = createCursorRowQuery();
+  let renderInFlight = false;
+  let renderPending = false;
 
-  const render = (): void => {
+  const performRender = async (): Promise<void> => {
     lastRenderedSize = readStdoutTerminalSize();
-    renderedFrame = renderRunningInputView(inputState, steeringState.queue.length, feedback, statusLines, renderedFrame);
+    do {
+      renderPending = false;
+      renderedFrame = await renderRunningInputView(
+        inputState,
+        steeringState.queue.length,
+        feedback,
+        statusLines,
+        renderedFrame,
+        cursorRowQuery,
+      );
+    } while (renderPending);
+    renderInFlight = false;
+  };
+  const render = (): void => {
+    if (renderInFlight) {
+      renderPending = true;
+      return;
+    }
+    renderInFlight = true;
+    void performRender();
   };
   const repairAfterResize = (): void => {
     renderedFrame = undefined;
     render();
   };
   const onKeypress = (value: string | undefined, key: Key): void => {
+    if (cursorRowQuery.shouldSuppressKeypress(value, key)) {
+      return;
+    }
     if (mouseInputSuppressor.shouldSuppressKeypress(value, key)) {
       return;
     }
