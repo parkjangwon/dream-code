@@ -19,11 +19,14 @@ export type CursorRowQuery = {
 
 const defaultTimeoutMs = 200;
 const bottomRightProbeSequence = "[9999;9999H";
+// Node's keypress decoder can lag the raw 'data' event that resolves a query by a
+// tick or more, and on some devices the reply itself arrives split across several
+// keypress events (one per byte). Keep suppressing for a short grace window after
+// the query settles, and once a reply-shaped fragment starts a match, keep
+// consuming fragments unconditionally until the terminating "R" — matching by
+// shape alone breaks the moment the sequence is split mid-stream.
+const suppressionGraceMs = 75;
 
-// process.stdout.rows can be wrong (Termux is the known offender). Moving the
-// cursor to an unreachably large row/column clamps it to the terminal's real
-// bottom-right corner, so the row a CPR query reports back afterward is the
-// terminal's true height rather than whatever Node guessed.
 export async function queryTerminalRows(
   input: NodeJS.ReadStream,
   output: NodeJS.WriteStream,
@@ -36,22 +39,38 @@ export async function queryTerminalRows(
 
 export function createCursorRowQuery(): CursorRowQuery {
   let pending = false;
+  let collecting = false;
+  let graceTimer: NodeJS.Timeout | undefined;
+
+  const clearGrace = (): void => {
+    if (graceTimer !== undefined) {
+      clearTimeout(graceTimer);
+      graceTimer = undefined;
+    }
+  };
 
   return {
     queryRow: (input, output, timeoutMs = defaultTimeoutMs) => {
       return new Promise((resolve) => {
         let buffer = "";
         let settled = false;
+        clearGrace();
         pending = true;
+        collecting = false;
 
         const finish = (row: number | undefined): void => {
           if (settled) {
             return;
           }
           settled = true;
-          pending = false;
           input.off("data", onData);
           clearTimeout(timer);
+          clearGrace();
+          graceTimer = setTimeout(() => {
+            pending = false;
+            collecting = false;
+            graceTimer = undefined;
+          }, suppressionGraceMs);
           resolve(row);
         };
 
@@ -73,7 +92,19 @@ export function createCursorRowQuery(): CursorRowQuery {
         return false;
       }
       const fragment = value ?? key.sequence ?? "";
-      return isCursorPositionReportFragment(fragment);
+      if (fragment.length === 0) {
+        return false;
+      }
+      if (!collecting) {
+        if (!isCursorPositionReportFragment(fragment)) {
+          return false;
+        }
+        collecting = true;
+      }
+      if (fragment.includes("R")) {
+        collecting = false;
+      }
+      return true;
     },
   };
 }
