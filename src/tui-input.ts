@@ -1,4 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
+import { appendFileSync } from "node:fs";
 import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
@@ -80,10 +81,19 @@ export function readInteractiveInput(
     const cursorRowQuery = createCursorRowQuery();
     let renderInFlight = false;
     let renderPending = false;
+    const debugLog = process.env["DREAM_CPR_DEBUG"];
+    let renderSeq = 0;
+    const log = (line: string): void => {
+      if (debugLog !== undefined) {
+        appendFileSync(debugLog, `${line}\n`);
+      }
+    };
 
     const performRender = async (): Promise<void> => {
       do {
         renderPending = false;
+        const seq = (renderSeq += 1);
+        log(`[render#${seq}] start hadPrev=${renderedFrame !== undefined} cols=${output.columns}`);
         renderedFrame = await renderInputView(
           state,
           options.prompt,
@@ -92,10 +102,12 @@ export function readInteractiveInput(
           renderedFrame,
           cursorRowQuery,
         );
+        log(`[render#${seq}] done lineCount=${renderedFrame.lineCount} promptLineIndex=${renderedFrame.promptLineIndex} terminalRows=${renderedFrame.terminalRows}`);
       } while (renderPending);
       renderInFlight = false;
     };
-    const render = (): void => {
+    const render = (reason: string): void => {
+      log(`[render-call] reason=${reason} inFlight=${renderInFlight}`);
       if (renderInFlight) {
         renderPending = true;
         return;
@@ -103,9 +115,10 @@ export function readInteractiveInput(
       renderInFlight = true;
       void performRender();
     };
-    const renderAfterResize = (): void => {
+    const renderAfterResize = (source: string): void => {
+      log(`[reset] source=${source} cols=${output.columns} rows=${output.rows}`);
       renderedFrame = undefined;
-      render();
+      render(`resize:${source}`);
     };
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
@@ -129,7 +142,7 @@ export function readInteractiveInput(
         return;
       }
       if (state.palette === undefined && scrollOutputForVerticalKey(key)) {
-        render();
+        render("scroll");
         return;
       }
       const action = actionForKey(value, key);
@@ -145,7 +158,7 @@ export function readInteractiveInput(
 
       switch (update.effect.kind) {
         case "none":
-          render();
+          render("keypress-none");
           return;
         case "submit":
           finish({ kind: "submit", text: update.effect.text });
@@ -153,7 +166,7 @@ export function readInteractiveInput(
         case "redraw":
           options.redrawHeader();
           renderedFrame = undefined;
-          render();
+          render("redraw-effect");
           return;
         case "cancel":
           {
@@ -170,7 +183,7 @@ export function readInteractiveInput(
             clearRenderedInputView(renderedFrame);
             renderedFrame = undefined;
             output.write(`${paint("Press Ctrl+C again to exit", ansi.yellow)}\n`);
-            render();
+            render("ctrlc-first-press");
           }
           return;
         default:
@@ -181,7 +194,7 @@ export function readInteractiveInput(
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       mouseInputSuppressor.observe(text);
       if (outputScrollInput.handle(text)) {
-        render();
+        render("output-scroll");
       }
     };
 
@@ -201,9 +214,10 @@ export function readInteractiveInput(
     input.setRawMode(true);
     input.resume();
     input.on("keypress", onKeypress);
-    unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
-    stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });
-    render();
+    unsubscribeResize = options.onResize?.(() => renderAfterResize("onResize"))
+      ?? subscribeStdoutResize(() => renderAfterResize("native-event"));
+    stopSizeWatcher = startTerminalSizeWatcher({ onChange: () => renderAfterResize("poll") });
+    render("initial");
   });
 }
 
