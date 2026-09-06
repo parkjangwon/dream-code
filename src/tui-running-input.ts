@@ -79,7 +79,6 @@ export function createRunningInputSession(
     void performRender();
   };
   const repairAfterResize = (): void => {
-    renderedFrame = undefined;
     render();
   };
   const onKeypress = (value: string | undefined, key: Key): void => {

@@ -1,4 +1,3 @@
-import { appendFileSync } from "node:fs";
 import { withHiddenCursor } from "./terminal-frame.js";
 import { isTermuxRuntime } from "./terminal-environment.js";
 import { queryTerminalRows, type CursorRowQuery } from "./terminal-cursor-query.js";
@@ -33,32 +32,19 @@ export async function writeCockpitFrame(
   cursorRowQuery: CursorRowQuery | undefined,
 ): Promise<RenderedInputView> {
   const { input, output } = streams;
-  const debugLog = process.env["DREAM_CPR_DEBUG"];
-  const log = (line: string): void => {
-    if (debugLog !== undefined) {
-      appendFileSync(debugLog, `${line}\n`);
-    }
-  };
 
   if (isTermuxRuntime() && cursorRowQuery !== undefined) {
     const confirmedRows = await queryTerminalRows(input, output, cursorRowQuery);
-    log(`[write] confirmedRows=${confirmedRows} prevLineCount=${previousFrame?.lineCount} prevTerminalRows=${previousFrame?.terminalRows} newLineCount=${frame.lines.length}`);
     if (confirmedRows !== undefined) {
       const renderedFrame = renderedInputViewFromCockpit(frame, confirmedRows);
-      const clearSeq = clearRenderedInputViewSequence(previousFrame);
-      const startSeq = cursorToFrameStartSequence(frame.lines.length, confirmedRows);
-      const promptSeq = cursorToPromptSequence(frame, confirmedRows);
-      log(`[write] clearSeq=${JSON.stringify(clearSeq)} startSeq=${JSON.stringify(startSeq)} promptSeq=${JSON.stringify(promptSeq)}`);
       output.write(withHiddenCursor([
-        clearSeq,
-        startSeq,
+        clearRenderedInputViewSequence(previousFrame),
+        cursorToFrameStartSequence(frame.lines.length, confirmedRows),
         frame.lines.join("\n"),
-        promptSeq,
+        cursorToPromptSequence(frame, confirmedRows),
       ].join("")));
       return renderedFrame;
     }
-  } else {
-    log(`[write] fallback isTermux=${isTermuxRuntime()} hasQuery=${cursorRowQuery !== undefined}`);
   }
 
   const terminalRows = terminalRowsForInputFrame(output.rows);
