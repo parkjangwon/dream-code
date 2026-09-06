@@ -1,4 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
+import { appendFileSync } from "node:fs";
 import { emitKeypressEvents } from "node:readline";
 import type { Key } from "node:readline";
 
@@ -103,7 +104,11 @@ export function readInteractiveInput(
       renderInFlight = true;
       void performRender();
     };
-    const renderAfterResize = (): void => {
+    const debugLog = process.env["DREAM_CPR_DEBUG"];
+    const renderAfterResize = (source: string): void => {
+      if (debugLog !== undefined) {
+        appendFileSync(debugLog, `[resize] source=${source} rows=${String(output.rows)} cols=${String(output.columns)}\n`);
+      }
       renderedFrame = undefined;
       render();
     };
@@ -151,6 +156,9 @@ export function readInteractiveInput(
           finish({ kind: "submit", text: update.effect.text });
           return;
         case "redraw":
+          if (debugLog !== undefined) {
+            appendFileSync(debugLog, "[reset] source=redraw-effect\n");
+          }
           options.redrawHeader();
           renderedFrame = undefined;
           render();
@@ -201,8 +209,9 @@ export function readInteractiveInput(
     input.setRawMode(true);
     input.resume();
     input.on("keypress", onKeypress);
-    unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
-    stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });
+    unsubscribeResize = options.onResize?.(() => renderAfterResize("onResize"))
+      ?? subscribeStdoutResize(() => renderAfterResize("native-event"));
+    stopSizeWatcher = startTerminalSizeWatcher({ onChange: () => renderAfterResize("poll") });
     render();
   });
 }
