@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { withHiddenCursor } from "./terminal-frame.js";
 import { isTermuxRuntime } from "./terminal-environment.js";
 import type { CursorRowQuery } from "./terminal-cursor-query.js";
@@ -32,9 +33,13 @@ export async function writeCockpitFrame(
   cursorRowQuery: CursorRowQuery | undefined,
 ): Promise<RenderedInputView> {
   const { input, output } = streams;
+  const debugLog = process.env["DREAM_CPR_DEBUG"];
 
   if (isTermuxRuntime() && previousFrame !== undefined && cursorRowQuery !== undefined) {
     const currentRow = await cursorRowQuery.queryRow(input, output);
+    if (debugLog !== undefined) {
+      appendFileSync(debugLog, `[cpr] currentRow=${String(currentRow)} previousFrame=${JSON.stringify(previousFrame)}\n`);
+    }
     if (currentRow !== undefined) {
       const frameTopRow = currentRow - previousFrame.promptLineIndex;
       const renderedFrame = renderedInputViewFromCockpit(frame, undefined);
@@ -46,6 +51,11 @@ export async function writeCockpitFrame(
       ].join("")));
       return renderedFrame;
     }
+  } else if (debugLog !== undefined) {
+    appendFileSync(
+      debugLog,
+      `[cpr] skipped branch: isTermux=${String(isTermuxRuntime())} hasPrev=${String(previousFrame !== undefined)} hasQuery=${String(cursorRowQuery !== undefined)}\n`,
+    );
   }
 
   const terminalRows = terminalRowsForInputFrame(output.rows);
