@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { withHiddenCursor } from "./terminal-frame.js";
 import { isTermuxRuntime } from "./terminal-environment.js";
 import type { CursorRowQuery } from "./terminal-cursor-query.js";
@@ -32,20 +33,33 @@ export async function writeCockpitFrame(
   cursorRowQuery: CursorRowQuery | undefined,
 ): Promise<RenderedInputView> {
   const { input, output } = streams;
+  const debugLog = process.env["DREAM_CPR_DEBUG"];
+  const log = (line: string): void => {
+    if (debugLog !== undefined) {
+      appendFileSync(debugLog, `${line}\n`);
+    }
+  };
 
   if (isTermuxRuntime() && previousFrame !== undefined && cursorRowQuery !== undefined) {
     const currentRow = await cursorRowQuery.queryRow(input, output);
     if (currentRow !== undefined) {
       const frameTopRow = currentRow - previousFrame.promptLineIndex;
       const renderedFrame = renderedInputViewFromCockpit(frame, undefined);
+      const clearSeq = clearRenderedInputViewAtRowSequence(previousFrame, frameTopRow);
+      const startSeq = cursorToFrameStartRowSequence(frameTopRow);
+      const promptSeq = cursorToPromptAtRowSequence(frame, frameTopRow);
+      log(`[cpr] currentRow=${currentRow} prevPromptLineIndex=${previousFrame.promptLineIndex} prevLineCount=${previousFrame.lineCount} frameTopRow=${frameTopRow} newLineCount=${frame.lines.length} newPromptLineIndex=${frame.promptLineIndex} clearSeq=${JSON.stringify(clearSeq)} startSeq=${JSON.stringify(startSeq)} promptSeq=${JSON.stringify(promptSeq)}`);
       output.write(withHiddenCursor([
-        clearRenderedInputViewAtRowSequence(previousFrame, frameTopRow),
-        cursorToFrameStartRowSequence(frameTopRow),
+        clearSeq,
+        startSeq,
         frame.lines.join("\n"),
-        cursorToPromptAtRowSequence(frame, frameTopRow),
+        promptSeq,
       ].join("")));
       return renderedFrame;
     }
+    log(`[cpr] query timed out, falling back`);
+  } else {
+    log(`[cpr] skipped: isTermux=${isTermuxRuntime()} hasPrev=${previousFrame !== undefined} hasQuery=${cursorRowQuery !== undefined}`);
   }
 
   const terminalRows = terminalRowsForInputFrame(output.rows);
