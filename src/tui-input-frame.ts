@@ -58,24 +58,6 @@ export function cursorToPromptSequence(frame: CockpitFrame, terminalRows: number
   return `${sequence}\r${cursorToColumn(frame.promptCursorColumn)}`;
 }
 
-export function clearRenderedInputViewAtRowSequence(
-  frame: RenderedInputView | undefined,
-  frameTopRow: number,
-): string {
-  if (frame === undefined || frame.lineCount === 0) {
-    return "";
-  }
-  return `${cursorToRow(frameTopRow)}${clearRowsFromCurrentPosition(frame.lineCount)}`;
-}
-
-export function cursorToFrameStartRowSequence(frameTopRow: number): string {
-  return cursorToRow(frameTopRow);
-}
-
-export function cursorToPromptAtRowSequence(frame: CockpitFrame, frameTopRow: number): string {
-  return `${cursorToRow(frameTopRow + frame.promptLineIndex)}${cursorToColumn(frame.promptCursorColumn)}`;
-}
-
 export function cursorToRenderedPromptSequence(frame: RenderedInputView | undefined): string {
   if (frame === undefined) {
     return "";

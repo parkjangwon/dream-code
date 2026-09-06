@@ -54,7 +54,7 @@ test("renderRunningInputView avoids absolute bottom rows on Termux", async () =>
   }
 });
 
-test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed row instead of drifting", async () => {
+test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed terminal height", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
@@ -62,7 +62,7 @@ test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed row in
   });
   const previousTermuxVersion = process.env["TERMUX_VERSION"];
   const cursorRowQuery: CursorRowQuery = {
-    queryRow: () => Promise.resolve(28),
+    queryRow: () => Promise.resolve(20),
     shouldSuppressKeypress: () => false,
   };
   try {
@@ -74,6 +74,7 @@ test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed row in
       "",
       ["[AUTO routing] | dream-code"],
       undefined,
+      cursorRowQuery,
     );
     chunks.length = 0;
     await renderRunningInputView(
@@ -85,9 +86,11 @@ test("renderRunningInputView anchors the Termux redraw to a CPR-confirmed row in
       cursorRowQuery,
     );
 
-    assert.equal(chunks.length, 1);
-    const expectedFrameTopRow = 28 - previous.promptLineIndex;
-    assert.match(chunks[0] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
+    // chunks[0] is the bottom-right-corner probe queryTerminalRows sends before
+    // asking for position; chunks[1] is the actual redraw.
+    assert.equal(chunks.length, 2);
+    const expectedFrameTopRow = 20 - previous.lineCount + 1;
+    assert.match(chunks[1] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
   } finally {
     if (previousTermuxVersion === undefined) {
       Reflect.deleteProperty(process.env, "TERMUX_VERSION");

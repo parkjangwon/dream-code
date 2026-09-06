@@ -139,37 +139,54 @@ test("renderInputView avoids absolute bottom rows on Termux", async () => {
   }
 });
 
-test("renderInputView anchors the Termux redraw to a CPR-confirmed row instead of drifting", async () => {
+test("renderInputView anchors the Termux redraw to a CPR-confirmed terminal height", async () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     return true;
   });
+  const rows = Object.getOwnPropertyDescriptor(process.stdout, "rows");
   const previousTermuxVersion = process.env["TERMUX_VERSION"];
+  // process.stdout.rows would say 30 here, but the real viewport (once the
+  // on-screen keyboard/extra-keys row eats into it) is confirmed at 20 — a
+  // frame anchored to the stale 30 would write past the real bottom edge,
+  // forcing a scroll that invalidates the fixed row math for that same write.
   const cursorRowQuery: CursorRowQuery = {
-    queryRow: () => Promise.resolve(28),
+    queryRow: () => Promise.resolve(20),
     shouldSuppressKeypress: () => false,
   };
   try {
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 30 });
     process.env["TERMUX_VERSION"] = "0.119.0";
 
-    const previous = await renderInputView(createInputState([], []), "> ", false, ["[model] | dream-code", "Context 0%"]);
+    const previous = await renderInputView(
+      createInputState([], []),
+      "> ",
+      false,
+      ["[model] | dream-code", "Context 0%"],
+      undefined,
+      cursorRowQuery,
+    );
     const typed = reduceInputState(createInputState([], []), { kind: "insert", value: "hi" }).state;
     chunks.length = 0;
     await renderInputView(typed, "> ", false, ["[model] | dream-code", "Context 0%"], previous, cursorRowQuery);
 
-    assert.equal(chunks.length, 1);
-    // The terminal reports the cursor sitting on row 28 (the ground-truth row,
-    // regardless of any scroll that happened since the previous render) — the
-    // redraw must clear and rewrite anchored there, derived from that row minus
-    // the previous frame's promptLineIndex, not from a stale assumed position.
-    const expectedFrameTopRow = 28 - previous.promptLineIndex;
-    assert.match(chunks[0] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
+    // chunks[0] is the bottom-right-corner probe queryTerminalRows sends before
+    // asking for position; chunks[1] is the actual redraw.
+    assert.equal(chunks.length, 2);
+    const expectedFrameTopRow = 20 - previous.lineCount + 1;
+    assert.match(chunks[1] ?? "", new RegExp(`\\u001B\\[${expectedFrameTopRow};1H`, "u"));
+    assert.doesNotMatch(chunks[1] ?? "", /\[25;1H/u);
   } finally {
     if (previousTermuxVersion === undefined) {
       Reflect.deleteProperty(process.env, "TERMUX_VERSION");
     } else {
       process.env["TERMUX_VERSION"] = previousTermuxVersion;
+    }
+    if (rows === undefined) {
+      Reflect.deleteProperty(process.stdout, "rows");
+    } else {
+      Object.defineProperty(process.stdout, "rows", rows);
     }
     stdout.mock.restore();
   }
