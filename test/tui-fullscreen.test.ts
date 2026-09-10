@@ -7,15 +7,17 @@ import {
   startFullscreenSession,
 } from "../src/tui-fullscreen.js";
 
-test("fullscreen sequences preserve primary scrollback while enabling SGR mouse scroll", () => {
+test("fullscreen enter stays untracked so idle taps raise the soft keyboard", () => {
   const enter = fullscreenEnterSequence();
   const exit = fullscreenExitSequence();
 
   assert.doesNotMatch(enter, /\u001B\[\?1049h/u);
   assert.match(enter, /\u001B\[2J\u001B\[H/u);
-  assert.match(enter, /\u001B\[\?1000h/u);
-  assert.match(enter, /\u001B\[\?1002h/u);
-  assert.match(enter, /\u001B\[\?1006h/u);
+  // Tracking is scoped to the running input session (start/stop); the
+  // idle shell must leave touches to the terminal itself.
+  assert.doesNotMatch(enter, /\u001B\[\?1000h/u);
+  assert.doesNotMatch(enter, /\u001B\[\?1002h/u);
+  assert.doesNotMatch(enter, /\u001B\[\?1006h/u);
 
   assert.match(exit, /\u001B\[\?1000l/u);
   assert.match(exit, /\u001B\[\?1006l/u);

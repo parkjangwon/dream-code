@@ -9,6 +9,7 @@ import { createInputState, reduceInputState } from "./tui-input-state.js";
 import { renderRunningInputView, runningInputCursorSequence } from "./tui-running-input-render.js";
 import { nextEscInterruptState, type EscInterruptState } from "./tui-interrupt.js";
 import type { ResizeSubscriber } from "./tui-fullscreen.js";
+import { mouseTrackingDisableSequence, mouseTrackingEnableSequence } from "./tui-fullscreen.js";
 import { readStdoutTerminalSize, sameTerminalSize, startTerminalSizeWatcher, type TerminalSize } from "./terminal-size-watch.js";
 import {
   createTerminalOutputScrollInput,
@@ -141,6 +142,7 @@ export function createRunningInputSession(
       input.on("keypress", onKeypress);
       unsubscribeResize = onResize?.(repairAfterResize) ?? subscribeStdoutResize(repairAfterResize);
       stopSizeWatcher = startTerminalSizeWatcher({ onChange: repairAfterResize });
+      output.write(mouseTrackingEnableSequence());
       render();
     },
     stop: () => {
@@ -153,6 +155,9 @@ export function createRunningInputSession(
         stopSizeWatcher = undefined;
         input.setRawMode(previousRawMode);
         input.pause();
+        // Hand touch back to the terminal (keyboard rise + native drag
+        // scrolling over the flushed scrollback) once streaming ends.
+        output.write(mouseTrackingDisableSequence());
       }
       const queuedInputs = steeringState.queue.map((item) => item.text);
       clearRenderedInputView(renderedFrame);

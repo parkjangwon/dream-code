@@ -62,6 +62,7 @@ export async function runAgentTextPrompt(options: RunAgentTextPromptOptions): Pr
     runtime.afterSteeringStop?.();
   }
   await finishAgentTextPrompt(options, assistantTranscript, runtime.write);
+  runtime.flushScrollback?.();
   return queuedInputs.length === 0
     ? { config: options.config, shouldContinue: true }
     : { config: options.config, shouldContinue: true, queuedInputs };
@@ -71,6 +72,7 @@ type AgentResponseRuntime = {
   readonly write: (chunk: string) => boolean;
   readonly steering?: RunningInputSession;
   readonly afterSteeringStop?: () => void;
+  readonly flushScrollback?: () => void;
 };
 
 async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise<AgentResponseRuntime> {
@@ -98,6 +100,7 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
   const steering = createRunningInputSession(statusLines, options.resize);
   let steeringActive = true;
   const writer = createLayeredMainWriter(layout, {
+    topChrome: { config: options.config, oneShotYolo: options.oneShotYolo === true },
     afterWrite: () => (steeringActive ? steering.cursorSequence() : ""),
     afterRender: () => {
       if (steeringActive) {
@@ -111,6 +114,7 @@ async function agentResponseRuntime(options: RunAgentTextPromptOptions): Promise
   return {
     write: writer.write,
     steering,
+    flushScrollback: writer.flushScrollback,
     afterSteeringStop: () => {
       steeringActive = false;
     },

@@ -87,7 +87,7 @@ export function readInteractivePicker(
 }
 
 function renderPickerView(title: string, state: PickerState): number {
-  const width = Math.max(64, output.columns ?? 80);
+  const width = Math.max(1, output.columns ?? 80);
   const visible = pickerVisibleChoices(state);
   const selected = pickerSelection(state);
   const start = visibleStart(state.selectedIndex, visible.length);

@@ -21,7 +21,7 @@ export async function renderRunningInputView(
   previousFrame: RenderedInputView | undefined,
   cursorRowQuery: CursorRowQuery | undefined = undefined,
 ): Promise<RenderedInputView> {
-  const width = Math.max(64, output.columns ?? 80);
+  const width = Math.max(1, output.columns ?? 80);
   const prompt = `${paint(`[queue ${queueCount}]`, ansi.blue)} ${paint(">", ansi.accent)} `;
   const promptWidth = terminalVisibleWidth(prompt);
   const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - promptWidth));

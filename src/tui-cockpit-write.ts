@@ -1,6 +1,6 @@
 import { withHiddenCursor } from "./terminal-frame.js";
 import { isTermuxRuntime } from "./terminal-environment.js";
-import type { CursorRowQuery } from "./terminal-cursor-query.js";
+import { queryTerminalRows, type CursorRowQuery } from "./terminal-cursor-query.js";
 import type { CockpitFrame } from "./tui-cockpit.js";
 import {
   clearRenderedInputViewAtRowSequence,
@@ -36,13 +36,21 @@ export async function writeCockpitFrame(
 ): Promise<RenderedInputView> {
   const { input, output } = streams;
 
-  if (isTermuxRuntime() && previousFrame !== undefined && cursorRowQuery !== undefined) {
-    const currentRow = await cursorRowQuery.queryRow(input, output);
-    if (currentRow !== undefined) {
-      const frameTopRow = currentRow - previousFrame.promptLineIndex;
-      const renderedFrame = renderedInputViewFromCockpit(frame, undefined);
+  if (isTermuxRuntime() && cursorRowQuery !== undefined) {
+    const anchorRow = previousFrame === undefined
+      ? await queryTerminalRows(input, output, cursorRowQuery)
+      : await cursorRowQuery.queryRow(input, output);
+    if (anchorRow !== undefined) {
+      const frameTopRow = previousFrame === undefined
+        ? Math.max(1, anchorRow - frame.lines.length + 1)
+        : Math.max(1, anchorRow - previousFrame.promptLineIndex);
+      const renderedFrame = renderedInputViewFromCockpit(frame, undefined, frameTopRow);
       output.write(withHiddenCursor([
-        clearRenderedInputViewAtRowSequence(previousFrame, frameTopRow),
+        // Clear at the PREVIOUS frame's own top row: when the CPR anchor
+        // drifts (scroll cursor restore racing the query, keyboard resizes),
+        // clearing at the new top row leaves the old dock behind and the
+        // status bar appears duplicated.
+        clearRenderedInputViewAtRowSequence(previousFrame, previousFrame?.frameTopRow ?? frameTopRow),
         cursorToFrameStartRowSequence(frameTopRow),
         frame.lines.join("\n"),
         cursorToPromptAtRowSequence(frame, frameTopRow),

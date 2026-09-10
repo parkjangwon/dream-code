@@ -6,17 +6,20 @@ export type RenderedInputView = {
   readonly promptLineIndex: number;
   readonly promptCursorColumn: number;
   readonly terminalRows: number | undefined;
+  readonly frameTopRow?: number;
 };
 
 export function renderedInputViewFromCockpit(
   frame: CockpitFrame,
   terminalRows: number | undefined,
+  frameTopRow?: number,
 ): RenderedInputView {
   return {
     lineCount: frame.lines.length,
     promptLineIndex: frame.promptLineIndex,
     promptCursorColumn: frame.promptCursorColumn,
     terminalRows,
+    ...(frameTopRow === undefined ? {} : { frameTopRow }),
   };
 }
 
@@ -32,7 +35,7 @@ export function clearRenderedInputViewSequence(frame: RenderedInputView | undefi
     return "";
   }
 
-  const absoluteStart = frameStartRow(frame.lineCount, frame.terminalRows);
+  const absoluteStart = frame.frameTopRow ?? frameStartRow(frame.lineCount, frame.terminalRows);
   if (absoluteStart !== undefined) {
     return `${cursorToRow(absoluteStart)}${clearRowsFromCurrentPosition(frame.lineCount)}`;
   }
@@ -80,7 +83,7 @@ export function cursorToRenderedPromptSequence(frame: RenderedInputView | undefi
   if (frame === undefined) {
     return "";
   }
-  const startRow = frameStartRow(frame.lineCount, frame.terminalRows);
+  const startRow = frame.frameTopRow ?? frameStartRow(frame.lineCount, frame.terminalRows);
   return startRow === undefined
     ? ""
     : `${cursorToRow(startRow + frame.promptLineIndex)}${cursorToColumn(frame.promptCursorColumn)}`;

@@ -60,6 +60,7 @@ export async function runSwarmCommand(options: RunSwarmCommandOptions): Promise<
   const layeredWriter = layeredLayout === undefined
     ? undefined
     : createLayeredMainWriter(layeredLayout, {
+      topChrome: { config: options.config, oneShotYolo: options.oneShotYolo === true },
       terminalRows: () => output.rows,
       terminalColumns: () => output.columns,
     });

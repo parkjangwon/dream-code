@@ -6,9 +6,10 @@ import { cockpitReservedRows, fitVisible, renderCockpitFrame } from "./tui-cockp
 import { cursorToFrameStartSequence } from "./tui-input-frame.js";
 import { renderHeaderPanel } from "./tui-render.js";
 import { cursorToRow, withHiddenCursor } from "./terminal-frame.js";
-import { terminalVisibleWidth } from "./terminal-width.js";
 import { isTermuxRuntime } from "./terminal-environment.js";
 import { queryTerminalRows } from "./terminal-cursor-query.js";
+import { flushLinesToScrollback } from "./tui-scrollback-flush.js";
+import { clampScrollOffset, wrapVisibleLine } from "./tui-viewport-wrap.js";
 
 export type LayeredTerminalLayout = {
   readonly topRows: number;
@@ -31,6 +32,7 @@ export type LayeredScreenOptions = {
 export type LayeredMainWriter = {
   readonly write: (chunk: string) => boolean;
   readonly scroll: (lines: number) => boolean;
+  readonly flushScrollback: () => void;
 };
 
 export type LayeredMainWriterOptions = {
@@ -38,6 +40,10 @@ export type LayeredMainWriterOptions = {
   readonly afterRender?: () => void;
   readonly terminalRows?: () => number | undefined;
   readonly terminalColumns?: () => number | undefined;
+  readonly topChrome?: {
+    readonly config: DreamConfig;
+    readonly oneShotYolo: boolean;
+  };
 };
 
 const topChromeRows = 5;
@@ -55,7 +61,7 @@ export function layeredTerminalLayout(terminalRows: number | undefined): Layered
 }
 
 export async function renderLayeredScreen(options: LayeredScreenOptions): Promise<LayeredTerminalLayout> {
-  const columns = Math.max(64, options.terminalColumns ?? output.columns ?? 80);
+  const columns = Math.max(1, options.terminalColumns ?? output.columns ?? 80);
   output.write(clearScreen());
   const rows = await confirmedTerminalRows(options.terminalRows, options.input ?? input);
   const layout = layeredTerminalLayout(rows);
@@ -111,7 +117,7 @@ export function createLayeredMainWriter(
           return afterWrite.length === 0 ? true : writeLayeredFrame(afterWrite, options);
         }
         logicalLines = replaceAnimatedLine(logicalLines, animationLine);
-        scrollOffset = clampScrollOffset(scrollOffset, currentLayout, logicalLines, currentColumns);
+        scrollOffset = clampScrollOffset(scrollOffset, currentLayout.mainRows, logicalLines, currentColumns);
         writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
         return true;
       }
@@ -121,20 +127,37 @@ export function createLayeredMainWriter(
         scrollOffset = 0;
       }
       logicalLines = appendChunk(logicalLines, chunk).slice(-currentLayout.mainRows * scrollbackViewportMultiplier);
-      scrollOffset = clampScrollOffset(scrollOffset, currentLayout, logicalLines, currentColumns);
+      scrollOffset = clampScrollOffset(scrollOffset, currentLayout.mainRows, logicalLines, currentColumns);
       return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
     },
     scroll: (lines) => {
       const currentLayout = activeLayout(layout, options);
       const currentColumns = activeColumns(options);
-      scrollOffset = clampScrollOffset(scrollOffset + lines, currentLayout, logicalLines, currentColumns);
+      scrollOffset = clampScrollOffset(scrollOffset + lines, currentLayout.mainRows, logicalLines, currentColumns);
       return writeLayeredFrame(withHiddenCursor(`${renderMainViewport(currentLayout, logicalLines, currentColumns, scrollOffset)}${options.afterWrite?.() ?? ""}`), options);
+    },
+    flushScrollback: () => {
+      const currentLayout = activeLayout(layout, options);
+      const currentColumns = Math.max(1, activeColumns(options) ?? 80);
+      const visualLines = logicalLines.flatMap((line) => wrapVisibleLine(line, currentColumns));
+      if (visualLines.length <= currentLayout.mainRows) {
+        return;
+      }
+      scrollOffset = 0;
+      flushLinesToScrollback(
+        visualLines.slice(0, visualLines.length - currentLayout.mainRows),
+        currentLayout.topRows + currentLayout.mainRows + currentLayout.bottomRows,
+        () => writeLayeredFrame(withHiddenCursor(renderMainViewport(currentLayout, logicalLines, currentColumns)), options),
+      );
     },
   };
 }
 
 function writeLayeredFrame(text: string, options: LayeredMainWriterOptions): boolean {
-  const written = output.write(text);
+  const chrome = options.topChrome === undefined
+    ? ""
+    : topChromeSequence(options.topChrome.config, options.topChrome.oneShotYolo, activeColumns(options));
+  const written = output.write(`${chrome}${text}`);
   options.afterRender?.();
   return written;
 }
@@ -151,11 +174,22 @@ function activeColumns(options: LayeredMainWriterOptions): number | undefined {
   return options.terminalColumns?.() ?? output.columns;
 }
 
-function renderTopChrome(config: DreamConfig, oneShotYolo: boolean, columns: number): void {
+export function topChromeSequence(
+  config: DreamConfig,
+  oneShotYolo: boolean,
+  terminalColumns: number | undefined,
+): string {
+  const columns = Math.max(1, terminalColumns ?? output.columns ?? 80);
   const lines = renderHeaderPanel(config, oneShotYolo, columns);
-  for (let index = 0; index < lines.length; index += 1) {
-    output.write(`\u001B[${index + 1};1H${lines[index] ?? ""}`);
+  const rows: string[] = [];
+  for (let index = 0; index < topChromeRows; index += 1) {
+    rows.push(`\u001B[${index + 1};1H\u001B[2K${lines[index] ?? ""}`);
   }
+  return rows.join("");
+}
+
+function renderTopChrome(config: DreamConfig, oneShotYolo: boolean, columns: number): void {
+  output.write(topChromeSequence(config, oneShotYolo, columns));
 }
 
 function renderPassiveBottomDock(
@@ -236,57 +270,4 @@ function renderMainViewport(
     rows.push(`${cursorToRow(layout.mainStartRow + index)}\u001B[2K${fitVisible(line, columns)}`);
   }
   return rows.join("");
-}
-
-function clampScrollOffset(
-  offset: number,
-  layout: LayeredTerminalLayout,
-  logicalLines: readonly string[],
-  terminalColumns: number | undefined,
-): number {
-  const columns = Math.max(1, terminalColumns ?? 80);
-  const visualLineCount = logicalLines.flatMap((line) => wrapVisibleLine(line, columns)).length;
-  const maxOffset = Math.max(0, visualLineCount - layout.mainRows);
-  return Math.min(Math.max(0, offset), maxOffset);
-}
-
-function wrapVisibleLine(line: string, width: number): readonly string[] {
-  if (line.length === 0) {
-    return [""];
-  }
-  const lines: string[] = [];
-  let current = "";
-  let currentWidth = 0;
-  let index = 0;
-
-  while (index < line.length) {
-    const escape = ansiEscapeAt(line, index);
-    if (escape !== undefined) {
-      current = `${current}${escape}`;
-      index += escape.length;
-      continue;
-    }
-    const codePoint = line.codePointAt(index);
-    if (codePoint === undefined) {
-      break;
-    }
-    const char = String.fromCodePoint(codePoint);
-    const charWidth = terminalVisibleWidth(char);
-    if (currentWidth > 0 && currentWidth + charWidth > width) {
-      lines.push(current);
-      current = "";
-      currentWidth = 0;
-    }
-    current = `${current}${char}`;
-    currentWidth += charWidth;
-    index += char.length;
-  }
-
-  lines.push(current);
-  return lines;
-}
-
-function ansiEscapeAt(text: string, index: number): string | undefined {
-  const match = /^\u001B\[[0-?]*[ -/]*[@-~]/u.exec(text.slice(index));
-  return match?.[0];
 }

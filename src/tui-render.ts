@@ -7,7 +7,7 @@ import { DREAM_SIGNATURE, DREAM_VERSION } from "./constants.js";
 import { describeModelMode } from "./model-routing.js";
 
 export function renderHeader(config: DreamConfig, oneShotYolo: boolean): void {
-  const width = Math.max(64, output.columns ?? 80);
+  const width = Math.max(1, output.columns ?? 80);
 
   output.write(clearScreen());
   output.write("\n");
@@ -49,7 +49,7 @@ export function renderHeaderPanel(
   _oneShotYolo: boolean,
   terminalWidth: number,
 ): readonly string[] {
-  const width = Math.max(64, terminalWidth);
+  const width = Math.max(1, terminalWidth);
   const contentWidth = width - 2;
   const infoWidth = Math.max(20, contentWidth);
   const infoRows = [

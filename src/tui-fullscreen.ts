@@ -34,11 +34,24 @@ const cleanupSignals = ["SIGHUP", "SIGTERM"] as const;
 type CleanupSignal = typeof cleanupSignals[number];
 
 export function fullscreenEnterSequence(): string {
-  return `${enableMouseTracking}${clearScreen()}${hideCursor}`;
+  // Mouse tracking intentionally stays OFF outside streaming: on Termux a
+  // tracked touch is consumed as an SGR report, so the soft keyboard never
+  // rises for idle taps. The running input session enables tracking in
+  // start() and disables it again in stop(), and flushLinesToScrollback
+  // keeps idle (untracked) drag scrolling useful in the meantime.
+  return `${clearScreen()}${hideCursor}`;
 }
 
 export function fullscreenExitSequence(): string {
   return `${disableMouseTracking}${disableBracketedPaste}${showCursor}`;
+}
+
+export function mouseTrackingEnableSequence(): string {
+  return enableMouseTracking;
+}
+
+export function mouseTrackingDisableSequence(): string {
+  return disableMouseTracking;
 }
 
 export function startFullscreenSession(options: FullscreenSessionOptions): FullscreenSession {

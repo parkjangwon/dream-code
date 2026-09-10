@@ -1,15 +1,13 @@
 import { stdin as input, stdout as output } from "node:process";
-import { emitKeypressEvents } from "node:readline";
-import type { Key } from "node:readline";
+import { emitKeypressEvents, type Key } from "node:readline";
 
 import { ansi, paint } from "./ansi.js";
-import { clearRenderedInputView, renderInputText, renderInputView } from "./tui-input-render.js";
-import type { RenderedInputView } from "./tui-input-render.js";
+import { clearRenderedInputView, renderInputText, renderInputView, type RenderedInputView } from "./tui-input-render.js";
 import { createInputState, reduceInputState, type InputAction } from "./tui-input-state.js";
 import type { SlashCommand } from "./tui-commands.js";
 import type { DreamSkill } from "./skills.js";
 import type { FileMentionTarget } from "./file-mention-targets.js";
-import type { ResizeSubscriber } from "./tui-fullscreen.js";
+import { mouseTrackingDisableSequence, type ResizeSubscriber } from "./tui-fullscreen.js";
 import { startTerminalSizeWatcher } from "./terminal-size-watch.js";
 import {
   createTerminalOutputScrollInput,
@@ -17,6 +15,7 @@ import {
   scrollOutputForVerticalKey,
 } from "./tui-output-scroll.js";
 import { createCursorRowQuery } from "./terminal-cursor-query.js";
+import { cursorToRenderedPromptSequence } from "./tui-input-frame.js";
 
 export type InteractiveInputOptions = {
   readonly prompt: string;
@@ -103,9 +102,7 @@ export function readInteractiveInput(
       renderInFlight = true;
       void performRender();
     };
-    const renderAfterResize = (): void => {
-      render();
-    };
+    const renderAfterResize = (): void => render();
 
     const finish = (result: InteractiveInputResult, echoCancel = true): void => {
       clearRenderedInputView(renderedFrame);
@@ -128,7 +125,7 @@ export function readInteractiveInput(
         return;
       }
       if (state.palette === undefined && scrollOutputForVerticalKey(key)) {
-        render();
+        output.write(cursorToRenderedPromptSequence(renderedFrame));
         return;
       }
       const action = actionForKey(value, key);
@@ -180,7 +177,7 @@ export function readInteractiveInput(
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       mouseInputSuppressor.observe(text);
       if (outputScrollInput.handle(text)) {
-        render();
+        output.write(cursorToRenderedPromptSequence(renderedFrame));
       }
     };
 
@@ -199,6 +196,7 @@ export function readInteractiveInput(
     emitKeypressEvents(input);
     input.setRawMode(true);
     input.resume();
+    output.write(mouseTrackingDisableSequence()); // untracked idle: a tap raises the Termux keyboard
     input.on("keypress", onKeypress);
     unsubscribeResize = options.onResize?.(renderAfterResize) ?? subscribeStdoutResize(renderAfterResize);
     stopSizeWatcher = startTerminalSizeWatcher({ onChange: renderAfterResize });

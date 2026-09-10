@@ -7,12 +7,12 @@ import { createCursorRowQuery, queryTerminalRows } from "../src/terminal-cursor-
 const esc = "";
 
 function fakeInput(): NodeJS.ReadStream {
-  return new EventEmitter() as unknown as NodeJS.ReadStream;
+  return new EventEmitter() as NodeJS.ReadStream;
 }
 
 function fakeOutput(writes: string[]): NodeJS.WriteStream {
-  const emitter = new EventEmitter() as unknown as NodeJS.WriteStream;
-  (emitter as unknown as { write: (chunk: string) => boolean }).write = (chunk: string) => {
+  const emitter = new EventEmitter() as NodeJS.WriteStream;
+  (emitter as { write: (chunk: string) => boolean }).write = (chunk: string) => {
     writes.push(chunk);
     return true;
   };

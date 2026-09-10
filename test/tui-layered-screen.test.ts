@@ -51,7 +51,7 @@ test("renderLayeredScreen keeps the running dock passive instead of echoing inpu
 
 test("renderLayeredScreen anchors the bottom dock to a CPR-confirmed row count on Termux", async () => {
   const chunks: string[] = [];
-  const input = new EventEmitter() as unknown as NodeJS.ReadStream;
+  const input = new EventEmitter() as NodeJS.ReadStream;
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
     chunks.push(chunk);
     if (chunk.includes("[6n")) {
@@ -176,6 +176,34 @@ test("createLayeredMainWriter wraps CJK text without writing raw newlines into t
   }
 });
 
+test("createLayeredMainWriter indents wrapped continuation rows so streamed lines stay scannable", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      {
+        topRows: 5,
+        mainStartRow: 6,
+        mainRows: 8,
+        bottomRows: 6,
+      },
+      { terminalColumns: () => 20 },
+    );
+
+    writer.write("| 010 streaming viewport verification line with enough text to wrap naturally\n");
+
+    const rendered = chunks.join("");
+    assert.match(rendered, /\u001B\[6;1H\u001B\[2K\| 010 streaming/u);
+    assert.match(rendered, /\u001B\[7;1H\u001B\[2K {2,3}\S/u);
+    assert.equal(rendered.includes("\n"), false);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
 test("createLayeredMainWriter returns cursor ownership to the active input dock", () => {
   const chunks: string[] = [];
   const stdout = mock.method(process.stdout, "write", (chunk: string) => {
@@ -279,6 +307,85 @@ test("createLayeredMainWriter scrolls older output inside the main viewport", ()
     assert.match(scrolledFrame, /\[7;1H\[2Ktwo/u);
     assert.match(scrolledFrame, /\[8;1H\[2Kthree/u);
     assert.doesNotMatch(scrolledFrame, /five/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter repaints the top chrome on every frame so drift cannot freeze stale rows", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      { topRows: 5, mainStartRow: 6, mainRows: 3, bottomRows: 6 },
+      { topChrome: { config: defaultConfig(), oneShotYolo: true } },
+    );
+
+    writer.write("answer\n");
+    writer.scroll(1);
+
+    // The header panel renders 3 content rows, but rows 4-5 must still be
+    // cleared: body content pushed into the top chrome by a physical scroll
+    // has to be wiped, not left frozen above the scrolling viewport.
+    assert.match(chunks[0] ?? "", /\u001B\[1;1H\u001B\[2K/u);
+    assert.match(chunks[0] ?? "", /\u001B\[4;1H\u001B\[2K/u);
+    assert.match(chunks[0] ?? "", /\u001B\[5;1H\u001B\[2K/u);
+    assert.match(stripAnsi(chunks[0] ?? ""), /Dream Code/u);
+    assert.match(chunks.at(-1) ?? "", /\u001B\[1;1H\u001B\[2K/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter flushes off-screen history into the native scrollback", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      { topRows: 5, mainStartRow: 6, mainRows: 3, bottomRows: 6 },
+      { terminalColumns: () => 80 },
+    );
+
+    writer.write("one\ntwo\nthree\nfour\nfive");
+    writer.flushScrollback();
+
+    // Stale scrollback (old headers, shell noise) is cleared before the
+    // history rows are pushed, so dragging up cannot resurrect duplicates.
+    assert.equal(chunks.at(-3), "\u001B[2J\u001B[H\u001B[3J");
+    assert.equal(chunks.at(-2), `one\r\ntwo\r\n${"\r\n".repeat(14)}`);
+    const repaint = chunks.at(-1) ?? "";
+    assert.match(repaint, /\u001B\[6;1H\u001B\[2Kthree/u);
+    assert.match(repaint, /\u001B\[7;1H\u001B\[2Kfour/u);
+    assert.match(repaint, /\u001B\[8;1H\u001B\[2Kfive/u);
+    assert.doesNotMatch(repaint, /one|two/u);
+  } finally {
+    stdout.mock.restore();
+  }
+});
+
+test("createLayeredMainWriter skips the scrollback flush when history still fits the viewport", () => {
+  const chunks: string[] = [];
+  const stdout = mock.method(process.stdout, "write", (chunk: string) => {
+    chunks.push(chunk);
+    return true;
+  });
+  try {
+    const writer = createLayeredMainWriter(
+      { topRows: 5, mainStartRow: 6, mainRows: 3, bottomRows: 6 },
+      { terminalColumns: () => 80 },
+    );
+
+    writer.write("one\ntwo");
+    const countAfterWrite = chunks.length;
+    writer.flushScrollback();
+
+    assert.equal(chunks.length, countAfterWrite);
   } finally {
     stdout.mock.restore();
   }

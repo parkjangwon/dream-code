@@ -31,7 +31,7 @@ export async function renderInputView(
   previousFrame: RenderedInputView | undefined = undefined,
   cursorRowQuery: CursorRowQuery | undefined = undefined,
 ): Promise<RenderedInputView> {
-  const width = Math.max(64, output.columns ?? 80);
+  const width = Math.max(1, output.columns ?? 80);
   const promptWidth = terminalVisibleWidth(prompt);
   const viewport = inputViewport(state.text, state.cursor, Math.max(0, width - promptWidth));
   const promptLine = `${paint(prompt, ansi.accent)}${renderInputText(viewport.text, secret, state.skills, state.fileMentions)}`;
