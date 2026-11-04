@@ -35,7 +35,7 @@
     "cli-highlight": "^2.1.11",
     "preact": "^10.29.2",
     "undici": "^8.5.0",
-    "zod": "^4.0.0"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
